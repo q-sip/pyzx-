@@ -1,0 +1,21 @@
+name: Weekly Sync Reminder
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 9AM UTC
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create sync issue
+      uses: actions/create-github-issue@v1
+      with:
+        title: "Weekly upstream sync - Week of ${{ github.event.schedule || 'now' }}"
+        body: |
+          ## Weekly sync task
+          
+          Please run upstream sync process:
+          1. [ ] Manual sync (SYNC.md)
+           Links to parent: #X
+        labels: sync, good first issue
