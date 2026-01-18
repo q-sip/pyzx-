@@ -16,6 +16,11 @@ PyZX currently allows you to:
 
 You can try out the in-browser demo which shows some of these features [here](http://zxcalculus.com/pyzx.html).
 
+> [!NOTE]
+> - This repository is a fork of the original [zxcalc/pyzx](https://github.com/zxcalc/pyzx).
+> - It is not the official PyZX repository. For the canonical version and documentation, please see https://github.com/zxcalc/pyzx.
+
+
 ## About the ZX-calculus
 
 ZX-diagrams are a type of tensor network built out of combinations of linear maps known as *spiders*. There are 2 types of spiders: the Z-spiders (represented as green dots in PyZX) and the X-spiders (represented as red dots). Every linear map between some set of qubits can be represented by a ZX-diagram.
