@@ -13,3 +13,4 @@ ipykernel>=6 # Needed for nbsphinx to execute correctly on readthedocs
 sphinxcontrib-svg2pdfconverter>=1.2.2
 lark>=1.2.2
 galois>=0.4.7
+neo4j

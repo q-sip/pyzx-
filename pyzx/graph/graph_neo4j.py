@@ -36,6 +36,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
+        self._maxr: int = 1
 
     # Avaa ja sulkee neo4j driverin, suoraan Valterin reposta
     @property
@@ -62,8 +63,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self,
         vertices_data: List[dict],
         edges_data: List[Tuple[Tuple[int, int], EdgeType]],
-        inputs: List[int] = None,
-        outputs: List[int] = None,
+        inputs: Optional[List[int]] = None,
+        outputs: Optional[List[int]] = None,
     ) -> List[VT]:
         if not vertices_data:
             return []
@@ -184,3 +185,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
             self._maxr = int(rec["maxr"]) if rec and rec["maxr"] is not None else -1
             return self._maxr
+
+    def _phase_to_str(self, phase) -> str:
+        if phase is None:
+            return "0"
+        return str(phase)
