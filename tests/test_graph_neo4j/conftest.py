@@ -17,10 +17,6 @@ def unique_graph_id() -> str:
 
 @pytest.fixture(autouse=True)
 def _patch_phase_to_str_if_missing(monkeypatch):
-    """
-    Your GraphNeo4j currently calls self._phase_to_str() but it might not exist yet.
-    Patch it in tests so create_graph works without requiring production changes.
-    """
     if not hasattr(GraphNeo4j, "_phase_to_str"):
         monkeypatch.setattr(
             GraphNeo4j,
