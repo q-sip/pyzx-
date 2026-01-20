@@ -190,3 +190,14 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         if phase is None:
             return "0"
         return str(phase)
+    
+    def vindex(self) -> int:
+        return self.num_vertices()
+    
+    def num_vertices(self):
+        query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            )
+        return result["count"] if result else 0

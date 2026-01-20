@@ -1,5 +1,5 @@
 import os
-from pyzx.graph.neo4j_backend_test import GraphNeo4j
+from pyzx.graph.graph_neo4j import GraphNeo4j
 from pyzx.utils import VertexType, EdgeType
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
@@ -33,3 +33,5 @@ v_ids = g.create_graph(
     inputs=[0],
     outputs=[3]
 )
+count = g.vindex()
+print(f'count = {count}')
