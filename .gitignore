@@ -17,3 +17,4 @@ pyzx/js/d3.v5.js
 *~
 .DS_store
 .env
+.env*
