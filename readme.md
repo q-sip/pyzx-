@@ -65,6 +65,31 @@ zx.draw(circuit)
 PyZX can also be run from the commandline. To optimise a circuit you can for instance run
 ```python -m pyzx opt input_circuit.qasm```
 
+
+## Docker and devops
+
+Now there is posibility to use docker and docker compose.  
+With ```docker compose up --build``` you get both neo4j and the pyzx running.  
+The PyZX will run the neo4j_functionality_test.py and be done.  
+After that you should be able to see the small demo graph in side neo4j.
+The neo4j will start on http://localhost:7474/.  
+On addition you will need the the .env.neo4j and .env.pyzx.
+
+The .env.pyzx should be like:
+<pre>
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=testkala
+</pre>
+Note: neo4j requires at least 8 char password, otherwise it will not use it.
+
+The .env.neo4j should be like:
+<pre>
+NEO4J_AUTH=neo4j/testkala
+</pre>
+
+The information in neo4j determines what you should put in to the .env.pyzx values.
+
 ## Attribution
 
 If you wish to cite PyZX in an academic work, please cite the [accompanying paper](https://arxiv.org/abs/1904.04735):
