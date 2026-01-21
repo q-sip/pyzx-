@@ -1,0 +1,31 @@
+services:
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    networks:
+      - silta
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    env_file: 
+      - path: ./.env.neo4j
+
+
+  pyzx:
+    build: .
+    image: pyzx:latest
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    networks:
+      - silta
+    env_file: 
+      - path: ./.env.pyzx
+
+networks:
+  silta:
+    name: silta
