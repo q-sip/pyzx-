@@ -407,7 +407,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     # }}}
 
 
-    # OPTIONAL OVERRIDES {{{
+    # OPTIONAL OVERRIDES{{{
 
     # These only need to be overridden if the backend will be used with hybrid classical/quantum
     # methods.
