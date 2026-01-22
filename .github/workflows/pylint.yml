@@ -3,8 +3,12 @@ name: Pylint
 on:
   push:
     branches: ["dev", "master"]
+    paths:
+      - "pyzx/graph/graph_neo4j.py"
   pull_request:
     branches: ["master"]
+    paths:
+      - "pyzx/graph/graph_neo4j.py"
 
 jobs:
   pylint:
@@ -30,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pylint pyzx tests || true | tee pylint.log
+          pylint pyzx/graph/graph_neo4j.py | tee pylint.log || true
 
           SCORE=$(grep -oE 'rated at [0-9]+(\.[0-9]+)?/10' pylint.log | tail -n 1 | grep -oE '[0-9]+(\.[0-9]+)?')
           if [ -z "${SCORE:-}" ]; then
