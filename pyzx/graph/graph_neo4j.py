@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional, Tuple
 
+# testing pylint
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
@@ -171,7 +172,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         return vertices
 
-
     def add_edges(self, edges: List[ET], edge_data: Optional[List[EdgeType]] = None):
         """
         Adds multiple edges in a single batch transaction.
@@ -182,10 +182,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         if edge_data is None:
             # Default to EdgeType.SIMPLE (usually value 1)
             edge_data = [EdgeType.SIMPLE] * len(edges)
-        
+
         edges_payload = [
-            {"s": e[0], "t": e[1], "et": ed.value} 
-            for e, ed in zip(edges, edge_data)
+            {"s": e[0], "t": e[1], "et": ed.value} for e, ed in zip(edges, edge_data)
         ]
 
         query = """
@@ -199,9 +198,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             session.execute_write(
                 lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
             )
-	
-
-
 
     def depth(self) -> int:
         # gets the maximum depth based on graph id.
@@ -222,10 +218,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         if phase is None:
             return "0"
         return str(phase)
-    
+
     def vindex(self) -> int:
         return self._vindex
-    
+
     def num_vertices(self):
         query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
         with self._get_session() as session:
@@ -233,15 +229,16 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id).single()
             )
         return result["count"] if result else 0
-    
+
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
         if not vertices:
             return
-        
+
         vertex_list = list(vertices)
-        
+
         with self._get_session() as session:
+
             def delete_vertices(tx):
                 # Delete all relationships connected to these vertices, then delete the vertices
                 tx.run(
@@ -253,9 +250,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     graph_id=self.graph_id,
                     vertex_ids=vertex_list,
                 )
-            
+
             session.execute_write(delete_vertices)
-        
+
         # Update inputs and outputs to remove deleted vertices
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
