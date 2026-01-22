@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 # testing pylint
 from dotenv import load_dotenv
@@ -194,32 +194,40 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         return vertices
 
-    def add_edges(self, edges: List[ET], edge_data: Optional[List[EdgeType]] = None):
-        """
-        Adds multiple edges in a single batch transaction.
-        """
-        if not edges:
-            return
 
-        if edge_data is None:
-            # Default to EdgeType.SIMPLE (usually value 1)
-            edge_data = [EdgeType.SIMPLE] * len(edges)
+def add_edges(
+    self,
+    edge_pairs: Iterable[Tuple[VT, VT]],
+    edgetype: EdgeType = EdgeType.SIMPLE,
+    *,
+    edge_data: Optional[Sequence[EdgeType]] = None,
+) -> None:
+    """Adds multiple edges in a single batch transaction."""
+    edges = list(edge_pairs)
+    if not edges:
+        return
 
-        edges_payload = [
-            {"s": e[0], "t": e[1], "et": ed.value} for e, ed in zip(edges, edge_data)
-        ]
+    if edge_data is None:
+        edge_data = [edgetype] * len(edges)
+    else:
+        if len(edge_data) != len(edges):
+            raise ValueError("edge_data must have same length as edge_pairs")
 
-        query = """
-        UNWIND $edges AS e
-        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
-        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-        MERGE (n1)-[r:Wire {t: e.et}]->(n2)
-        """
+    edges_payload = [
+        {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
+    ]
 
-        with self._get_session() as session:
-            session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
-            )
+    query = """
+    UNWIND $edges AS e
+    MATCH (n1:Node {graph_id: $graph_id, id: e.s})
+    MATCH (n2:Node {graph_id: $graph_id, id: e.t})
+    MERGE (n1)-[:Wire {t: e.et}]->(n2)
+    """
+
+    with self._get_session() as session:
+        session.execute_write(
+            lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
+        )
 
     def depth(self) -> int:
         # gets the maximum depth based on graph id.
@@ -279,12 +287,30 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
 
-    def num_edges(self):
-        query = "MATCH ()-->() RETURN count(*) as count;"
+    def num_edges(
+        self,
+        s: Optional[VT] = None,
+        t: Optional[VT] = None,
+        et: Optional[EdgeType] = None,
+    ) -> int:
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})
+        WHERE ($s IS NULL OR n1.id = $s)
+        AND ($t IS NULL OR n2.id = $t)
+        AND ($et IS NULL OR r.t = $et)
+        RETURN count(r) AS count
+        """
         with self._get_session() as session:
-            result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            rec = session.execute_read(
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    s=s,
+                    t=t,
+                    et=(et.value if et is not None else None),
+                ).single()
             )
+<<<<<<< HEAD
         return result["count"] if result else 0
 
     def add_edge(self, edge_pair: Tuple[VT,VT], edgetype:EdgeType=EdgeType.SIMPLE) -> ET:
@@ -543,3 +569,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns the edges of the graph as a Python set.
         Should be overloaded if the backend supplies a cheaper version than this. Note this ignores parallel edges."""
         return set(self.edges())
+=======
+        return int(rec["count"]) if rec else 0
+>>>>>>> a72878b (mypy fiksejä)
