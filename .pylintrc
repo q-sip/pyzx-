@@ -1,0 +1,2 @@
+[MAIN]
+ignore=/cirquits/*,/demos/*,/doc/*,/tests/*,setup.py,benchmark.py
