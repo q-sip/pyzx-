@@ -90,6 +90,19 @@ NEO4J_AUTH=neo4j/testkala
 
 The information in neo4j determines what you should put in to the .env.pyzx values.
 
+## precommit hooks
+
+Inside your virtual environment, do (one time):
+```
+python -m pip install pre-commit
+pre-commit install
+```
+To commit, you can commit just normally.
+If you want to bypass pylint or tests manually, you can use
+```
+git commit --no-verify -m "commit msg"
+```
+
 ## Attribution
 
 If you wish to cite PyZX in an academic work, please cite the [accompanying paper](https://arxiv.org/abs/1904.04735):
