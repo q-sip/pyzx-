@@ -1,5 +1,4 @@
 # tests/test_graph_neo4j/test_add_edges.py
-import pytest
 from neo4j import Session
 
 from pyzx.utils import EdgeType, VertexType

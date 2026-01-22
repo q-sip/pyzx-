@@ -259,3 +259,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         # Update inputs and outputs to remove deleted vertices
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
+
+    def num_edges(self):
+        query = "MATCH ()-->() RETURN count(*) as count;"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            )
+        return result["count"] if result else 0
+

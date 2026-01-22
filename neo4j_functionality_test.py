@@ -33,5 +33,3 @@ v_ids = g.create_graph(
     inputs=[0],
     outputs=[3]
 )
-count = g.vindex()
-print(f'count = {count}')
