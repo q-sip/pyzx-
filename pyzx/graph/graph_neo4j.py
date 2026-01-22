@@ -192,7 +192,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return str(phase)
     
     def vindex(self) -> int:
-        return self.num_vertices()
+        return self._vindex
     
     def num_vertices(self):
         query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
