@@ -267,4 +267,3 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id).single()
             )
         return result["count"] if result else 0
-
