@@ -4,8 +4,11 @@ from typing import List, Optional, Tuple
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
-from ..utils import EdgeType, VertexType
+from ..utils import EdgeType, VertexType, toggle_edge, vertex_is_zx
+from ..utils import FloatInt, FractionLike
 from .base import BaseGraph
+from typing import TYPE_CHECKING, Union, Optional, Generic, TypeVar, Any, Sequence
+from typing import List, Dict, Set, Tuple, Mapping, Iterable, Callable, ClassVar, Literal
 
 load_dotenv()
 
@@ -14,6 +17,25 @@ ET = Tuple[int, int]
 
 
 class GraphNeo4j(BaseGraph[VT, ET]):
+    """Implementation of the BaseGraph interface using Neo4j as the backend.
+    This class manages a graph instance stored within a Neo4j database. Unlike in-memory
+    backends, this implementation persists data to a database using the Neo4j Bolt driver.
+    It supports multiple distinct graphs within the same database instance by associating
+    every node and relationship with a specific ``graph_id``.
+    Attributes:
+        backend (str): The identifier for this backend ("neo4j").
+        uri (str): The Neo4j database URI (default: env NEO4J_URI).
+        user (str): The Neo4j database user (default: env NEO4J_USER).
+        password (str): The Neo4j database password (default: env NEO4J_PASSWORD).
+        database (str, optional): The specific database name to use within the Neo4j instance.
+        graph_id (str): A unique identifier for this specific graph instance. Used to separate 
+                        nodes of this graph from others in the same database. If not provided, 
+                        a string based on the object's `id()` is generated.
+    Usage:
+        The driver is initialized lazily upon the property access. Connections
+        should be closed explicitly using the ``close()`` method when the object is
+        no longer needed to release network resources."""
+
     backend = "neo4j"
 
     def __init__(
@@ -182,9 +204,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         if edge_data is None:
             # Default to EdgeType.SIMPLE (usually value 1)
             edge_data = [EdgeType.SIMPLE] * len(edges)
-        
+
         edges_payload = [
-            {"s": e[0], "t": e[1], "et": ed.value} 
+            {"s": e[0], "t": e[1], "et": ed.value}
             for e, ed in zip(edges, edge_data)
         ]
 
@@ -199,7 +221,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             session.execute_write(
                 lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
             )
-	
+
 
 
 
@@ -222,10 +244,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         if phase is None:
             return "0"
         return str(phase)
-    
+
     def vindex(self) -> int:
         return self._vindex
-    
+
     def num_vertices(self):
         query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
         with self._get_session() as session:
@@ -233,14 +255,14 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id).single()
             )
         return result["count"] if result else 0
-    
+
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
         if not vertices:
             return
-        
+
         vertex_list = list(vertices)
-        
+
         with self._get_session() as session:
             def delete_vertices(tx):
                 # Delete all relationships connected to these vertices, then delete the vertices
@@ -253,9 +275,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     graph_id=self.graph_id,
                     vertex_ids=vertex_list,
                 )
-            
+
             session.execute_write(delete_vertices)
-        
+
         # Update inputs and outputs to remove deleted vertices
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
@@ -267,3 +289,260 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id).single()
             )
         return result["count"] if result else 0
+
+    def add_edge(self, edge_pair: Tuple[VT,VT], edgetype:EdgeType=EdgeType.SIMPLE) -> ET:
+        """Adds a single edge of the given type and return its id"""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def remove_edges(self, edges: List[ET]) -> None:
+        """Removes the list of edges from the graph."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def vertices(self) -> Iterable[VT]:
+        """Iterator over all the vertices."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
+        """Iterator that returns all the edges in the graph, or all the edges connecting the pair of vertices.
+        Output type depends on implementation in backend."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edge_st(self, edge: ET) -> Tuple[VT, VT]:
+        """Returns a tuple of source/target of the given edge."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def incident_edges(self, vertex: VT) -> Sequence[ET]:
+        """Returns all neighboring edges of the given vertex."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edge_type(self, e: ET) -> EdgeType:
+        """Returns the type of the given edge:
+        ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge,
+        0 if the edge is not in the graph."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def set_edge_type(self, e: ET, t: EdgeType) -> None:
+        """Sets the type of the given edge."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def type(self, vertex: VT) -> VertexType:
+        """Returns the type of the given vertex:
+        VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
+        VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def set_type(self, vertex: VT, t: VertexType) -> None:
+        """Sets the type of the given vertex to t."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def phase(self, vertex: VT) -> FractionLike:
+        """Returns the phase value of the given vertex."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_phase(self, vertex: VT, phase: FractionLike) -> None:
+        """Sets the phase of the vertex to the given value."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def qubit(self, vertex: VT) -> FloatInt:
+        """Returns the qubit index associated to the vertex.
+        If no index has been set, returns -1."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_qubit(self, vertex: VT, q: FloatInt) -> None:
+        """Sets the qubit index associated to the vertex."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def row(self, vertex: VT) -> FloatInt:
+        """Returns the row that the vertex is positioned at.
+        If no row has been set, returns -1."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_row(self, vertex: VT, r: FloatInt) -> None:
+        """Sets the row the vertex should be positioned at."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def clear_vdata(self, vertex: VT) -> None:
+        """Removes all vdata associated to a vertex"""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def vdata_keys(self, vertex: VT) -> Sequence[str]:
+        """Returns an iterable of the vertex data key names.
+        Used e.g. in making a copy of the graph in a backend-independent way."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def vdata(self, vertex: VT, key: str, default: Any=None) -> Any:
+        """Returns the data value of the given vertex associated to the key.
+        If this key has no value associated with it, it returns the default value."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
+        """Sets the vertex data associated to key to val."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def clear_edata(self, edge: ET) -> None:
+        """Removes all edata associated to an edge"""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edata_keys(self, edge: ET) -> Sequence[str]:
+        """Returns an iterable of the edge data key names."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edata(self, edge: ET, key: str, default: Any=None) -> Any:
+        """Returns the data value of the given edge associated to the key.
+        If this key has no value associated with it, it returns the default value."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def set_edata(self, edge: ET, key: str, val: Any) -> None:
+        """Sets the edge data associated to key to val."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+    # }}}
+
+
+    # OPTIONAL OVERRIDES {{{
+
+    # These only need to be overridden if the backend will be used with hybrid classical/quantum
+    # methods.
+    def is_ground(self, vertex: VT) -> bool:
+        """Returns a boolean indicating if the vertex is connected to a ground."""
+        return False
+
+    def grounds(self) -> Set[VT]:
+        """Returns the set of vertices connected to a ground."""
+        return set(v for v in self.vertices() if self.is_ground(v))
+
+    def set_ground(self, vertex: VT, flag: bool=True) -> None:
+        """Connect or disconnect the vertex to a ground."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def is_hybrid(self) -> bool:
+        """Returns whether this is a hybrid quantum-classical graph,
+        i.e. a graph with ground generators."""
+        return bool(self.grounds())
+
+    # Override and set to true if the backend supports parallel edges
+    def multigraph(self) -> bool:
+        return False
+
+
+    # Backends may wish to override these methods to implement them more efficiently
+
+    # These methods return mappings from vertices to various pieces of data. If the backend
+    # stores these e.g. as Python dicts, just return the relevant dicts.
+    def phases(self) -> Mapping[VT, FractionLike]:
+        """Returns a mapping of vertices to their phase values."""
+        return { v: self.phase(v) for v in self.vertices() }
+
+    def types(self) -> Mapping[VT, VertexType]:
+        """Returns a mapping of vertices to their types."""
+        return { v: self.type(v) for v in self.vertices() }
+
+    def qubits(self) -> Mapping[VT,FloatInt]:
+        """Returns a mapping of vertices to their qubit index."""
+        return { v: self.qubit(v) for v in self.vertices() }
+
+    def rows(self) -> Mapping[VT, FloatInt]:
+        """Returns a mapping of vertices to their row index."""
+        return { v: self.row(v) for v in self.vertices() }
+
+    def edge(self, s:VT, t:VT, et: EdgeType=EdgeType.SIMPLE) -> ET:
+        """Returns the name of the first edge with the given source/target and type. Behaviour is undefined if the vertices are not connected."""
+        for e in self.incident_edges(s):
+            if t in self.edge_st(e) and et == self.edge_type(e):
+                return e
+        raise ValueError(f"No edge of type {et} between {s} and {t}")
+
+    def connected(self,v1: VT,v2: VT) -> bool:
+        """Returns whether vertices v1 and v2 share an edge."""
+        for e in self.incident_edges(v1):
+            if v2 in self.edge_st(e):
+                return True
+        return False
+
+    def add_vertex(self,
+                   ty:VertexType=VertexType.BOUNDARY,
+                   qubit:FloatInt=-1,
+                   row:FloatInt=-1,
+                   phase:Optional[FractionLike]=None,
+                   ground:bool=False,
+                   index: Optional[VT] = None
+                   ) -> VT:
+        """Add a single vertex to the graph and return its index.
+        The optional parameters allow you to respectively set
+        the type, qubit index, row index and phase of the vertex."""
+        if index is not None:
+            self.add_vertex_indexed(index)
+            v = index
+        else:
+            v = self.add_vertices(1)[0]
+        self.set_type(v, ty)
+        if phase is None:
+            if ty == VertexType.H_BOX: phase = 1
+            else: phase = 0
+        self.set_qubit(v, qubit)
+        self.set_row(v, row)
+        if phase:
+            self.set_phase(v, phase)
+        if ground:
+            self.set_ground(v, True)
+        if self.track_phases:
+            self.max_phase_index += 1
+            self.phase_index[v] = self.max_phase_index
+            self.phase_mult[self.max_phase_index] = 1
+        return v
+
+
+    def remove_vertex(self, vertex: VT) -> None:
+        """Removes the given vertex from the graph."""
+        self.remove_vertices([vertex])
+
+    def remove_edge(self, edge: ET) -> None:
+        """Removes the given edge from the graph."""
+        self.remove_edges([edge])
+
+    def add_to_phase(self, vertex: VT, phase: FractionLike) -> None:
+        """Add the given phase to the phase value of the given vertex."""
+        self.set_phase(vertex,self.phase(vertex)+phase)
+
+    def num_inputs(self) -> int:
+        """Gets the number of inputs of the graph."""
+        return len(self.inputs())
+
+    def num_outputs(self) -> int:
+        """Gets the number of outputs of the graph."""
+        return len(self.outputs())
+
+    def set_position(self, vertex: VT, q: FloatInt, r: FloatInt):
+        """Set both the qubit index and row index of the vertex."""
+        self.set_qubit(vertex, q)
+        self.set_row(vertex, r)
+
+    def neighbors(self, vertex: VT) -> Sequence[VT]:
+        """Returns all neighboring vertices of the given vertex."""
+        vs: Set[VT] = set()
+        for e in self.incident_edges(vertex):
+            s,t = self.edge_st(e)
+            vs.add(s if t == vertex else t)
+        return list(vs)
+
+    def vertex_degree(self, vertex: VT) -> int:
+        """Returns the degree of the given vertex."""
+        return len(self.incident_edges(vertex))
+
+    def edge_s(self, edge: ET) -> VT:
+        """Returns the source of the given edge."""
+        return self.edge_st(edge)[0]
+
+    def edge_t(self, edge: ET) -> VT:
+        """Returns the target of the given edge."""
+        return self.edge_st(edge)[1]
+
+
+    def vertex_set(self) -> Set[VT]:
+        """Returns the vertices of the graph as a Python set.
+        Should be overloaded if the backend supplies a cheaper version than this."""
+        return set(self.vertices())
+
+    def edge_set(self) -> Set[ET]:
+        """Returns the edges of the graph as a Python set.
+        Should be overloaded if the backend supplies a cheaper version than this. Note this ignores parallel edges."""
+        return set(self.edges())
