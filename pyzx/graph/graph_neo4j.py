@@ -54,9 +54,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._driver = None
 
         self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
-        self.initialize()
-
-    def initialize(self):
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()

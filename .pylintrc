@@ -1,2 +1,5 @@
 [MAIN]
 ignore=/cirquits/*,/demos/*,/doc/*,/tests/*,setup.py,benchmark.py
+
+[DESIGN]
+max-attributes=12
