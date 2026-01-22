@@ -199,26 +199,34 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         return vertices
 
-    def add_edges(self, edges: List[ET], edge_data: Optional[List[EdgeType]] = None):
+    def add_edges(
+        self,
+        edge_pairs: Iterable[Tuple[VT, VT]],
+        edge_data: Optional[Iterable[EdgeType]] = None,
+        edgetype: EdgeType = EdgeType.SIMPLE,
+    ) -> None:
         """
         Adds multiple edges in a single batch transaction.
         """
+        edges = list(edge_pairs)
         if not edges:
             return
 
         if edge_data is None:
-            # Default to EdgeType.SIMPLE (usually value 1)
-            edge_data = [EdgeType.SIMPLE] * len(edges)
+            edge_data = [edgetype] * len(edges)
+        else:
+            if len(edge_data) != len(edges):
+                raise ValueError("edge_data must have same length as edge_pairs")
 
         edges_payload = [
-            {"s": e[0], "t": e[1], "et": ed.value} for e, ed in zip(edges, edge_data)
+            {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
         ]
 
         query = """
         UNWIND $edges AS e
         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-        MERGE (n1)-[r:Wire {t: e.et}]->(n2)
+        MERGE (n1)-[:Wire {t: e.et}]->(n2)
         """
 
         with self._get_session() as session:
