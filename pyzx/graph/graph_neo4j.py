@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional, Tuple
 
+# testing pylint
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
@@ -193,7 +194,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         return vertices
 
-
     def add_edges(self, edges: List[ET], edge_data: Optional[List[EdgeType]] = None):
         """
         Adds multiple edges in a single batch transaction.
@@ -206,8 +206,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             edge_data = [EdgeType.SIMPLE] * len(edges)
 
         edges_payload = [
-            {"s": e[0], "t": e[1], "et": ed.value}
-            for e, ed in zip(edges, edge_data)
+            {"s": e[0], "t": e[1], "et": ed.value} for e, ed in zip(edges, edge_data)
         ]
 
         query = """
@@ -221,9 +220,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             session.execute_write(
                 lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
             )
-
-
-
 
     def depth(self) -> int:
         # gets the maximum depth based on graph id.
@@ -264,6 +260,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         vertex_list = list(vertices)
 
         with self._get_session() as session:
+
             def delete_vertices(tx):
                 # Delete all relationships connected to these vertices, then delete the vertices
                 tx.run(
