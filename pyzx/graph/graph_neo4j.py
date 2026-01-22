@@ -1,14 +1,36 @@
 import os
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 # testing pylint
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
-from ..utils import EdgeType, VertexType, toggle_edge, vertex_is_zx
-from ..utils import FloatInt, FractionLike
+from ..utils import (
+    EdgeType,
+    FloatInt,
+    FractionLike,
+    VertexType,
+    toggle_edge,
+    vertex_is_zx,
+)
 from .base import BaseGraph
-from typing import TYPE_CHECKING, Union, Optional, Generic, TypeVar, Any, Sequence
-from typing import List, Dict, Set, Tuple, Mapping, Iterable, Callable, ClassVar, Literal
 
 load_dotenv()
 
