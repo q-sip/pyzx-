@@ -9,7 +9,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
-    
+
 )
 
 # testing pylint
@@ -54,7 +54,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._driver = None
 
         self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        self.initialize()
 
+    def initialize(self):
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
@@ -71,6 +73,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return self._driver
 
     def _get_session(self):
+        """Returns driver session"""
         if self.database:
             return self.driver.session(database=self.database)
         return self.driver.session()
@@ -88,9 +91,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         inputs: Optional[List[int]] = None,
         outputs: Optional[List[int]] = None,
     ) -> List[VT]:
+        """Creates a graph with given vertices and edges"""
         if not vertices_data:
             return []
-        """Creates a graph with given vertices and edges"""
         # Anna nodeille ID:t
         vertices = list(range(self._vindex, self._vindex + len(vertices_data)))
 
