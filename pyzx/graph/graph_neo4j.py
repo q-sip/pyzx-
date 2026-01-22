@@ -201,10 +201,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def add_edges(
         self,
-        edge_pairs: Iterable[Tuple[VT, VT]],
-        edge_data: Optional[Iterable[EdgeType]] = None,
+        edge_pairs: Iterable[tuple[int, int]],
         edgetype: EdgeType = EdgeType.SIMPLE,
+        *,
+        edge_data: Optional[Iterable[EdgeType]] = None,
     ) -> None:
+
         """
         Adds multiple edges in a single batch transaction.
         """
@@ -215,8 +217,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         if edge_data is None:
             edge_data = [edgetype] * len(edges)
         else:
+            edge_data = list(edge_data)
             if len(edge_data) != len(edges):
                 raise ValueError("edge_data must have same length as edge_pairs")
+
 
         edges_payload = [
             {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
