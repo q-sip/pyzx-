@@ -1,0 +1,70 @@
+name: Weekly upstream sync (PR)
+
+on:
+  schedule:
+    # Every Monday 03:00 UTC
+    - cron: "0 3 * * 5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [dev, master]
+
+    env:
+      UPSTREAM_OWNER: zxcalc
+      UPSTREAM_REPO: pyzx
+
+    steps:
+      - name: Checkout fork branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
+          git fetch upstream "${{ matrix.branch }}" --tags --prune
+
+      - name: Merge upstream -> local (prepare sync)
+        run: |
+          # Create/update a dedicated sync branch based on the fork branch
+          git checkout -B "sync/upstream-${{ matrix.branch }}"
+
+          # Merge upstream changes. If there are conflicts, this will fail and you resolve manually.
+          git merge --no-edit "upstream/${{ matrix.branch }}"
+
+      - name: Create or update PR
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          base: ${{ matrix.branch }}
+          branch: sync/upstream-${{ matrix.branch }}
+          title: "Sync from upstream: ${{ matrix.branch }}"
+          body: |
+            Automated weekly sync PR.
+
+            Upstream: https://github.com/${{ env.UPSTREAM_OWNER }}/${{ env.UPSTREAM_REPO }}
+            Target branch: `${{ matrix.branch }}`
+
+            If this PR has conflicts, resolve them locally and push to `sync/upstream-${{ matrix.branch }}`.
+          labels: |
+            upstream-sync
+          delete-branch: true

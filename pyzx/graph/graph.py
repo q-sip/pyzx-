@@ -25,13 +25,18 @@ try:
 except ImportError:
 	quizx = None
 
-backends = { 'simple': True, 'multigraph': True, 'quizx-vec': False if quizx is None else True }
 
-def Graph(backend:Optional[str]=None) -> BaseGraph:
+backends = { 
+	'simple': True, 
+	'multigraph': True, 
+	'quizx-vec': False if quizx is None else True,
+}
+
+def Graph(backend:Optional[str]=None, **kwargs) -> BaseGraph:
 	"""Returns an instance of an implementation of :class:`~pyzx.graph.base.BaseGraph`. 
 	By default :class:`~pyzx.graph.graph_s.GraphS` is used. 
 	Currently ``backend`` is allowed to be `simple` (for the default),
-	or 'graph_tool' and 'igraph'.
+	'multigraph', 'graph_tool', 'igraph', 'quizx-vec', or 'neo4j'.
 	This method is the preferred way to instantiate a ZX-diagram in PyZX.
 
 	Example:
@@ -39,16 +44,25 @@ def Graph(backend:Optional[str]=None) -> BaseGraph:
 
 			g = zx.Graph()
 		
+		For a Neo4j-backed graph::
+		
+			g = zx.Graph(backend='neo4j', uri='bolt://localhost:7687')
+		
 	"""
 	if backend is None: backend = 'simple'
 	if backend not in backends:
 		raise KeyError("Unavailable backend '{}'".format(backend))
+	if not backends[backend]:
+		raise ImportError(f"Backend '{backend}' is not available. Install required dependencies.")
 	if backend == 'simple': return GraphS()
 	if backend == 'multigraph': return Multigraph()
 	if backend == 'graph_tool': 
 		return GraphGT()
 	if backend == 'igraph': return GraphIG()
 	if backend == 'quizx-vec': return quizx.VecGraph()
+	if backend == 'neo4j':
+		from .graph_neo4j import GraphNeo4j
+		return GraphNeo4j(**kwargs)
 	return GraphS()
 
 Graph.from_json = GraphS.from_json # type: ignore
@@ -64,5 +78,10 @@ try:
 	import igraph as ig
 	from .graph_ig import GraphIG
 	backends['igraph'] = ig 
+except ImportError:
+	pass
+try:
+	import neo4j as _neo4j_module
+	backends['neo4j'] = _neo4j_module
 except ImportError:
 	pass

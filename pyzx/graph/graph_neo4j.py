@@ -1,0 +1,559 @@
+import os
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+
+)
+
+# testing pylint
+from dotenv import load_dotenv
+from neo4j import GraphDatabase
+
+from ..utils import (
+    EdgeType,
+    FloatInt,
+    FractionLike,
+    VertexType,
+    toggle_edge,
+    vertex_is_zx,
+)
+from .base import BaseGraph
+
+load_dotenv()
+
+VT = int
+ET = Tuple[int, int]
+
+
+class GraphNeo4j(BaseGraph[VT, ET]):
+    """Implementation of the BaseGraph interface using Neo4j as the backend.
+    This class manages a graph instance stored within a Neo4j database."""
+
+    backend = "neo4j"
+
+    def __init__(
+        self,
+        uri: str = os.getenv("NEO4J_URI", ""),
+        user: str = os.getenv("NEO4J_USER", ""),
+        password: str = os.getenv("NEO4J_PASSWORD", ""),
+        graph_id: Optional[str] = None,
+        database: Optional[str] = None,
+    ):
+        BaseGraph.__init__(self)
+        self.uri = uri
+        self.user = user
+        self.password = password
+        self.database = database
+        self._driver = None
+
+        self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        self._vindex: int = 0
+        self._inputs: Tuple[VT, ...] = tuple()
+        self._outputs: Tuple[VT, ...] = tuple()
+        self._maxr: int = 1
+
+    # Avaa ja sulkee neo4j driverin, suoraan Valterin reposta
+    @property
+    def driver(self):
+        """Create driver only when needed"""
+        if self._driver is None:
+            self._driver = GraphDatabase.driver(
+                self.uri, auth=(self.user, self.password)
+            )
+        return self._driver
+
+    def _get_session(self):
+        """Returns driver session"""
+        if self.database:
+            return self.driver.session(database=self.database)
+        return self.driver.session()
+
+    def close(self):
+        """Explicitly close the driver"""
+        if self._driver is not None:
+            self._driver.close()
+            self._driver = None
+
+    def create_graph(
+        self,
+        vertices_data: List[dict],
+        edges_data: List[Tuple[Tuple[int, int], EdgeType]],
+        inputs: Optional[List[int]] = None,
+        outputs: Optional[List[int]] = None,
+    ) -> List[VT]:
+        """Creates a graph with given vertices and edges"""
+        if not vertices_data:
+            return []
+        # Anna nodeille ID:t
+        vertices = list(range(self._vindex, self._vindex + len(vertices_data)))
+
+        # Valmistellaan nodejen luominen
+        all_vertices = []
+        for v_id, data in zip(vertices, vertices_data):
+            ty = data.get("ty", VertexType.BOUNDARY)
+            phase = data.get("phase")
+            phase_str = self._phase_to_str(phase) if phase is not None else "0"
+
+            all_vertices.append(
+                {
+                    "id": v_id,
+                    "t": ty.value,
+                    "phase": phase_str,
+                    "qubit": data.get("qubit", -1),
+                    "row": data.get("row", -1),
+                }
+            )
+
+        # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu nodejen ID:eiksi
+        all_edges = (
+            [
+                {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
+                for x in edges_data
+            ]
+            if edges_data
+            else []
+        )
+
+        # Valmistellaan input ja output nodejen ID:T
+        input_ids = [vertices[i] for i in inputs] if inputs else []
+        output_ids = [vertices[i] for i in outputs] if outputs else []
+
+        graph_id = self.graph_id
+
+        with self._get_session() as session:
+
+            def create_full_graph(tx):
+                # Luodaan kaikki nodet
+                tx.run(
+                    """
+                    UNWIND $vertices AS v
+                    CREATE (n:Node {
+                        graph_id: $graph_id,
+                        id: v.id,
+                        t: v.t,
+                        phase: v.phase,
+                        qubit: v.qubit,
+                        row: v.row
+                    })
+                """,
+                    graph_id=graph_id,
+                    vertices=all_vertices,
+                )
+
+                # Luodaan kaikki relationshipit nodeille
+                if all_edges:
+                    tx.run(
+                        """
+                        UNWIND $edges AS e
+                        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
+                        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
+                        CREATE (n1)-[:Wire {t: e.et}]->(n2)
+                    """,
+                        graph_id=graph_id,
+                        edges=all_edges,
+                    )
+
+                # Merkitään input nodet
+                if input_ids:
+                    tx.run(
+                        """
+                        UNWIND $ids AS vid
+                        MATCH (n:Node {graph_id: $graph_id, id: vid})
+                        SET n:Input
+                    """,
+                        graph_id=graph_id,
+                        ids=input_ids,
+                    )
+
+                # Merkitään output nodet
+                if output_ids:
+                    tx.run(
+                        """
+                        UNWIND $ids AS vid
+                        MATCH (n:Node {graph_id: $graph_id, id: vid})
+                        SET n:Output
+                    """,
+                        graph_id=graph_id,
+                        ids=output_ids,
+                    )
+
+            session.execute_write(create_full_graph)
+
+        # Päivitetään indeksit ja input sekä output tuplet
+        self._vindex += len(vertices_data)
+        self._inputs = tuple(input_ids)
+        self._outputs = tuple(output_ids)
+
+        return vertices
+
+    def add_edges(
+        self,
+        edge_pairs: Iterable[tuple[int, int]],
+        edgetype: EdgeType = EdgeType.SIMPLE,
+        *,
+        edge_data: Optional[Iterable[EdgeType]] = None,
+    ) -> None:
+
+        """
+        Adds multiple edges in a single batch transaction.
+        """
+        edges = list(edge_pairs)
+        if not edges:
+            return
+
+        if edge_data is None:
+            edge_data = [edgetype] * len(edges)
+        else:
+            edge_data = list(edge_data)
+            if len(edge_data) != len(edges):
+                raise ValueError("edge_data must have same length as edge_pairs")
+
+
+        edges_payload = [
+            {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
+        ]
+
+        query = """
+        UNWIND $edges AS e
+        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
+        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
+        MERGE (n1)-[:Wire {t: e.et}]->(n2)
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
+            )
+
+    def depth(self) -> int:
+        # gets the maximum depth based on graph id.
+        # if unsure / fails, it returns -1.
+        query = """
+        MATCH (n:Node {graph_id: $graph_id})
+        WHERE n.row IS NOT NULL AND n.row >= 0
+        RETURN coalesce(max(n.row), -1) AS maxr
+        """
+        with self._get_session() as session:
+            rec = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            )
+            self._maxr = int(rec["maxr"]) if rec and rec["maxr"] is not None else -1
+            return self._maxr
+
+    def _phase_to_str(self, phase) -> str:
+        if phase is None:
+            return "0"
+        return str(phase)
+
+    def vindex(self) -> int:
+        return self._vindex
+
+    def num_vertices(self):
+        query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            )
+        return result["count"] if result else 0
+
+    def remove_vertices(self, vertices):
+        """Removes the specified vertices from the graph."""
+        if not vertices:
+            return
+
+        vertex_list = list(vertices)
+
+        with self._get_session() as session:
+
+            def delete_vertices(tx):
+                # Delete all relationships connected to these vertices, then delete the vertices
+                tx.run(
+                    """
+                    UNWIND $vertex_ids AS vid
+                    MATCH (n:Node {graph_id: $graph_id, id: vid})
+                    DETACH DELETE n
+                    """,
+                    graph_id=self.graph_id,
+                    vertex_ids=vertex_list,
+                )
+
+            session.execute_write(delete_vertices)
+
+        # Update inputs and outputs to remove deleted vertices
+        self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
+        self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
+
+    def num_edges(self):
+        query = "MATCH ()-->() RETURN count(*) as count;"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            )
+        return result["count"] if result else 0
+
+    def add_edge(self, edge_pair: Tuple[VT,VT], edgetype:EdgeType=EdgeType.SIMPLE) -> ET:
+        """Adds a single edge of the given type and return its id"""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def remove_edges(self, edges: List[ET]) -> None:
+        """Removes the list of edges from the graph."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def vertices(self) -> Iterable[VT]:
+        """Iterator over all the vertices."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
+        """Iterator that returns all the edges in the graph,
+        or all the edges connecting the pair of vertices.
+        Output type depends on implementation in backend."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edge_st(self, edge: ET) -> Tuple[VT, VT]:
+        """Returns a tuple of source/target of the given edge."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def incident_edges(self, vertex: VT) -> Sequence[ET]:
+        """Returns all neighboring edges of the given vertex."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edge_type(self, e: ET) -> EdgeType:
+        """Returns the type of the given edge:
+        ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge,
+        0 if the edge is not in the graph."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def set_edge_type(self, e: ET, t: EdgeType) -> None:
+        """Sets the type of the given edge."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def type(self, vertex: VT) -> VertexType:
+        """Returns the type of the given vertex:
+        VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
+        VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def set_type(self, vertex: VT, t: VertexType) -> None:
+        """Sets the type of the given vertex to t."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def phase(self, vertex: VT) -> FractionLike:
+        """Returns the phase value of the given vertex."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_phase(self, vertex: VT, phase: FractionLike) -> None:
+        """Sets the phase of the vertex to the given value."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def qubit(self, vertex: VT) -> FloatInt:
+        """Returns the qubit index associated to the vertex.
+        If no index has been set, returns -1."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_qubit(self, vertex: VT, q: FloatInt) -> None:
+        """Sets the qubit index associated to the vertex."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def row(self, vertex: VT) -> FloatInt:
+        """Returns the row that the vertex is positioned at.
+        If no row has been set, returns -1."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_row(self, vertex: VT, r: FloatInt) -> None:
+        """Sets the row the vertex should be positioned at."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def clear_vdata(self, vertex: VT) -> None:
+        """Removes all vdata associated to a vertex"""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def vdata_keys(self, vertex: VT) -> Sequence[str]:
+        """Returns an iterable of the vertex data key names.
+        Used e.g. in making a copy of the graph in a backend-independent way."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def vdata(self, vertex: VT, key: str, default: Any=None) -> Any:
+        """Returns the data value of the given vertex associated to the key.
+        If this key has no value associated with it, it returns the default value."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
+        """Sets the vertex data associated to key to val."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def clear_edata(self, edge: ET) -> None:
+        """Removes all edata associated to an edge"""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edata_keys(self, edge: ET) -> Sequence[str]:
+        """Returns an iterable of the edge data key names."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def edata(self, edge: ET, key: str, default: Any=None) -> Any:
+        """Returns the data value of the given edge associated to the key.
+        If this key has no value associated with it, it returns the default value."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+    def set_edata(self, edge: ET, key: str, val: Any) -> None:
+        """Sets the edge data associated to key to val."""
+        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+    # }}}
+
+
+    # OPTIONAL OVERRIDES{{{
+
+    # These only need to be overridden if the backend will be used with hybrid classical/quantum
+    # methods.
+    def is_ground(self, vertex: VT) -> bool:
+        """Returns a boolean indicating if the vertex is connected to a ground."""
+        return False
+
+    def grounds(self) -> Set[VT]:
+        """Returns the set of vertices connected to a ground."""
+        return set(v for v in self.vertices() if self.is_ground(v))
+
+    def set_ground(self, vertex: VT, flag: bool=True) -> None:
+        """Connect or disconnect the vertex to a ground."""
+        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+    def is_hybrid(self) -> bool:
+        """Returns whether this is a hybrid quantum-classical graph,
+        i.e. a graph with ground generators."""
+        return bool(self.grounds())
+
+    # Override and set to true if the backend supports parallel edges
+    def multigraph(self) -> bool:
+        return False
+
+
+    # Backends may wish to override these methods to implement them more efficiently
+
+    # These methods return mappings from vertices to various pieces of data. If the backend
+    # stores these e.g. as Python dicts, just return the relevant dicts.
+    def phases(self) -> Mapping[VT, FractionLike]:
+        """Returns a mapping of vertices to their phase values."""
+        return { v: self.phase(v) for v in self.vertices() }
+
+    def types(self) -> Mapping[VT, VertexType]:
+        """Returns a mapping of vertices to their types."""
+        return { v: self.type(v) for v in self.vertices() }
+
+    def qubits(self) -> Mapping[VT,FloatInt]:
+        """Returns a mapping of vertices to their qubit index."""
+        return { v: self.qubit(v) for v in self.vertices() }
+
+    def rows(self) -> Mapping[VT, FloatInt]:
+        """Returns a mapping of vertices to their row index."""
+        return { v: self.row(v) for v in self.vertices() }
+
+    def edge(self, s:VT, t:VT, et: EdgeType=EdgeType.SIMPLE) -> ET:
+        """Returns the name of the first edge with the given source/target and type.
+        Behaviour is undefined if the vertices are not connected."""
+        for e in self.incident_edges(s):
+            if t in self.edge_st(e) and et == self.edge_type(e):
+                return e
+        raise ValueError(f"No edge of type {et} between {s} and {t}")
+
+    def connected(self,v1: VT,v2: VT) -> bool:
+        """Returns whether vertices v1 and v2 share an edge."""
+        for e in self.incident_edges(v1):
+            if v2 in self.edge_st(e):
+                return True
+        return False
+
+    def add_vertex(self,
+                   ty:VertexType=VertexType.BOUNDARY,
+                   qubit:FloatInt=-1,
+                   row:FloatInt=-1,
+                   phase:Optional[FractionLike]=None,
+                   ground:bool=False,
+                   index: Optional[VT] = None
+                   ) -> VT:
+        """Add a single vertex to the graph and return its index.
+        The optional parameters allow you to respectively set
+        the type, qubit index, row index and phase of the vertex."""
+        if index is not None:
+            self.add_vertex_indexed(index)
+            v = index
+        else:
+            v = self.add_vertices(1)[0]
+        self.set_type(v, ty)
+        if phase is None:
+            if ty == VertexType.H_BOX: phase = 1
+            else: phase = 0
+        self.set_qubit(v, qubit)
+        self.set_row(v, row)
+        if phase:
+            self.set_phase(v, phase)
+        if ground:
+            self.set_ground(v, True)
+        if self.track_phases:
+            self.max_phase_index += 1
+            self.phase_index[v] = self.max_phase_index
+            self.phase_mult[self.max_phase_index] = 1
+        return v
+
+
+    def remove_vertex(self, vertex: VT) -> None:
+        """Removes the given vertex from the graph."""
+        self.remove_vertices([vertex])
+
+    def remove_edge(self, edge: ET) -> None:
+        """Removes the given edge from the graph."""
+        self.remove_edges([edge])
+
+    def add_to_phase(self, vertex: VT, phase: FractionLike) -> None:
+        """Add the given phase to the phase value of the given vertex."""
+        self.set_phase(vertex,self.phase(vertex)+phase)
+
+    def num_inputs(self) -> int:
+        """Gets the number of inputs of the graph."""
+        return len(self.inputs())
+
+    def num_outputs(self) -> int:
+        """Gets the number of outputs of the graph."""
+        return len(self.outputs())
+
+    def set_position(self, vertex: VT, q: FloatInt, r: FloatInt):
+        """Set both the qubit index and row index of the vertex."""
+        self.set_qubit(vertex, q)
+        self.set_row(vertex, r)
+
+    def neighbors(self, vertex: VT) -> Sequence[VT]:
+        """Returns all neighboring vertices of the given vertex."""
+        vs: Set[VT] = set()
+        for e in self.incident_edges(vertex):
+            s,t = self.edge_st(e)
+            vs.add(s if t == vertex else t)
+        return list(vs)
+
+    def vertex_degree(self, vertex: VT) -> int:
+        """Returns the degree of the given vertex."""
+        return len(self.incident_edges(vertex))
+
+    def edge_s(self, edge: ET) -> VT:
+        """Returns the source of the given edge."""
+        return self.edge_st(edge)[0]
+
+    def edge_t(self, edge: ET) -> VT:
+        """Returns the target of the given edge."""
+        return self.edge_st(edge)[1]
+
+
+    def vertex_set(self) -> Set[VT]:
+        """Returns the vertices of the graph as a Python set.
+        Should be overloaded if the backend supplies a cheaper version than this."""
+        return set(self.vertices())
+
+    def edge_set(self) -> Set[ET]:
+        """Returns the edges of the graph as a Python set.
+        Should be overloaded if the backend supplies a cheaper version than this.
+        Note this ignores parallel edges."""
+        return set(self.edges())
