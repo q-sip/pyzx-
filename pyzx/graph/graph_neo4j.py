@@ -171,6 +171,38 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         return vertices
 
+
+    def add_edges(self, edges: List[ET], edge_data: Optional[List[EdgeType]] = None):
+        """
+        Adds multiple edges in a single batch transaction.
+        """
+        if not edges:
+            return
+
+        if edge_data is None:
+            # Default to EdgeType.SIMPLE (usually value 1)
+            edge_data = [EdgeType.SIMPLE] * len(edges)
+        
+        edges_payload = [
+            {"s": e[0], "t": e[1], "et": ed.value} 
+            for e, ed in zip(edges, edge_data)
+        ]
+
+        query = """
+        UNWIND $edges AS e
+        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
+        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
+        MERGE (n1)-[r:Wire {t: e.et}]->(n2)
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
+            )
+	
+
+
+
     def depth(self) -> int:
         # gets the maximum depth based on graph id.
         # if unsure / fails, it returns -1.
