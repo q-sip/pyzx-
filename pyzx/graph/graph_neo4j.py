@@ -201,3 +201,29 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id).single()
             )
         return result["count"] if result else 0
+    
+    def remove_vertices(self, vertices):
+        """Removes the specified vertices from the graph."""
+        if not vertices:
+            return
+        
+        vertex_list = list(vertices)
+        
+        with self._get_session() as session:
+            def delete_vertices(tx):
+                # Delete all relationships connected to these vertices, then delete the vertices
+                tx.run(
+                    """
+                    UNWIND $vertex_ids AS vid
+                    MATCH (n:Node {graph_id: $graph_id, id: vid})
+                    DETACH DELETE n
+                    """,
+                    graph_id=self.graph_id,
+                    vertex_ids=vertex_list,
+                )
+            
+            session.execute_write(delete_vertices)
+        
+        # Update inputs and outputs to remove deleted vertices
+        self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
+        self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
