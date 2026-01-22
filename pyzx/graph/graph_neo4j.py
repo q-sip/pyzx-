@@ -1,5 +1,4 @@
 import os
-from typing import List, Optional, Tuple
 
 # testing pylint
 from dotenv import load_dotenv
@@ -19,23 +18,7 @@ ET = Tuple[int, int]
 
 class GraphNeo4j(BaseGraph[VT, ET]):
     """Implementation of the BaseGraph interface using Neo4j as the backend.
-    This class manages a graph instance stored within a Neo4j database. Unlike in-memory
-    backends, this implementation persists data to a database using the Neo4j Bolt driver.
-    It supports multiple distinct graphs within the same database instance by associating
-    every node and relationship with a specific ``graph_id``.
-    Attributes:
-        backend (str): The identifier for this backend ("neo4j").
-        uri (str): The Neo4j database URI (default: env NEO4J_URI).
-        user (str): The Neo4j database user (default: env NEO4J_USER).
-        password (str): The Neo4j database password (default: env NEO4J_PASSWORD).
-        database (str, optional): The specific database name to use within the Neo4j instance.
-        graph_id (str): A unique identifier for this specific graph instance. Used to separate 
-                        nodes of this graph from others in the same database. If not provided, 
-                        a string based on the object's `id()` is generated.
-    Usage:
-        The driver is initialized lazily upon the property access. Connections
-        should be closed explicitly using the ``close()`` method when the object is
-        no longer needed to release network resources."""
+    This class manages a graph instance stored within a Neo4j database."""
 
     backend = "neo4j"
 
@@ -91,7 +74,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     ) -> List[VT]:
         if not vertices_data:
             return []
-
+        """Creates a graph with given vertices and edges"""
         # Anna nodeille ID:t
         vertices = list(range(self._vindex, self._vindex + len(vertices_data)))
 
@@ -300,7 +283,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         raise NotImplementedError("Not implemented on backend " + type(self).backend)
 
     def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
-        """Iterator that returns all the edges in the graph, or all the edges connecting the pair of vertices.
+        """Iterator that returns all the edges in the graph,
+        or all the edges connecting the pair of vertices.
         Output type depends on implementation in backend."""
         raise NotImplementedError("Not implemented on backend " + type(self).backend)
 
@@ -442,7 +426,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return { v: self.row(v) for v in self.vertices() }
 
     def edge(self, s:VT, t:VT, et: EdgeType=EdgeType.SIMPLE) -> ET:
-        """Returns the name of the first edge with the given source/target and type. Behaviour is undefined if the vertices are not connected."""
+        """Returns the name of the first edge with the given source/target and type.
+        Behaviour is undefined if the vertices are not connected."""
         for e in self.incident_edges(s):
             if t in self.edge_st(e) and et == self.edge_type(e):
                 return e
@@ -541,5 +526,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def edge_set(self) -> Set[ET]:
         """Returns the edges of the graph as a Python set.
-        Should be overloaded if the backend supplies a cheaper version than this. Note this ignores parallel edges."""
+        Should be overloaded if the backend supplies a cheaper version than this.
+        Note this ignores parallel edges."""
         return set(self.edges())
