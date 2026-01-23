@@ -1,3 +1,6 @@
+"""
+Docstring for pyzx.graph.graph_neo4j
+"""
 import os
 from typing import (
     TYPE_CHECKING,
@@ -300,7 +303,22 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def add_edge(self, edge_pair: Tuple[VT,VT], edgetype:EdgeType=EdgeType.SIMPLE) -> ET:
         """Adds a single edge of the given type and return its id"""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+
+        edge = {'s': edge_pair[0], 't': edge_pair[1], 'et': edgetype}
+
+        query = """
+        UNWIND $edge AS e
+        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
+        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
+        MERGE (n1)-[:Wire {t: e.et}]->(n2)
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, edge=edge)
+            )
+
+        return self.num_edges()
 
     def remove_edges(self, edges: List[ET]) -> None:
         """Removes the list of edges from the graph."""
