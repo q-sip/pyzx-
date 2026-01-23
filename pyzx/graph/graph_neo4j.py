@@ -329,7 +329,13 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """MATCH (n:Node {graph_id: $graph_id}) RETURN n.id AS id"""
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+        return [r["id"] for r in result]
 
     def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
         """Iterator that returns all the edges in the graph,
