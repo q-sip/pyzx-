@@ -115,15 +115,18 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
 
         # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu nodejen ID:eiksi
-        all_edges = (
-            [
-                {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
-                for x in edges_data
-            ]
-            if edges_data
-            else []
-        )
-
+        edge_ids = [self.num_edges() + x for x in range(len(edges_data))]
+        if edges_data:
+            all_edges = (
+                [
+                    {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
+                    for x in edges_data
+                ]
+            )
+            for edge, edge_id in zip(all_edges, edge_ids):
+                edge['id'] = edge_id
+        else:
+            all_edges = ([])
         # Valmistellaan input ja output nodejen ID:T
         input_ids = [vertices[i] for i in inputs] if inputs else []
         output_ids = [vertices[i] for i in outputs] if outputs else []
@@ -157,7 +160,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         UNWIND $edges AS e
                         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
                         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-                        CREATE (n1)-[:Wire {t: e.et}]->(n2)
+                        CREATE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
                     """,
                         graph_id=graph_id,
                         edges=all_edges,
