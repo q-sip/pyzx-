@@ -39,8 +39,10 @@ jobs:
 
       - name: Add upstream remote and fetch
         run: |
-          git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
-          git fetch upstream "${{ matrix.branch }}" --tags --prune
+          git remote get-url upstream >/dev/null 2>&1 || \
+            git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
+          git fetch upstream --tags --prune
+
 
       - name: Merge upstream -> local (prepare sync)
         run: |
