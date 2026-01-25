@@ -61,6 +61,7 @@ jobs:
           labels: |
             upstream-sync
           delete-branch: true
+          fail-on-no-changes: false
 
   sync_dev_from_master:
     runs-on: ubuntu-latest
@@ -105,3 +106,5 @@ jobs:
           labels: |
             upstream-sync
           delete-branch: true
+          fail-on-no-changes: false
+
