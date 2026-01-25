@@ -53,7 +53,10 @@ def chat(base_url: str, api_key: str, model: str, system: str, user: str) -> str
     if not base.endswith("/v1"):
         base += "/v1"
     url = base + "/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
     payload = {
         "model": model,
         "temperature": 0.2,
@@ -82,8 +85,8 @@ def main() -> int:
     model = os.environ.get("AGENT_MODEL", "").strip()
     api_key = os.environ.get("AGENT_API_KEY", "").strip()
 
-    if not base_url or not model or not api_key:
-        print("Missing AGENT_BASE_URL / AGENT_MODEL / AGENT_API_KEY.", file=sys.stderr)
+    if not base_url or not model:
+        print("Missing AGENT_BASE_URL / AGENT_MODEL.", file=sys.stderr)
         return 2
 
     repo_root = sh(["git", "rev-parse", "--show-toplevel"]).strip()
