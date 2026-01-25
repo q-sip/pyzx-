@@ -2,6 +2,7 @@
 import argparse
 import os
 import re
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -23,15 +24,29 @@ def read_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-def extract_unified_diff(text: str) -> Optional[str]:
-    m = re.search(r"```(?:diff)?\n(.*?)\n```", text, flags=re.S)
+ def extract_unified_diff(text: str) -> Optional[str]:
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+
+    candidates: List[str] = []
+
+    m = re.search(r"```(?:diff|patch)?\n(.*?)\n```", cleaned, flags=re.S | re.I)
     if m:
-        block = m.group(1).strip()
-        if "diff --git" in block:
-            return block
-    idx = text.find("diff --git")
-    if idx >= 0:
-        return text[idx:].strip()
+        candidates.append(m.group(1).strip())
+    candidates.append(cleaned)
+
+    for cand in candidates:
+        m_git = re.search(r"(?m)^diff --git ", cand)
+        if m_git:
+            return cand[m_git.start():].strip()
+
+
+        m_unified = re.search(
+            r"(?m)^--- (?:a/|/dev/null|\S+).*\n\+\+\+ (?:b/|/dev/null|\S+).*$",
+            cand,
+        )
+        if m_unified:
+            return cand[m_unified.start():].strip()
+
     return None
 
 
@@ -56,10 +71,11 @@ def chat(base_url: str, api_key: str, model: str, system: str, user: str) -> str
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-
+    max_tokens = int(os.environ.get("AGENT_MAX_TOKENS", 8192))
     payload = {
         "model": model,
         "temperature": 0.2,
+        "max_tokens": max_tokens,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -98,6 +114,7 @@ def main() -> int:
         "No explanations. No markdown. Diff only.\n"
         "Do not change runtime behavior unless fixing lint issues.\n"
         "Prefer minimal, reviewable changes.\n"
+        "Your response MUST begin with diff --git or - - -"
     )
 
     if args.mode == "docs-tests":
