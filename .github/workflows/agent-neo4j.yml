@@ -1,4 +1,4 @@
-name: Agent: propose neo4j docs + tests + lint fixes (no pushes)
+name: "Agent: propose neo4j docs + tests + lint fixes (no pushes)"
 
 on:
   workflow_dispatch:
@@ -11,13 +11,15 @@ on:
         description: "Try to fix pylint issues if score below threshold"
         required: true
         default: "true"
+
   schedule:
     - cron: "0 3 * * 1" # weekly Monday 03:00 UTC
-  # optional: force indexing/visibility on default branch changes
+
+  # Optional: helps visibility/indexing; runs in proposal-only mode anyway.
   push:
     branches: ["dev"]
     paths:
-      - ".github/workflows/agent-neo4j-propose.yml"
+      - ".github/workflows/agent-neo4j.yml"
       - "tools/agent/**"
 
 permissions:
@@ -43,8 +45,9 @@ jobs:
       PYLINT_THRESHOLD: "9.5"
       DOCS_PATH: docs/neo4j/graph_neo4j.md
 
-      TARGET_BRANCH: ${{ inputs.target_branch || 'dev' }}
-      ENABLE_PYLINT_FIXES: ${{ inputs.enable_pylint_fixes || 'true' }}
+      # For schedule/push events, these inputs do not exist; read them from the event payload safely.
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch || 'dev' }}
+      ENABLE_PYLINT_FIXES: ${{ github.event.inputs.enable_pylint_fixes || 'true' }}
 
     steps:
       - name: Checkout target branch
@@ -220,11 +223,13 @@ jobs:
         run: |
           set -euo pipefail
           git diff > agent-proposal.patch
-          echo "Changed files:" > agent-proposal.txt
-          git diff --name-only >> agent-proposal.txt
-          echo "" >> agent-proposal.txt
-          echo "Apply with:" >> agent-proposal.txt
-          echo "  git apply agent-proposal.patch" >> agent-proposal.txt
+          {
+            echo "Changed files:"
+            git diff --name-only
+            echo
+            echo "Apply with:"
+            echo "  git apply agent-proposal.patch"
+          } > agent-proposal.txt
 
       - name: Upload proposal artifact
         uses: actions/upload-artifact@v4
@@ -242,14 +247,14 @@ jobs:
         run: |
           {
             echo "## Agent proposal (no pushes)"
-            echo ""
+            echo
             echo "**Target branch:** \`${TARGET_BRANCH}\`"
-            echo ""
+            echo
             echo "### Changed files"
             cat changed_files.txt || true
-            echo ""
+            echo
             echo "### How to apply"
             echo "\`git apply agent-proposal.patch\`"
-            echo ""
+            echo
             echo "Download the artifact **agent-neo4j-proposal** from this run."
           } >> "$GITHUB_STEP_SUMMARY"
