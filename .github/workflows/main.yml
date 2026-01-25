@@ -1,0 +1,18 @@
+name: Self-hosted runner smoke test
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: self-hosted
+    steps:
+      - name: Who am I and where am I
+        run: |
+          whoami
+          hostname
+          uname -a
+          pwd
+      - name: GPU check (optional)
+        run: |
+          nvidia-smi || true
