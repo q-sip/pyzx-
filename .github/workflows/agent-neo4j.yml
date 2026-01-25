@@ -1,27 +1,34 @@
-name: Agent: neo4j docs + tests + pylint fixes
+name: Agent: propose neo4j docs + tests + lint fixes (no pushes)
 
 on:
   workflow_dispatch:
     inputs:
       target_branch:
-        description: "Branch to run the agent on (and PR back into)"
+        description: "Branch to run against (no pushes will be made)"
         required: true
         default: "dev"
       enable_pylint_fixes:
         description: "Try to fix pylint issues if score below threshold"
         required: true
         default: "true"
+  schedule:
+    - cron: "0 3 * * 1" # weekly Monday 03:00 UTC
+  # optional: force indexing/visibility on default branch changes
+  push:
+    branches: ["dev"]
+    paths:
+      - ".github/workflows/agent-neo4j-propose.yml"
+      - "tools/agent/**"
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
-  group: agent-neo4j
+  group: agent-neo4j-propose
   cancel-in-progress: false
 
 jobs:
-  agent:
+  propose:
     runs-on: self-hosted
 
     env:
@@ -33,18 +40,47 @@ jobs:
       AGENT_MODEL: ${{ secrets.AGENT_MODEL }}
       AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
 
-      PR_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
       PYLINT_THRESHOLD: "9.5"
-
-      # Where standalone markdown docs are allowed to be created/updated
       DOCS_PATH: docs/neo4j/graph_neo4j.md
+
+      TARGET_BRANCH: ${{ inputs.target_branch || 'dev' }}
+      ENABLE_PYLINT_FIXES: ${{ inputs.enable_pylint_fixes || 'true' }}
 
     steps:
       - name: Checkout target branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
+
+      - name: Add upstream remote and fetch
+        run: |
+          set -euo pipefail
+          git remote get-url upstream >/dev/null 2>&1 || \
+            git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_BRANCH}" --prune --tags
+
+      - name: Compute fork-touched Python files (diff vs upstream/master)
+        id: touched
+        run: |
+          set -euo pipefail
+          git diff --name-only "upstream/${UPSTREAM_BRANCH}...HEAD" > touched_files_all.txt
+          grep -E '^pyzx/.*\.py$' touched_files_all.txt | grep -vE '^tests/' > touched_py_files.txt || true
+
+          echo "Touched python files:"
+          cat touched_py_files.txt || true
+
+          if [ -s touched_py_files.txt ]; then
+            echo "has_touched_py=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_touched_py=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Exit early if nothing to do
+        if: steps.touched.outputs.has_touched_py != 'true'
+        run: |
+          echo "No fork-touched Python files vs upstream/${UPSTREAM_BRANCH}. Nothing to do."
+          exit 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -72,36 +108,7 @@ jobs:
           print("LLM OK:", r.status_code)
           PY
 
-      - name: Add upstream remote and fetch
-        run: |
-          set -euo pipefail
-          git remote get-url upstream >/dev/null 2>&1 || \
-            git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
-          git fetch upstream "${UPSTREAM_BRANCH}" --prune --tags
-
-      - name: Compute fork-touched files (diff vs upstream/master)
-        id: touched
-        run: |
-          set -euo pipefail
-          git diff --name-only "upstream/${UPSTREAM_BRANCH}...HEAD" > touched_files_all.txt
-          grep -E '^pyzx/.*\.py$' touched_files_all.txt | grep -vE '^tests/' > touched_py_files.txt || true
-
-          echo "Touched python files:"
-          cat touched_py_files.txt || true
-
-          if [ -s touched_py_files.txt ]; then
-            echo "has_touched_py=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_touched_py=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Stop if no fork-touched Python files
-        if: steps.touched.outputs.has_touched_py != 'true'
-        run: |
-          echo "No fork-touched Python files vs upstream/${UPSTREAM_BRANCH}. Nothing to document."
-          exit 0
-
-      - name: Run agent to generate docs + tests + standalone markdown docs
+      - name: Run agent (apply changes locally)
         run: |
           set -euo pipefail
           python tools/agent/agent.py \
@@ -130,17 +137,17 @@ jobs:
           while read -r f; do
             [ -z "$f" ] && continue
 
-            # Allow any python file already touched in the fork (vs upstream)
+            # allow any python file already touched in the fork (vs upstream)
             if grep -qxF "$f" touched_py_files.txt; then
               continue
             fi
 
-            # Allow neo4j test area
+            # allow neo4j test area
             if [[ "$f" == "$ALLOWED_TEST_PREFIX"* ]]; then
               continue
             fi
 
-            # Allow exactly this one docs file (standalone doc)
+            # allow exactly this standalone doc
             if [ "$f" = "$ALLOWED_DOC_FILE" ]; then
               continue
             fi
@@ -158,30 +165,19 @@ jobs:
         run: |
           set -euo pipefail
           pylint pyzx/graph/graph_neo4j.py | tee pylint.log || true
-
           SCORE=$(grep -oE 'rated at [0-9]+(\.[0-9]+)?/10' pylint.log | tail -n 1 | awk '{print $3}' | cut -d/ -f1 || true)
           if [ -z "${SCORE:-}" ]; then
             echo "Could not determine pylint score."
             exit 1
           fi
-
-          echo "Pylint score: $SCORE"
-          python - <<PY
-          import sys
-          score = float("$SCORE")
-          threshold = float("${PYLINT_THRESHOLD}")
-          if score < threshold:
-              sys.exit(2)
-          sys.exit(0)
-          PY
+          echo "Pylint score (before fixes): $SCORE"
 
       - name: Agent: attempt pylint fixes (optional)
-        if: inputs.enable_pylint_fixes == 'true'
+        if: env.ENABLE_PYLINT_FIXES == 'true'
         run: |
           set -euo pipefail
-
-          # Only run fixes if current score is below threshold
           SCORE=$(grep -oE 'rated at [0-9]+(\.[0-9]+)?/10' pylint.log | tail -n 1 | awk '{print $3}' | cut -d/ -f1 || true)
+
           python - <<PY
           import sys
           score = float("${SCORE:-0}")
@@ -206,15 +202,13 @@ jobs:
             echo "Could not determine pylint score after fixes."
             exit 1
           fi
+          echo "Pylint score (after fixes): $SCORE2"
 
-          echo "Pylint score after fixes: $SCORE2"
           python - <<PY
           import sys
           score = float("$SCORE2")
           threshold = float("${PYLINT_THRESHOLD}")
-          if score < threshold:
-              sys.exit(1)
-          sys.exit(0)
+          sys.exit(0 if score >= threshold else 1)
           PY
 
       - name: Run end-to-end tests (pytest)
@@ -222,26 +216,40 @@ jobs:
           set -euo pipefail
           pytest -q
 
-      - name: Create PR (only after all checks succeed)
-        uses: peter-evans/create-pull-request@v8
+      - name: Produce proposal patch
+        run: |
+          set -euo pipefail
+          git diff > agent-proposal.patch
+          echo "Changed files:" > agent-proposal.txt
+          git diff --name-only >> agent-proposal.txt
+          echo "" >> agent-proposal.txt
+          echo "Apply with:" >> agent-proposal.txt
+          echo "  git apply agent-proposal.patch" >> agent-proposal.txt
+
+      - name: Upload proposal artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ env.PR_TOKEN }}
-          base: ${{ inputs.target_branch }}
-          branch: agent/neo4j-docs-tests
-          title: "Agent: neo4j docs/tests/lint improvements"
-          body: |
-            Automated agent PR.
+          name: agent-neo4j-proposal
+          path: |
+            agent-proposal.patch
+            agent-proposal.txt
+            pylint.log
+            pylint_after.log
+            changed_files.txt
+          if-no-files-found: ignore
 
-            Scope:
-            - Docstrings/comments for fork-touched Python files (diff vs upstream/master)
-            - Standalone docs: `${{ env.DOCS_PATH }}` (with usage examples)
-            - Additional tests under `tests/test_graph_neo4j/`
-            - Optional pylint fixes for `pyzx/graph/graph_neo4j.py`
-
-            Gates passed:
-            - mypy
-            - pylint (>= ${{ env.PYLINT_THRESHOLD }})
-            - pytest
-          labels: |
-            upstream-sync
-          delete-branch: false
+      - name: Write run summary
+        run: |
+          {
+            echo "## Agent proposal (no pushes)"
+            echo ""
+            echo "**Target branch:** \`${TARGET_BRANCH}\`"
+            echo ""
+            echo "### Changed files"
+            cat changed_files.txt || true
+            echo ""
+            echo "### How to apply"
+            echo "\`git apply agent-proposal.patch\`"
+            echo ""
+            echo "Download the artifact **agent-neo4j-proposal** from this run."
+          } >> "$GITHUB_STEP_SUMMARY"
