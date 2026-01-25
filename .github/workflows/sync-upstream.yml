@@ -14,23 +14,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync:
+  sync_master_from_upstream:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: [dev, master]
-
     env:
       UPSTREAM_OWNER: zxcalc
       UPSTREAM_REPO: pyzx
+      UPSTREAM_BRANCH: master
 
     steps:
-      - name: Checkout fork branch
+      - name: Checkout fork master
         uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.branch }}
+          ref: master
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Configure git identity
         run: |
@@ -43,29 +40,68 @@ jobs:
             git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
           git fetch upstream --tags --prune
 
-
-      - name: Merge upstream -> local (prepare sync)
+      - name: Merge upstream/master -> sync branch
         run: |
-          # Create/update a dedicated sync branch based on the fork branch
-          git checkout -B "sync/upstream-${{ matrix.branch }}"
+          git checkout -B "sync/upstream-master"
+          git merge --no-edit "upstream/${UPSTREAM_BRANCH}"
 
-          # Merge upstream changes. If there are conflicts, this will fail and you resolve manually.
-          git merge --no-edit "upstream/${{ matrix.branch }}"
-
-      - name: Create or update PR
-        id: cpr
+      - name: Create or update PR (upstream -> master)
         uses: peter-evans/create-pull-request@v8
         with:
-          base: ${{ matrix.branch }}
-          branch: sync/upstream-${{ matrix.branch }}
-          title: "Sync from upstream: ${{ matrix.branch }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: master
+          branch: sync/upstream-master
+          title: "Sync from upstream: master"
           body: |
             Automated weekly sync PR.
 
             Upstream: https://github.com/${{ env.UPSTREAM_OWNER }}/${{ env.UPSTREAM_REPO }}
-            Target branch: `${{ matrix.branch }}`
+            Upstream branch: `${{ env.UPSTREAM_BRANCH }}`
+            Target branch: `master`
+          labels: |
+            upstream-sync
+          delete-branch: true
 
-            If this PR has conflicts, resolve them locally and push to `sync/upstream-${{ matrix.branch }}`.
+  sync_dev_from_master:
+    runs-on: ubuntu-latest
+    needs: sync_master_from_upstream
+
+    steps:
+      - name: Checkout fork dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch fork master
+        run: |
+          git fetch origin master --prune
+
+      - name: Merge origin/master -> sync branch
+        run: |
+          git checkout -B "sync/master-to-dev"
+          git merge --no-edit "origin/master"
+
+      - name: Create or update PR (master -> dev)
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: dev
+          branch: sync/master-to-dev
+          title: "Merge master into dev"
+          body: |
+            Automated weekly propagation PR.
+
+            Source branch: `master`
+            Target branch: `dev`
+
+            This PR merges the latest `master` into `dev` so dev stays current.
           labels: |
             upstream-sync
           delete-branch: true
