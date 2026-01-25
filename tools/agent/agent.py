@@ -24,7 +24,7 @@ def read_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
- def extract_unified_diff(text: str) -> Optional[str]:
+def extract_unified_diff(text: str) -> Optional[str]:
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
 
     candidates: List[str] = []
