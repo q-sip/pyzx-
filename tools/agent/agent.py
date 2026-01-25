@@ -75,6 +75,7 @@ def main() -> int:
     ap.add_argument("--focus-file")
     ap.add_argument("--tests-dir")
     ap.add_argument("--pylint-log")
+    ap.add_argument("--docs-path")
     args = ap.parse_args()
 
     base_url = os.environ.get("AGENT_BASE_URL", "").strip()
@@ -104,9 +105,10 @@ def main() -> int:
 
         focus_file = args.focus_file or ""
         tests_dir = args.tests_dir or "tests"
+        docs_path = args.docs_path or "docs/neo4j/graph_neo4j.md"
 
         # Include narrow context: focus file + existing tests folder + touched files
-        ctx_parts = []
+        ctx_parts: List[str] = []
 
         def add_file(path: str) -> None:
             if Path(path).exists():
@@ -130,13 +132,21 @@ def main() -> int:
         user = (
             "Task:\n"
             "1) Improve docstrings/comments ONLY for the fork-touched Python files listed.\n"
-            "2) Add/extend pytest tests under the specified tests directory (neo4j graph focus).\n\n"
+            "2) Add/extend pytest tests under the specified tests directory (neo4j graph focus).\n"
+            "3) Create/update ONE standalone Markdown documentation file with examples at:\n"
+            f"   - {docs_path}\n\n"
+            "Standalone docs requirements:\n"
+            "- Markdown with clear headings.\n"
+            "- Explain what graph_neo4j provides and how to use it.\n"
+            "- Include at least 2 usage examples that match the actual API in the code.\n"
+            "- Include a brief section explaining how to run the tests in tests/test_graph_neo4j.\n\n"
             "Hard constraints:\n"
             "- Output must be a unified diff.\n"
-            f"- Only modify the touched files and files under {tests_dir}/\n"
+            f"- Only modify the touched files and files under {tests_dir}/ and the single docs file {docs_path}\n"
             "- No CI/config changes.\n\n"
             f"Primary focus file: {focus_file}\n"
-            f"Tests directory: {tests_dir}\n\n"
+            f"Tests directory: {tests_dir}\n"
+            f"Docs file: {docs_path}\n\n"
             "Touched Python files:\n"
             + "\n".join(f"- {f}" for f in touched)
             + "\n\nContext:\n\n"
