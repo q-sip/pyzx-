@@ -2,6 +2,8 @@ name: Weekly upstream sync (PR)
 
 on:
   workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * 1"
 
 permissions:
   contents: write
@@ -15,12 +17,10 @@ env:
   UPSTREAM_OWNER: zxcalc
   UPSTREAM_REPO: pyzx
   UPSTREAM_BRANCH: master
-
-
   PR_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
 
 jobs:
-  sync_master_from_upstream:
+  upstream_to_master:
     name: Sync upstream/master -> fork master (PR)
     runs-on: ubuntu-latest
 
@@ -41,55 +41,28 @@ jobs:
         run: |
           git remote get-url upstream >/dev/null 2>&1 || \
             git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
-
-          git fetch --prune origin
           git fetch --prune upstream "${UPSTREAM_BRANCH}" --tags
+          git fetch --prune origin
 
-          # Try to fetch the existing PR branch (if it exists) to avoid generating new merge commits each run
-          git fetch --prune origin "+refs/heads/sync/upstream-master:refs/remotes/origin/sync/upstream-master" || true
-
-      - name: Merge upstream/master -> sync branch
+      - name: Create merge result locally (do not use PR branch name)
         run: |
-          if git show-ref --verify --quiet "refs/remotes/origin/sync/upstream-master"; then
-            git checkout -B "sync/upstream-master" "origin/sync/upstream-master"
-          else
-            git checkout -B "sync/upstream-master" "origin/master"
-          fi
-
+          git checkout -B __merge_upstream_master origin/master
           git merge --no-edit "upstream/${UPSTREAM_BRANCH}"
 
-      - name: Detect whether PR is needed / branch changed
+      - name: Check whether master needs a PR
         id: changes
         run: |
-          # Is there anything to PR vs base?
           if git diff --quiet origin/master...HEAD; then
-            echo "base_changed=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "base_changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-          # Did the sync branch change vs the last pushed sync branch?
-          if git show-ref --verify --quiet "refs/remotes/origin/sync/upstream-master"; then
-            if git diff --quiet origin/sync/upstream-master...HEAD; then
-              echo "branch_changed=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "branch_changed=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            # No remote sync branch exists yet; if base changed, we must create one.
-            if git diff --quiet origin/master...HEAD; then
-              echo "branch_changed=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "branch_changed=true" >> "$GITHUB_OUTPUT"
-            fi
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create or update PR (upstream -> master)
-        if: steps.changes.outputs.base_changed == 'true' && steps.changes.outputs.branch_changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ env.PR_TOKEN }}
-          branch-token: ${{ env.PR_TOKEN }}
           base: master
           branch: sync/upstream-master
           title: "Sync from upstream: master"
@@ -104,17 +77,13 @@ jobs:
           delete-branch: true
 
       - name: No-op notice
-        if: steps.changes.outputs.base_changed != 'true'
+        if: steps.changes.outputs.changed != 'true'
         run: echo "Fork master already matches upstream/master. No PR needed."
 
-      - name: No-op notice (PR already up-to-date)
-        if: steps.changes.outputs.base_changed == 'true' && steps.changes.outputs.branch_changed != 'true'
-        run: echo "PR branch already reflects current upstream changes. No update needed."
-
-  sync_dev_from_master:
+  master_to_dev:
     name: Sync fork master -> fork dev (PR)
     runs-on: ubuntu-latest
-    needs: sync_master_from_upstream
+    needs: upstream_to_master
 
     steps:
       - name: Checkout fork dev
@@ -132,48 +101,26 @@ jobs:
       - name: Fetch latest origin branches
         run: |
           git fetch --prune origin
-          # Fetch existing PR branch (if it exists) to avoid generating new merge commits each run
-          git fetch --prune origin "+refs/heads/sync/master-to-dev:refs/remotes/origin/sync/master-to-dev" || true
 
-      - name: Merge origin/master -> sync branch
+      - name: Create merge result locally (do not use PR branch name)
         run: |
-          if git show-ref --verify --quiet "refs/remotes/origin/sync/master-to-dev"; then
-            git checkout -B "sync/master-to-dev" "origin/sync/master-to-dev"
-          else
-            git checkout -B "sync/master-to-dev" "origin/dev"
-          fi
+          git checkout -B __merge_master_to_dev origin/dev
+          git merge --no-edit origin/master
 
-          git merge --no-edit "origin/master"
-
-      - name: Detect whether PR is needed / branch changed
+      - name: Check whether dev needs a PR
         id: changes
         run: |
           if git diff --quiet origin/dev...HEAD; then
-            echo "base_changed=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "base_changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-          if git show-ref --verify --quiet "refs/remotes/origin/sync/master-to-dev"; then
-            if git diff --quiet origin/sync/master-to-dev...HEAD; then
-              echo "branch_changed=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "branch_changed=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            if git diff --quiet origin/dev...HEAD; then
-              echo "branch_changed=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "branch_changed=true" >> "$GITHUB_OUTPUT"
-            fi
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create or update PR (master -> dev)
-        if: steps.changes.outputs.base_changed == 'true' && steps.changes.outputs.branch_changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ env.PR_TOKEN }}
-          branch-token: ${{ env.PR_TOKEN }}
           base: dev
           branch: sync/master-to-dev
           title: "Merge master into dev"
@@ -187,9 +134,5 @@ jobs:
           delete-branch: true
 
       - name: No-op notice
-        if: steps.changes.outputs.base_changed != 'true'
+        if: steps.changes.outputs.changed != 'true'
         run: echo "dev already contains master. No PR needed."
-
-      - name: No-op notice (PR already up-to-date)
-        if: steps.changes.outputs.base_changed == 'true' && steps.changes.outputs.branch_changed != 'true'
-        run: echo "PR branch already reflects current master->dev changes. No update needed."
