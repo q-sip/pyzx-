@@ -2,8 +2,7 @@ name: Weekly upstream sync (PR)
 
 on:
   schedule:
-    # Every Monday 03:00 UTC
-    - cron: "0 3 * * 5"
+    - cron: "0 3 * * 1"
   workflow_dispatch: {}
 
 permissions:
