@@ -1,5 +1,4 @@
 name: Weekly upstream sync (PR)
-
 on:
   workflow_dispatch: {}
   schedule:
@@ -29,8 +28,7 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
-          persist-credentials: false
-          token: ${{ env.PR_TOKEN }}
+          persist-credentials: true
 
       - name: Configure git identity
         run: |
@@ -39,50 +37,28 @@ jobs:
 
       - name: Add upstream remote and fetch
         run: |
-          set -euo pipefail
           git remote get-url upstream >/dev/null 2>&1 || \
             git remote add upstream "https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git"
           git fetch --prune upstream "${UPSTREAM_BRANCH}" --tags
           git fetch --prune origin
 
-      - name: Create merge result locally (squash, no merge commit)
+      - name: Create merge result locally
         run: |
-          set -euo pipefail
           git checkout -B __merge_upstream_master origin/master
-          git merge --squash "upstream/${UPSTREAM_BRANCH}"
-          if git diff --cached --quiet; then
-            echo "No changes staged from upstream merge."
-          else
-            git commit -m "Sync from upstream: ${UPSTREAM_BRANCH}"
-          fi
+          git merge --no-edit "upstream/${UPSTREAM_BRANCH}"
 
       - name: Check whether master needs a PR
         id: changes
         run: |
-          set -euo pipefail
           if git diff --quiet origin/master...HEAD; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Python 3.11
+      - name: Push merge result branch
         if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Run mypy + unit tests (same as pythonpackage.yml)
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
-          pip install mypy
-          mypy pyzx/ tests/
-          python -m unittest discover -s "tests" -t "." --verbose
+        run: git push origin __merge_upstream_master --force
 
       - name: Create or update PR (upstream -> master)
         if: steps.changes.outputs.changed == 'true'
@@ -114,8 +90,7 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-          persist-credentials: false
-          token: ${{ env.PR_TOKEN }}
+          persist-credentials: true
 
       - name: Configure git identity
         run: |
@@ -123,48 +98,25 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch latest origin branches
-        run: |
-          set -euo pipefail
-          git fetch --prune origin
+        run: git fetch --prune origin
 
-      - name: Create merge result locally (squash, no merge commit)
+      - name: Create merge result locally
         run: |
-          set -euo pipefail
           git checkout -B __merge_master_to_dev origin/dev
-          git merge --squash origin/master
-          if git diff --cached --quiet; then
-            echo "No changes staged from master->dev."
-          else
-            git commit -m "Merge master into dev (squash)"
-          fi
+          git merge --no-edit origin/master
 
       - name: Check whether dev needs a PR
         id: changes
         run: |
-          set -euo pipefail
           if git diff --quiet origin/dev...HEAD; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Python 3.11
+      - name: Push merge result branch
         if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Run mypy + unit tests (same as pythonpackage.yml)
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
-          pip install mypy
-          mypy pyzx/ tests/
-          python -m unittest discover -s "tests" -t "." --verbose
+        run: git push origin __merge_master_to_dev --force
 
       - name: Create or update PR (master -> dev)
         if: steps.changes.outputs.changed == 'true'
@@ -172,7 +124,7 @@ jobs:
         with:
           token: ${{ env.PR_TOKEN }}
           base: dev
-          branch: sync/master-to-dev-${{ github.run_id }}
+          branch: sync/master-to-dev-${{ github.run_id }}   # ← made unique (recommended)
           title: "Merge master into dev"
           body: |
             Automated propagation PR.
