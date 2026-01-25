@@ -121,7 +121,7 @@ jobs:
             --tests-dir tests/test_graph_neo4j \
             --docs-path "${DOCS_PATH}"
 
-      - name: Guardrail: restrict changed files
+      - name: "Guardrail: restrict changed files"
         run: |
           set -euo pipefail
           git diff --name-only > changed_files.txt || true
