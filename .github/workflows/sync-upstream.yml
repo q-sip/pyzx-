@@ -64,16 +64,14 @@ jobs:
         with:
           token: ${{ env.PR_TOKEN }}
           base: master
-          branch: sync/upstream-master
+          branch: sync/upstream-master-${{ github.run_id }}   # ← key change
           title: "Sync from upstream: master"
           body: |
             Automated sync PR.
-
             Upstream: https://github.com/${{ env.UPSTREAM_OWNER }}/${{ env.UPSTREAM_REPO }}
             Upstream branch: `${{ env.UPSTREAM_BRANCH }}`
             Target branch: `master`
-          labels: |
-            upstream-sync
+          labels: upstream-sync
           delete-branch: true
 
       - name: No-op notice
