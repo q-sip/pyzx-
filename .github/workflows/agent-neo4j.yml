@@ -12,16 +12,6 @@ on:
         required: true
         default: "true"
 
-  schedule:
-    - cron: "0 3 * * 1" # weekly Monday 03:00 UTC
-
-  # Optional: helps visibility/indexing; runs in proposal-only mode anyway.
-  push:
-    branches: ["dev"]
-    paths:
-      - ".github/workflows/agent-neo4j.yml"
-      - "tools/agent/**"
-
 permissions:
   contents: read
 
