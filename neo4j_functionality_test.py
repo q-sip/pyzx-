@@ -6,17 +6,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+
 URI = os.getenv("NEO4J_URI")
 AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
-
-
-# Runnataan virtual environmentissa. Kun ollaan venvissä, voidaan: python3 neo4j_functionality_test.py.
 
 with GraphDatabase.driver(URI, auth=AUTH) as driver:
     driver.verify_connectivity()
 
 
-g = GraphNeo4j(uri=URI, user=os.getenv("NEO4J_USER"), password=os.getenv("NEO4J_PASSWORD"), database="neo4j", graph_id="test_graph")
+g = GraphNeo4j(
+    uri=URI, user=os.getenv("NEO4J_USER"), password=os.getenv("NEO4J_PASSWORD"),
+    database="neo4j", 
+    graph_id="test_graph"
+)
 
 v_ids = g.create_graph(
     vertices_data=[

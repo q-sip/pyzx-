@@ -324,8 +324,22 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return self.num_edges()
 
     def remove_edges(self, edges: List[ET]) -> None:
-        """Removes the list of edges from the graph."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        #Poistaa listan relationshippejä graafista
+        if not edges:
+            return
+
+        edges_payload = [{"s": s, "t": t} for s, t in edges]
+
+        query = """
+        UNWIND $edges AS e
+        MATCH (n1:Node {graph_id: $graph_id, id: e.s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: e.t})
+        DELETE r
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
+            )
 
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
