@@ -175,7 +175,7 @@ jobs:
           fi
           echo "Pylint score (before fixes): $SCORE"
 
-      - name: Agent: attempt pylint fixes (optional)
+      - name: "Agent: attempt pylint fixes (optional)"
         if: env.ENABLE_PYLINT_FIXES == 'true'
         run: |
           set -euo pipefail
