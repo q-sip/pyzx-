@@ -1,6 +1,7 @@
 """
 Docstring for pyzx.graph.graph_neo4j
 """
+
 import os
 from typing import (
     TYPE_CHECKING,
@@ -12,7 +13,6 @@ from typing import (
     Sequence,
     Set,
     Tuple,
-
 )
 
 # testing pylint
@@ -117,16 +117,14 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu nodejen ID:eiksi
         edge_ids = [self.num_edges() + x for x in range(len(edges_data))]
         if edges_data:
-            all_edges = (
-                [
-                    {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
-                    for x in edges_data
-                ]
-            )
+            all_edges = [
+                {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
+                for x in edges_data
+            ]
             for edge, edge_id in zip(all_edges, edge_ids):
-                edge['id'] = edge_id
+                edge["id"] = edge_id
         else:
-            all_edges = ([])
+            all_edges = []
         # Valmistellaan input ja output nodejen ID:T
         input_ids = [vertices[i] for i in inputs] if inputs else []
         output_ids = [vertices[i] for i in outputs] if outputs else []
@@ -206,7 +204,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         *,
         edge_data: Optional[Iterable[EdgeType]] = None,
     ) -> None:
-
         """
         Adds multiple edges in a single batch transaction.
         """
@@ -220,7 +217,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             edge_data = list(edge_data)
             if len(edge_data) != len(edges):
                 raise ValueError("edge_data must have same length as edge_pairs")
-
 
         edges_payload = [
             {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
@@ -304,12 +300,14 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
         return result["count"] if result else 0
 
-    def add_edge(self, edge_pair: Tuple[VT,VT], edgetype:EdgeType=EdgeType.SIMPLE) -> ET:
+    def add_edge(
+        self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
+    ) -> ET:
         """Adds a single edge of the given type and return its id"""
 
         id = self.num_edges()
 
-        edge = {'s': edge_pair[0], 't': edge_pair[1], 'et': edgetype, 'id': id}
+        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype, "id": id}
 
         query = """
         UNWIND $edge AS e
@@ -325,7 +323,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return id
 
     def remove_edges(self, edges: List[ET]) -> None:
-        #Poistaa listan relationshippejä graafista
+        # Poistaa listan relationshippejä graafista
         if not edges:
             return
 
@@ -352,7 +350,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
         return [r["id"] for r in result]
 
-    def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
+    def edges(self, s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]:
         """Iterator that returns all the edges in the graph,
         or all the edges connecting the pair of vertices.
         Output type depends on implementation in backend."""
@@ -421,7 +419,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         Used e.g. in making a copy of the graph in a backend-independent way."""
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
-    def vdata(self, vertex: VT, key: str, default: Any=None) -> Any:
+    def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
         If this key has no value associated with it, it returns the default value."""
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
@@ -438,7 +436,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns an iterable of the edge data key names."""
         raise NotImplementedError("Not implemented on backend " + type(self).backend)
 
-    def edata(self, edge: ET, key: str, default: Any=None) -> Any:
+    def edata(self, edge: ET, key: str, default: Any = None) -> Any:
         """Returns the data value of the given edge associated to the key.
         If this key has no value associated with it, it returns the default value."""
         raise NotImplementedError("Not implemented on backend " + type(self).backend)
@@ -446,8 +444,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""
         raise NotImplementedError("Not implemented on backend " + type(self).backend)
-    # }}}
 
+    # }}}
 
     # OPTIONAL OVERRIDES{{{
 
@@ -461,7 +459,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns the set of vertices connected to a ground."""
         return set(v for v in self.vertices() if self.is_ground(v))
 
-    def set_ground(self, vertex: VT, flag: bool=True) -> None:
+    def set_ground(self, vertex: VT, flag: bool = True) -> None:
         """Connect or disconnect the vertex to a ground."""
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
@@ -474,28 +472,27 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def multigraph(self) -> bool:
         return False
 
-
     # Backends may wish to override these methods to implement them more efficiently
 
     # These methods return mappings from vertices to various pieces of data. If the backend
     # stores these e.g. as Python dicts, just return the relevant dicts.
     def phases(self) -> Mapping[VT, FractionLike]:
         """Returns a mapping of vertices to their phase values."""
-        return { v: self.phase(v) for v in self.vertices() }
+        return {v: self.phase(v) for v in self.vertices()}
 
     def types(self) -> Mapping[VT, VertexType]:
         """Returns a mapping of vertices to their types."""
-        return { v: self.type(v) for v in self.vertices() }
+        return {v: self.type(v) for v in self.vertices()}
 
-    def qubits(self) -> Mapping[VT,FloatInt]:
+    def qubits(self) -> Mapping[VT, FloatInt]:
         """Returns a mapping of vertices to their qubit index."""
-        return { v: self.qubit(v) for v in self.vertices() }
+        return {v: self.qubit(v) for v in self.vertices()}
 
     def rows(self) -> Mapping[VT, FloatInt]:
         """Returns a mapping of vertices to their row index."""
-        return { v: self.row(v) for v in self.vertices() }
+        return {v: self.row(v) for v in self.vertices()}
 
-    def edge(self, s:VT, t:VT, et: EdgeType=EdgeType.SIMPLE) -> ET:
+    def edge(self, s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET:
         """Returns the name of the first edge with the given source/target and type.
         Behaviour is undefined if the vertices are not connected."""
         for e in self.incident_edges(s):
@@ -503,21 +500,22 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 return e
         raise ValueError(f"No edge of type {et} between {s} and {t}")
 
-    def connected(self,v1: VT,v2: VT) -> bool:
+    def connected(self, v1: VT, v2: VT) -> bool:
         """Returns whether vertices v1 and v2 share an edge."""
         for e in self.incident_edges(v1):
             if v2 in self.edge_st(e):
                 return True
         return False
 
-    def add_vertex(self,
-                   ty:VertexType=VertexType.BOUNDARY,
-                   qubit:FloatInt=-1,
-                   row:FloatInt=-1,
-                   phase:Optional[FractionLike]=None,
-                   ground:bool=False,
-                   index: Optional[VT] = None
-                   ) -> VT:
+    def add_vertex(
+        self,
+        ty: VertexType = VertexType.BOUNDARY,
+        qubit: FloatInt = -1,
+        row: FloatInt = -1,
+        phase: Optional[FractionLike] = None,
+        ground: bool = False,
+        index: Optional[VT] = None,
+    ) -> VT:
         """Add a single vertex to the graph and return its index.
         The optional parameters allow you to respectively set
         the type, qubit index, row index and phase of the vertex."""
@@ -528,8 +526,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             v = self.add_vertices(1)[0]
         self.set_type(v, ty)
         if phase is None:
-            if ty == VertexType.H_BOX: phase = 1
-            else: phase = 0
+            if ty == VertexType.H_BOX:
+                phase = 1
+            else:
+                phase = 0
         self.set_qubit(v, qubit)
         self.set_row(v, row)
         if phase:
@@ -542,6 +542,53 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             self.phase_mult[self.max_phase_index] = 1
         return v
 
+    def add_vertices(self, amount: int) -> List[VT]:
+        """Adds ``amount`` number of vertices and returns a list containing their IDs
+
+        Neo4j nodes are stored as (:Node {graph_id, id, t, phase, qubit, row})
+
+        Default values:
+            t = VertexType.BOUNDARY
+            phase = "0"
+            qubit = -1
+            row = -1
+        """
+        if amount < 0:
+            raise ValueError("Amount of vertices added must be >= 0")
+        if amount == 0:
+            return []
+
+        vertex_ids: List[VT] = list(range(self._vindex, self._vindex + amount))
+        payload = [
+            {
+                "id": v_id,
+                "t": VertexType.BOUNDARY.value,
+                "phase": "0",
+                "qubit": -1,
+                "row": -1,
+            }
+            for v_id in vertex_ids
+        ]
+
+        query = """
+        UNWIND $vertices AS v
+        CREATE (n:Node {
+            graph_id: $graph_id,
+            id: v.id,
+            t: v.t,
+            phase: v.phase,
+            qubit: v.qubit,
+            row: v.row
+        })
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, vertices=payload)
+            )
+
+        self._vindex += amount
+        return vertex_ids
 
     def remove_vertex(self, vertex: VT) -> None:
         """Removes the given vertex from the graph."""
@@ -553,7 +600,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def add_to_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Add the given phase to the phase value of the given vertex."""
-        self.set_phase(vertex,self.phase(vertex)+phase)
+        self.set_phase(vertex, self.phase(vertex) + phase)
 
     def num_inputs(self) -> int:
         """Gets the number of inputs of the graph."""
@@ -572,7 +619,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns all neighboring vertices of the given vertex."""
         vs: Set[VT] = set()
         for e in self.incident_edges(vertex):
-            s,t = self.edge_st(e)
+            s, t = self.edge_st(e)
             vs.add(s if t == vertex else t)
         return list(vs)
 
@@ -587,7 +634,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def edge_t(self, edge: ET) -> VT:
         """Returns the target of the given edge."""
         return self.edge_st(edge)[1]
-
 
     def vertex_set(self) -> Set[VT]:
         """Returns the vertices of the graph as a Python set.
