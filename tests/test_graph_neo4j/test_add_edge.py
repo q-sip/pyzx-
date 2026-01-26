@@ -1,53 +1,75 @@
-from pyzx.utils import VertexType, EdgeType
+# tests/test_graph_neo4j/test_add_edge.py
+from pyzx.utils import EdgeType, VertexType
+
+from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
 
 
-def test_add_edge_first(neo4j_graph_e2e):
-    """Test that add_edge returns 0 for the first edge added"""
-    g = neo4j_graph_e2e
-    nodes = [
-            {"id": 0, "ty": VertexType.BOUNDARY, "row": 0, "qubit": 0},
-            {"id": 1, "ty": VertexType.Z, "row": 1, "qubit": 0},
-            {"id": 2, "ty": VertexType.X, "row": 1, "qubit": 1},
-        ]
-    g.create_graph(nodes, [])
-    assert g.add_edge((0, 1), EdgeType.SIMPLE) == 0
-
-
-def test_add_edge_secong(neo4j_graph_e2e):
-    """Test that add_edge increments after creating vertices"""
-    g = neo4j_graph_e2e
-    
-    vertices_data = [
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-        {"ty": VertexType.Z, "qubit": 0, "row": 1},
-        {"ty": VertexType.X, "qubit": 0, "row": 2},
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 3}
-    ]
-    edges_data = [
-        ((0, 1), EdgeType.SIMPLE),
-        ((1, 2), EdgeType.HADAMARD),
-        ((2, 3), EdgeType.SIMPLE)
-    ]
-    g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-    
-    # test without second parameter
-    assert g.add_edge((3, 0)) == 3
-
-
-def test_correct_number_of_edges(neo4j_graph_e2e):
-    """Test that the graph has the correct amount of edges"""
-    g = neo4j_graph_e2e
-    
-    initial = g.num_edges()
-    g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1}, {"ty": VertexType.X, "qubit": 0, "row": 2}], edges_data=[])
-    g.add_edge((0, 1))
-
-    query = """
-        MATCH (n:Node {graph_id: $gid})-[r:Wire]->(m:Node {graph_id: $gid})
-        RETURN n.id as src, m.id as tgt, r.t as type
+class TestAddEdge(Neo4jE2ETestCase):
+    def test_add_edge_returns_current_num_edges(self):
         """
+        Test that add_edge returns the edge id equal to the edge-count *before* insertion.
+        This is robust even if the DB is not empty, since the implementation uses num_edges().
+        """
+        g = self.g
 
-    with g._get_session() as session:
-        result = session.run(query, gid=g.graph_id).data()
+        nodes = [
+            {"ty": VertexType.BOUNDARY, "row": 0, "qubit": 0},
+            {"ty": VertexType.Z, "row": 1, "qubit": 0},
+            {"ty": VertexType.X, "row": 1, "qubit": 1},
+        ]
+        g.create_graph(nodes, [])
 
-    assert len(result) == initial + 1
+        expected = g.num_edges()
+        got = g.add_edge((0, 1), EdgeType.SIMPLE)
+        self.assertEqual(got, expected)
+
+    def test_add_edge_id_increments_after_create_graph(self):
+        """
+        After create_graph adds N edges, add_edge should return previous num_edges(),
+        i.e. base + N.
+        """
+        g = self.g
+
+        vertices_data = [
+            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+            {"ty": VertexType.Z, "qubit": 0, "row": 1},
+            {"ty": VertexType.X, "qubit": 0, "row": 2},
+            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 3},
+        ]
+        edges_data = [
+            ((0, 1), EdgeType.SIMPLE),
+            ((1, 2), EdgeType.HADAMARD),
+            ((2, 3), EdgeType.SIMPLE),
+        ]
+
+        before = g.num_edges()
+        g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
+
+        expected = before + len(edges_data)
+        got = g.add_edge((3, 0))  # default type
+        self.assertEqual(got, expected)
+
+    def test_correct_number_of_edges_in_this_graph(self):
+        """
+        Verify that adding an edge creates exactly one relationship for this graph_id.
+        (We query by graph_id to avoid coupling to global num_edges() implementation.)
+        """
+        g = self.g
+
+        g.create_graph(
+            vertices_data=[
+                {"ty": VertexType.Z, "qubit": 0, "row": 1},
+                {"ty": VertexType.X, "qubit": 0, "row": 2},
+            ],
+            edges_data=[],
+        )
+        g.add_edge((0, 1))
+
+        query = """
+            MATCH (n:Node {graph_id: $gid})-[r:Wire]->(m:Node {graph_id: $gid})
+            RETURN n.id as src, m.id as tgt, r.t as type
+        """
+        with g._get_session() as session:
+            result = session.run(query, gid=g.graph_id).data()
+
+        self.assertEqual(len(result), 1)
