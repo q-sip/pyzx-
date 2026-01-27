@@ -16,7 +16,6 @@ def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
             )
             return [(item['src'], item['tgt']) for item in result]
         else:
-            print('else')
             query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id}) RETURN n1.id, n2.id"
             with self._get_session() as session:
                 result = session.execute_read(
