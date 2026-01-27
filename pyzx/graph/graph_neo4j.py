@@ -217,16 +217,18 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             edge_data = list(edge_data)
             if len(edge_data) != len(edges):
                 raise ValueError("edge_data must have same length as edge_pairs")
-
+        n = self.num_edges()
+        ids = [i + n for i in range(len(edges))]
+        print(f'ids = {ids}')
         edges_payload = [
-            {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
+            {"s": s, "t": t, "et": et.value, "id": eid} for (s, t), et, eid in zip(edges, edge_data, ids)
         ]
 
         query = """
         UNWIND $edges AS e
         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-        MERGE (n1)-[:Wire {t: e.et}]->(n2)
+        MERGE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
         """
 
         with self._get_session() as session:
