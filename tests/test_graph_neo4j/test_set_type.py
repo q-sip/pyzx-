@@ -1,11 +1,11 @@
-# tests/test_graph_neo4j/test_set_edge_type.py
+# tests/test_graph_neo4j/test_set_type.py
 from pyzx.utils import EdgeType, VertexType
 
 from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
 
 
-class TestSetEdgeType(Neo4jE2ETestCase):
-    def test_set_edge_type_HADAMARD(self):
+class TestSetType(Neo4jE2ETestCase):
+    def test_set_type_BOUNDARY(self):
         g = self.g
 
         nodes = [
@@ -21,10 +21,10 @@ class TestSetEdgeType(Neo4jE2ETestCase):
         ]
         g.create_graph(nodes, edges_data=edges_data)
 
-        g.set_edge_type((0, 1), EdgeType.HADAMARD)
-        self.assertEqual(g.edge_type((0, 1)), EdgeType.HADAMARD)
+        g.set_type(1, VertexType.BOUNDARY)
+        self.assertEqual(g.type(1), VertexType.BOUNDARY)
 
-    def test_set_edge_type_SIMPLE(self):
+    def test_set_type_X(self):
         g = self.g
 
         vertices_data = [
@@ -42,10 +42,10 @@ class TestSetEdgeType(Neo4jE2ETestCase):
 
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
-        g.set_edge_type((1, 2), EdgeType.SIMPLE)
-        self.assertEqual(g.edge_type((1, 2)), EdgeType.SIMPLE)
+        g.set_type(0, VertexType.X)
+        self.assertEqual(g.type(0), VertexType.X)
 
-    def test_edge_type_is_different_after_set_edge_type(self):
+    def test_type_is_different_after_set_type(self):
         g = self.g
 
         vertices_data = [
@@ -63,11 +63,11 @@ class TestSetEdgeType(Neo4jE2ETestCase):
 
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
-        initial = g.edge_type((1, 2))
-        g.set_edge_type((1, 2), EdgeType.SIMPLE)
-        self.assertNotEqual(g.edge_type((1, 2)), initial)
+        initial = g.type(3)
+        g.set_type(3, VertexType.X)
+        self.assertNotEqual(g.type(3), initial)
 
-    def test_set_edge_type_increment(self):
+    def test_set_type_increment(self):
         g = self.g
 
         vertices_data = [
@@ -85,6 +85,6 @@ class TestSetEdgeType(Neo4jE2ETestCase):
 
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
-        initial = int(str(g.edge_type((0, 1))))
-        g.set_edge_type((0, 1), EdgeType.HADAMARD)
-        self.assertEqual(int(str(g.edge_type((0, 1)))), initial + 1)
+        initial = int(str(g.type(0)))
+        g.set_type(0, VertexType.Z)
+        self.assertEqual(int(str(g.type(0))), initial + 1)
