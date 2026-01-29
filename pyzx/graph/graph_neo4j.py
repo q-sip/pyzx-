@@ -460,13 +460,26 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
     def row(self, vertex: VT) -> FloatInt:
-        """Returns the row that the vertex is positioned at.
-        If no row has been set, returns -1."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        """Palauttaa sen rivin jolla verteksi on.
+        Jos ei ole asetettu, palauttaa -1 -1."""
+        query = "MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.row AS r"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+            )
+        
+        return result["r"] if result and result["r"] is not None else -1
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
-        """Sets the row the vertex should be positioned at."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        """Asettaa rivin verteksille."""
+        query = """
+        MATCH (n:Node {graph_id: $graph_id, id: $id})
+        SET n.row = $r
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, r=r)
+            )
 
     def clear_vdata(self, vertex: VT) -> None:
         """Removes all vdata associated to a vertex"""
