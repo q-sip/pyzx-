@@ -3,6 +3,8 @@ Docstring for pyzx.graph.graph_neo4j
 """
 
 import os
+from fractions import Fraction
+from ..symbolic import Poly, parse, new_var
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -429,7 +431,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     result = session.execute_read(
                     lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
                 )
-        return VertexType(result[0]['n.t'])
+        return VertexType(result[0]['n.t']) if result else None
 
     def set_type(self, vertex: VT, t: VertexType) -> None:
         """Sets the type of the given vertex to t."""
