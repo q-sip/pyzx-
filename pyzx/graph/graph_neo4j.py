@@ -459,14 +459,18 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Sets the qubit index associated to the vertex."""
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
-    def row(self, vertex: VT) -> FloatInt:
-        """Returns the row that the vertex is positioned at.
-        If no row has been set, returns -1."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+    
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
-        """Sets the row the vertex should be positioned at."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        """Asettaa rivin verteksille."""
+        query = """
+        MATCH (n:Node {graph_id: $graph_id, id: $id})
+        SET n.row = $r
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, r=r)
+            )
 
     def clear_vdata(self, vertex: VT) -> None:
         """Removes all vdata associated to a vertex"""
