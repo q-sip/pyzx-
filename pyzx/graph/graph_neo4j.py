@@ -352,11 +352,30 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
         return [r["id"] for r in result]
 
-    def edges(self, s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]:
+    def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
         """Iterator that returns all the edges in the graph,
         or all the edges connecting the pair of vertices.
         Output type depends on implementation in backend."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        if s is not None and t is not None:
+            vertices_payload = [{"s": s, "t": t}]
+
+            query = """
+            UNWIND $vertices as v
+            MATCH (n1:Node {graph_id: $graph_id, id: v.s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: v.t})
+            RETURN startNode(r).id AS src, endNode(r).id AS tgt"""
+            with self._get_session() as session:
+                result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, vertices=vertices_payload).data()
+            )
+            return [(item['src'], item['tgt']) for item in result]
+        else:
+            query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id}) RETURN n1.id, n2.id"
+            with self._get_session() as session:
+                result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id).data()
+                )
+            return [(item['n1.id'], item['n2.id']) for item in result]
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""
@@ -364,27 +383,64 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def incident_edges(self, vertex: VT) -> Sequence[ET]:
         """Returns all neighboring edges of the given vertex."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """
+        MATCH (n:Node {graph_id: $graph_id, id: $vertex})-[r:Wire]-(m:Node {graph_id: $graph_id})
+        RETURN m.id AS neighbor
+        """
+
+        with self._get_session() as session:
+            result = session.execute_read(
+            lambda tx: tx.run(query, graph_id=self.graph_id, vertex=vertex).data()
+            )
+
+        return [
+            (vertex, r["neighbor"])
+            for r in result
+        ]
+
 
     def edge_type(self, e: ET) -> EdgeType:
         """Returns the type of the given edge:
         ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge,
         0 if the edge is not in the graph."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2}) RETURN r.t"""
+        with self._get_session() as session:
+                    result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=e[0], node2=e[1]).data()
+                )
+        return EdgeType(result[0]['r.t']) if len(result) > 0 else 0
 
     def set_edge_type(self, e: ET, t: EdgeType) -> None:
         """Sets the type of the given edge."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2}) SET r.t = $type"""
+        with self._get_session() as session:
+                    session.execute_write(
+                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t)
+                )
+
 
     def type(self, vertex: VT) -> VertexType:
         """Returns the type of the given vertex:
         VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
         VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.t"""
+        with self._get_session() as session:
+                    result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
+                )
+        return VertexType(result[0]['n.t'])
 
     def set_type(self, vertex: VT, t: VertexType) -> None:
         """Sets the type of the given vertex to t."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.t = $type"""
+        with self._get_session() as session:
+            session.execute_write(
+            lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=t)
+            )
 
     def phase(self, vertex: VT) -> FractionLike:
         """Returns the phase value of the given vertex."""
