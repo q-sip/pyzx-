@@ -26,8 +26,6 @@ from ..utils import (
     FloatInt,
     FractionLike,
     VertexType,
-    toggle_edge,
-    vertex_is_zx,
 )
 from .base import BaseGraph
 
@@ -354,7 +352,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
         return [r["id"] for r in result]
 
-    def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
+    def edges(self, s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]:
         """Iterator that returns all the edges in the graph,
         or all the edges connecting the pair of vertices.
         Output type depends on implementation in backend."""
@@ -368,16 +366,16 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             RETURN startNode(r).id AS src, endNode(r).id AS tgt"""
             with self._get_session() as session:
                 result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, vertices=vertices_payload).data()
-            )
-            return [(item['src'], item['tgt']) for item in result]
-        else:
-            query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id}) RETURN n1.id, n2.id"
-            with self._get_session() as session:
-                result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id).data()
+                    lambda tx: tx.run(query, graph_id=self.graph_id, vertices=vertices_payload).data()
                 )
-            return [(item['n1.id'], item['n2.id']) for item in result]
+            return [(item['src'], item['tgt']) for item in result]
+
+        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id}) RETURN n1.id, n2.id"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+        return [(item['n1.id'], item['n2.id']) for item in result]
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""
@@ -489,7 +487,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
             )
-        
         return result["r"] if result and result["r"] is not None else -1
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
