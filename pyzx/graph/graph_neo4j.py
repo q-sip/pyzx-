@@ -473,11 +473,23 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def qubit(self, vertex: VT) -> FloatInt:
         """Returns the qubit index associated to the vertex.
         If no index has been set, returns -1."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.qubit AS qubit
+        """
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+            )
+        return result["qubit"] if result else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {id: $id}) SET n.qubit = $qubit"""
+
+        with self._get_session() as session:
+            session.execute_write(
+            lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, qubit=self._phase_to_str(q))
+            )
+        
 
     def row(self, vertex: VT) -> FloatInt:
         """Palauttaa sen rivin jolla verteksi on.
