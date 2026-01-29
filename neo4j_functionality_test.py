@@ -1,6 +1,8 @@
 import os
 from pyzx.graph.graph_neo4j import GraphNeo4j
 from pyzx.utils import VertexType, EdgeType
+from pyzx.symbolic import Poly
+from fractions import Fraction
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 
