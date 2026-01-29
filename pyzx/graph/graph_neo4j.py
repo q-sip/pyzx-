@@ -459,7 +459,16 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Sets the qubit index associated to the vertex."""
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
-    
+    def row(self, vertex: VT) -> FloatInt:
+        """Palauttaa sen rivin jolla verteksi on.
+        Jos ei ole asetettu, palauttaa -1 -1."""
+        query = "MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.row AS r"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+            )
+        
+        return result["r"] if result and result["r"] is not None else -1
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
         """Asettaa rivin verteksille."""
