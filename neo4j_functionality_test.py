@@ -23,6 +23,11 @@ g = GraphNeo4j(
     graph_id="test_graph"
 )
 
+
+query =""" MATCH (N) DETACH DELETE N"""
+
+g.clear_graph(query)
+
 v_ids = g.create_graph(
     vertices_data=[
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
@@ -38,4 +43,19 @@ v_ids = g.create_graph(
     inputs=[0],
     outputs=[3]
 )
-print(v_ids)
+print("vdata_keys for vertex 1:", g.vdata_keys(1))
+
+print("vdata for vertex 2:", g.vdata(2, "row"))
+
+#print(f"Clearing vdata for vertex 3"), g.clear_vdata(3)
+
+print(f"Set vdata for vertex 1: qubit=5"), g.set_vdata(1, "qubit", 5)
+
+print(f"Clear all edata for edge (1,2)"), g.clear_edata((1,2))
+
+print(f"Print edata keys for edge (0,1): {g.edata_keys((0,1))}")
+
+print(f"Set edata for edge (2,3:) {g.set_edata((2,3), "t", 2)}")
+
+print(f"Print edata for edge (2,3)): {g.edata((2,3), "t")}")
+

@@ -514,38 +514,109 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def clear_vdata(self, vertex: VT) -> None:
         """Removes all vdata associated to a vertex"""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n = {}"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex)
+            )
 
     def vdata_keys(self, vertex: VT) -> Sequence[str]:
         """Returns an iterable of the vertex data key names.
         Used e.g. in making a copy of the graph in a backend-independent way."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        
+        query = """ CALL db.propertyKeys() YIELD propertyKey
+        MATCH (n:Node {graph_id: $graph_id, id: $id})
+        RETURN propertyKey"""
+
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
+            )
+        return [r["propertyKey"] for r in result]
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
         If this key has no value associated with it, it returns the default value."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n[$key] as value"""
 
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, key=key).data()
+            )
+        if result[0]["value"] is not None:
+            value = result[0]["value"]
+        else:
+            value = default
+        return f"{key} {value}"
+    
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n[$key] = $val"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, key=key, val=val)
+            )
 
     def clear_edata(self, edge: ET) -> None:
         """Removes all edata associated to an edge"""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2}) SET r = {}"""
+        with self._get_session() as session:
+                    session.execute_write(
+                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1])
+                )
 
     def edata_keys(self, edge: ET) -> Sequence[str]:
         """Returns an iterable of the edge data key names."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        RETURN keys(r) AS propertyKey"""
+
+        with self._get_session() as session:
+                    result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]).data()
+                )
+        return [r["propertyKey"] for r in result]
 
     def edata(self, edge: ET, key: str, default: Any = None) -> Any:
         """Returns the data value of the given edge associated to the key.
         If this key has no value associated with it, it returns the default value."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        RETURN r[$key] AS value"""
 
+        with self._get_session() as session:
+                    result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key).data()
+                )
+        if result[0]["value"] is not None:
+            value = result[0]["value"]
+        else:
+            value = default
+        return f"{key} {value}"
+    
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        SET r[$key] = $val"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key, val=val)
+            )
+    
+    def clear_graph(self, query: str) -> None:
+        """Clears the entire graph from the database."""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id)
+            )
+
 
     # }}}
 
