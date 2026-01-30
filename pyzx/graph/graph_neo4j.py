@@ -610,6 +610,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key, val=val)
             )
     
+    #Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
     def clear_graph(self, query: str) -> None:
         """Clears the entire graph from the database."""
         with self._get_session() as session:

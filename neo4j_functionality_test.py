@@ -23,10 +23,9 @@ g = GraphNeo4j(
     graph_id="test_graph"
 )
 
-
-query =""" MATCH (N) DETACH DELETE N"""
-
-g.clear_graph(query)
+#Älkää välittäkö näistä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
+#query =""" MATCH (N) DETACH DELETE N"""
+#g.clear_graph(query)
 
 v_ids = g.create_graph(
     vertices_data=[
