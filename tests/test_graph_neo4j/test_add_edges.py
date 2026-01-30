@@ -78,12 +78,14 @@ class TestAddEdges(Neo4jE2ETestCase):
             ).single()
 
         self.assertIsNotNone(res)
-        self.assertEqual(res["t"], EdgeType.HADAMARD.value)
-
-        # Enforce edge id exists
-        self.assertIn("id", res)
-        self.assertIsNotNone(res["id"], msg="Edge 1->2 missing r.id")
-        self.assertIsInstance(res["id"], int)
+        res_dict = dict(res)
+        
+        self.assertEqual(res_dict["t"], EdgeType.HADAMARD.value)
+        
+        # Enforce that edge id exists
+        self.assertIn("id", res_dict)
+        self.assertIsNotNone(res_dict["id"], msg="Edge 1->2 missing r.id")
+        self.assertIsInstance(res_dict["id"], int)
 
     def test_add_edges_duplicates_are_merged_and_id_is_stable(self):
         """

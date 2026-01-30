@@ -205,7 +205,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         edge_data: Optional[Iterable[EdgeType]] = None,
     ) -> None:
         """
-        Adds multiple edges in a single batch transaction.
+        Adds multiple edges at once.
         """
         edges = list(edge_pairs)
         if not edges:
@@ -228,7 +228,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         UNWIND $edges AS e
         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-        MERGE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
+        MERGE (n1)-[r:Wire]->(n2)
+        ON CREATE SET r.t = e.et, r.id = e.id
+        ON MATCH SET r.t = e.et
         """
 
         with self._get_session() as session:
