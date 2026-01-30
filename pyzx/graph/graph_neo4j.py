@@ -491,7 +491,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             session.execute_write(
             lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, qubit=self._phase_to_str(q))
             )
-        
+
 
     def row(self, vertex: VT) -> FloatInt:
         """Palauttaa sen rivin jolla verteksi on.
@@ -526,7 +526,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def vdata_keys(self, vertex: VT) -> Sequence[str]:
         """Returns an iterable of the vertex data key names.
         Used e.g. in making a copy of the graph in a backend-independent way."""
-        
+
         query = """ MATCH(n:Node {graph_id: $graph_id, id: $id}) RETURN keys(n) AS keys"""
         with self._get_session() as session:
             result = session.execute_read(
@@ -544,7 +544,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, key=key).single()
             )
         return result["value"] if result and result["value"] is not None else default
-    
+
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
         query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n[$key] = $val"""
@@ -588,7 +588,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key).single()
                 )
         return result["value"] if result and result["value"] is not None else default
-    
+
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""
 
@@ -600,7 +600,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             session.execute_write(
                 lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key, val=val)
             )
-    
+
     #Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
     def clear_graph(self, query: str) -> None:
         """Clears the entire graph from the database."""

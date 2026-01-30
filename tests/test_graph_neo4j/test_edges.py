@@ -30,7 +30,9 @@ class TestEdgesE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
         
-        self.assertEqual(g.edges(), [(0, 1), (1, 2), (2, 0)])
+        edges = sorted(g.edges())
+        print(edges)
+        self.assertEqual(edges, [(0, 1), (1, 2), (2, 0)])
 
     def test_edges_singular(self):
         """Test that edges returns correct edges between 2 vertices"""
@@ -51,7 +53,8 @@ class TestEdgesE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
         
-        self.assertEqual(g.edges(0, 3), [(3, 0), (0, 3)])
+        edges = sorted(g.edges(0, 3))
+        self.assertEqual(edges, [(0, 3), (3, 0)])
 
 
     def test_edges_increment(self):
