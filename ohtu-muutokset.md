@@ -92,6 +92,96 @@ g.close()
 ```
 See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
 
+## GraphNeo4j.set_qubit(self, vertex: VT, q: FloatInt) -> None:
+
+Sets the `qubit` value associated to the vertex.
+
+Vertices are created as `(:Node {graph_id, id, t, phase, qubit, row})` with the following defaults:
+
+- t: `VertexType.BOUNDARY`
+- phase: `"0"`
+- qubit: `-1`
+- row: `-1`
+
+Vertex ids are allocated consecutively starting from the current internal vertex index (`self._vindex`). After insertio>
+
+### Parameters
+
+- vertex: id of the vertex `int`
+- q: qubit `float`
+
+### Returns
+
+  Sets qubit value in the database for an index. Does not return anything.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+g.set_qubit(3, 1)
+
+g.close()
+```
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.set_qubit(self, vertex: VT) -> None:
+
+Returns the `qubit` value associated to the vertex. If no index has been set, returns -1.
+
+Vertices are created as `(:Node {graph_id, id, t, phase, qubit, row})` with the following defaults:
+
+- t: `VertexType.BOUNDARY`
+- phase: `"0"`
+- qubit: `-1`
+- row: `-1`
+
+Vertex ids are allocated consecutively starting from the current internal vertex index (`self._vindex`). After insertio>
+
+### Parameters
+
+- vertex: id of the vertex `int`
+
+### Returns
+
+  Returns qubit value in the database for an index. Does not return anything.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+qubit_value = g.qubit(3)
+print(qubit_value)
+g.close()
+```
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
 
 ## Seuraava metodi / luokka
 
