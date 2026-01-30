@@ -1,12 +1,13 @@
 # tests/test_graph_neo4j/conftest.py
 import os
 import uuid
-
+from dotenv import load_dotenv
 import pytest
 from pyzx.graph.graph_neo4j import GraphNeo4j
 
 
 def _neo4j_env_present() -> bool:
+
     return all(os.getenv(k) for k in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD"))
 
 

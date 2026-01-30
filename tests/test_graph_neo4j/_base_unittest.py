@@ -2,8 +2,9 @@
 import os
 import unittest
 import uuid
-
+from dotenv import load_dotenv
 from pyzx.graph.graph_neo4j import GraphNeo4j
+
 
 
 def _neo4j_env_present() -> bool:
