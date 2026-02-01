@@ -339,22 +339,58 @@ g.close()
 
 
 
+## GraphNeo4j.set_outputs(self, outputs: Tuple[VT, ...])
 
-## Seuraava metodi / luokka
+Sets the outputs of the graph.
 
-```
-koodiesimerkki
-```
+This mirrors the semantics of `BaseGraph.set_outputs` and updates both the in-memory output tuple (`self._outputs`) and the Neo4j labels used to mark output boundary nodes.
 
+### Behaviour
 
-### Parametrit
+- Updates the in-memory output tuple:
 
-- eka: ``highlight`` 
-- toka: ``highlight`` 
-- kolmas: ``highlight`` 
-- neljäs:
-- viides: 
+  `self._outputs = tuple(outputs)`
 
+- Synchronizes Neo4j labels for the current `graph_id`:
 
-See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
-(en löytäny miten sais permalinkin joka päivittyis esim. rivinumeroiden muuttuessa, joten tää on se millä mennään toistaseks)
+  1) Clears all existing output markers:
+     - removes label `:Output` from any node currently labeled `:Output`.
+
+  2) Marks the new output nodes:
+     - for each vertex id in `outputs`, matches `(:Node {graph_id, id})` and sets label `:Output`.
+
+Passing an empty tuple clears all output labels for the graph.
+
+### Parameters
+
+- outputs: `Tuple[VT, ...]`  
+  Tuple of vertex ids that should be treated as the outputs of this ZX-diagram.
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+g.add_vertices(4)          # ids: 0,1,2,3
+g.set_outputs((1, 3))      # marks nodes 1 and 3 as outputs
+g.set_outputs(tuple())     # clears outputs
+
+g.close()

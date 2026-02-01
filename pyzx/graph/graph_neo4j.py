@@ -933,6 +933,36 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._vindex += amount
         return vertex_ids
 
+    def set_outputs(self, outputs: Tuple[VT, ...]):
+        """Sets the outputs of the graph.
+
+        Behaviour:
+        - Updates the in-memory outputs tuple (`self._outputs`).
+        - Synchronizes Neo4j labels:
+            * removes :Output from all nodes of this graph_id
+            * sets :Output on nodes whose ids are in `outputs`
+        """
+        self._outputs = tuple(outputs)
+        ids: List[int] = list(self._outputs)
+
+        q_clear = """
+        MATCH (n:Output {graph_id: $graph_id})
+        REMOVE n:Output
+        """
+        q_set = """
+        UNWIND $ids AS vid
+        MATCH (n:Node {graph_id: $graph_id, id: vid})
+        SET n:Output
+        """
+
+        with self._get_session() as session:
+
+            def _tx(tx):
+                tx.run(q_clear, graph_id=self.graph_id)
+                tx.run(q_set, graph_id=self.graph_id, ids=ids)
+
+            session.execute_write(_tx)
+
     def remove_vertex(self, vertex: VT) -> None:
         """Removes the given vertex from the graph."""
         self.remove_vertices([vertex])
