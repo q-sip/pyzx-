@@ -298,6 +298,82 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
 
+    def remove_isolated_vertices(self) -> None:
+        """Deletes all vertices and vertex pairs that are not connected to any other vertex.
+
+        Mirrors BaseGraph.remove_isolated_vertices semantics:
+          - Isolated boundary vertex => TypeError
+          - Isolated Z/X => absorbed into scalar via add_node(phase)
+          - Isolated H_BOX => absorbed into scalar via add_phase(phase)
+          - Degree-1 non-boundary vertex whose unique neighbor also has degree-1
+            and neither is boundary => remove both and update scalar depending on types and edge type.
+        """
+        rem: List[VT] = []
+
+        # IMPORTANT: vertices() hits the DB, but we want a snapshot because we’ll delete.
+        for v in list(self.vertices()):
+            d = self.vertex_degree(v)
+
+            # Completely isolated vertex
+            if d == 0:
+                rem.append(v)
+                ty = self.type(v)
+
+                if ty == VertexType.BOUNDARY:
+                    raise TypeError(
+                        "Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex."
+                    )
+                elif ty == VertexType.H_BOX:
+                    self.scalar.add_phase(self.phase(v))
+                else:
+                    self.scalar.add_node(self.phase(v))
+
+            # A dangling component of size 2: v--w and nothing else
+            if d == 1:
+                if v in rem:
+                    continue
+                if self.type(v) == VertexType.BOUNDARY:
+                    continue
+
+                ws = list(self.neighbors(v))
+                if not ws:
+                    continue
+                w = ws[0]
+
+                # Neighbor has other neighbors => not isolated pair
+                if len(list(self.neighbors(w))) > 1:
+                    continue
+                if self.type(w) == VertexType.BOUNDARY:
+                    continue
+
+                # Now v and w are only connected to each other
+                rem.append(v)
+                rem.append(w)
+
+                et = self.edge_type(self.edge(v, w))
+                t1 = self.type(v)
+                t2 = self.type(w)
+
+                # 1-ary H-box behaves like a Z-spider here
+                if t1 == VertexType.H_BOX:
+                    t1 = VertexType.Z
+                if t2 == VertexType.H_BOX:
+                    t2 = VertexType.Z
+
+                if t1 == t2:
+                    if et == EdgeType.SIMPLE:
+                        self.scalar.add_node(self.phase(v) + self.phase(w))
+                    else:
+                        self.scalar.add_spider_pair(self.phase(v), self.phase(w))
+                else:
+                    if et == EdgeType.SIMPLE:
+                        self.scalar.add_spider_pair(self.phase(v), self.phase(w))
+                    else:
+                        self.scalar.add_node(self.phase(v) + self.phase(w))
+
+        # Perform deletions in one go (Neo4j DETACH DELETE handles incident relationships)
+        self.remove_vertices(rem)
+
     def num_edges(
         self,
         s: Optional[VT] = None,
