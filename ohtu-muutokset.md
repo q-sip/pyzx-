@@ -554,3 +554,103 @@ print(g.inputs())  # (1, 4)
 
 g.close()
 ```
+
+
+## GraphNeo4j.clone(self) -> GraphNeo4j
+
+Creates an identical copy of the graph in Neo4j **without any relabeling** (vertex ids and edge properties are preserved), stored under a **new `graph_id` namespace**.
+
+### Behaviour
+
+* Allocates a new graph namespace by creating a fresh `graph_id` of the form:
+
+  `"<old_graph_id>_clone_<random_hex>"`
+
+* Reads a snapshot of the current graph from Neo4j for the current `graph_id`:
+
+  * all nodes `(:Node {graph_id})`, including:
+
+    * all node properties via `properties(n)`
+    * all labels via `labels(n)` (used to detect `:Input` and `:Output`)
+  * all directed edges `(:Node {graph_id})-[r:Wire]->(:Node {graph_id})`, including:
+
+    * all relationship properties via `properties(r)`
+
+* Writes the copy into Neo4j under the new `graph_id`:
+
+  * recreates nodes as `(:Node)` and sets their full property maps (with `graph_id` rewritten to the new value)
+  * recreates relationships as directed `[:Wire]` and sets their full property maps
+
+* Preserves **vertex ids** (the `id` property of each node) exactly; no remapping/reindexing is performed.
+
+* Preserves input/output markers:
+
+  * If `self._inputs` / `self._outputs` are set in memory, those are used as the authoritative order.
+  * Otherwise the clone derives inputs/outputs from `:Input` and `:Output` labels found in Neo4j.
+  * The clone sets `:Input` / `:Output` labels on the copied nodes accordingly and stores the same tuples in memory.
+
+* Copies Python-side `BaseGraph` state that is not stored in Neo4j:
+
+  * `scalar` (copied, not shared)
+  * phase-tracking fields if enabled (`track_phases`, `phase_index`, `phase_mult`, `max_phase_index`, `phase_master`)
+  * backend bookkeeping such as `_vindex` and `_maxr`
+
+### Parameters
+
+* None
+
+### Returns
+
+* `GraphNeo4j`
+  A new `GraphNeo4j` instance pointing to the copied graph (new `graph_id`), with identical structure and metadata.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.utils import VertexType, EdgeType
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+# Build a simple graph
+vertices_data = [
+    {"ty": VertexType.BOUNDARY, "row": 0, "qubit": 0},
+    {"ty": VertexType.Z, "row": 1, "qubit": 0, "phase": 0},
+    {"ty": VertexType.BOUNDARY, "row": 2, "qubit": 0},
+]
+edges_data = [
+    ((0, 1), EdgeType.SIMPLE),
+    ((1, 2), EdgeType.SIMPLE),
+]
+g.create_graph(vertices_data=vertices_data, edges_data=edges_data, inputs=[0], outputs=[2])
+
+# Add custom metadata (will be preserved by clone)
+g.set_vdata(1, "tag", "middle")
+g.set_edata((0, 1), "weight", 123)
+
+g2 = g.clone()
+
+print(g.graph_id)   # original graph namespace
+print(g2.graph_id)  # new graph namespace (different)
+
+print(g.inputs(), g.outputs())    # (0,) (2,)
+print(g2.inputs(), g2.outputs())  # (0,) (2,)
+
+# Vertex ids are preserved (no relabeling)
+print(sorted(g.vertices()))   # [0, 1, 2]
+print(sorted(g2.vertices()))  # [0, 1, 2]
+
+g.close()
+g2.close()
+```

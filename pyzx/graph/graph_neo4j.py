@@ -1100,3 +1100,138 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         ids: List[int] = [int(r["id"]) for r in rows]
         self._inputs = tuple(ids)
         return self._inputs
+
+    def clone(self) -> "GraphNeo4j":
+        """Return an identical copy of the graph without relabeling vertices/edges.
+
+        For the Neo4j backend, this means copying all (:Node) vertices and (:Wire)
+        relationships belonging to this instance's ``graph_id`` into a fresh
+        ``graph_id`` namespace, preserving the ``id`` fields and all properties.
+        """
+        import uuid
+
+        # Fresh namespace so the copy won't clash with existing data.
+        new_graph_id = f"{self.graph_id}_clone_{uuid.uuid4().hex}"
+        cpy = GraphNeo4j(
+            uri=self.uri,
+            user=self.user,
+            password=self.password,
+            graph_id=new_graph_id,
+            database=self.database,
+        )
+
+        # Copy BaseGraph-level state that is not stored in the DB.
+        cpy.scalar = self.scalar.copy()
+        cpy.track_phases = self.track_phases
+        cpy.phase_index = self.phase_index.copy()
+        cpy.phase_master = self.phase_master
+        cpy.phase_mult = self.phase_mult.copy()
+        cpy.max_phase_index = self.max_phase_index
+        cpy.merge_vdata = self.merge_vdata
+
+        # Preserve backend bookkeeping.
+        cpy._vindex = self._vindex
+        cpy._maxr = self._maxr
+
+        # Snapshot the current graph from Neo4j.
+        q_nodes = """
+        MATCH (n:Node {graph_id: $graph_id})
+        RETURN n.id AS id, properties(n) AS props, labels(n) AS labels
+        ORDER BY id
+        """
+
+        q_edges = """
+        MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})
+        RETURN n1.id AS s, n2.id AS t, properties(r) AS props
+        """
+
+        with self._get_session() as session:
+            nodes_rows = session.execute_read(
+                lambda tx: tx.run(q_nodes, graph_id=self.graph_id).data()
+            )
+
+            # Empty graph: just copy scalar/state.
+            if not nodes_rows:
+                cpy._inputs = tuple(self.inputs())
+                cpy._outputs = tuple(self.outputs())
+                return cpy
+
+            edges_rows = session.execute_read(
+                lambda tx: tx.run(q_edges, graph_id=self.graph_id).data()
+            )
+
+            node_payload = []
+            label_inputs = []
+            label_outputs = []
+
+            for row in nodes_rows:
+                props = dict(row.get("props") or {})
+                props["graph_id"] = new_graph_id  # move to new namespace
+                node_payload.append(props)
+
+                labels = row.get("labels") or []
+                if "Input" in labels:
+                    label_inputs.append(int(props["id"]))
+                if "Output" in labels:
+                    label_outputs.append(int(props["id"]))
+
+            # Preserve ordering if present in-memory; otherwise fall back to label-derived order.
+            input_ids = list(self._inputs) if getattr(self, "_inputs", None) else []
+            output_ids = list(self._outputs) if getattr(self, "_outputs", None) else []
+            if not input_ids:
+                input_ids = label_inputs
+            if not output_ids:
+                output_ids = label_outputs
+
+            edges_payload = [
+                {
+                    "s": int(r["s"]),
+                    "t": int(r["t"]),
+                    "props": dict(r.get("props") or {}),
+                }
+                for r in (edges_rows or [])
+            ]
+
+            q_create_nodes = """
+            UNWIND $nodes AS p
+            CREATE (n:Node)
+            SET n = p
+            """
+
+            q_create_edges = """
+            UNWIND $edges AS e
+            MATCH (s:Node {graph_id: $new_graph_id, id: e.s})
+            MATCH (t:Node {graph_id: $new_graph_id, id: e.t})
+            CREATE (s)-[r:Wire]->(t)
+            SET r = e.props
+            """
+
+            q_set_inputs = """
+            UNWIND $ids AS vid
+            MATCH (n:Node {graph_id: $new_graph_id, id: vid})
+            SET n:Input
+            """
+
+            q_set_outputs = """
+            UNWIND $ids AS vid
+            MATCH (n:Node {graph_id: $new_graph_id, id: vid})
+            SET n:Output
+            """
+
+            def _write(tx):
+                tx.run(q_create_nodes, nodes=node_payload)
+                if edges_payload:
+                    tx.run(
+                        q_create_edges, new_graph_id=new_graph_id, edges=edges_payload
+                    )
+                if input_ids:
+                    tx.run(q_set_inputs, new_graph_id=new_graph_id, ids=input_ids)
+                if output_ids:
+                    tx.run(q_set_outputs, new_graph_id=new_graph_id, ids=output_ids)
+
+            session.execute_write(_write)
+
+        # Sync in-memory IO.
+        cpy._inputs = tuple(input_ids)
+        cpy._outputs = tuple(output_ids)
+        return cpy
