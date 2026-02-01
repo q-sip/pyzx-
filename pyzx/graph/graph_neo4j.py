@@ -989,6 +989,36 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._outputs = tuple(ids)
         return self._outputs
 
+    def set_inputs(self, inputs: Tuple[VT, ...]):
+        """Sets the inputs of the graph.
+
+        Behaviour:
+        - Updates the in-memory inputs tuple (`self._inputs`).
+        - Synchronizes Neo4j labels:
+            * removes :Input from all nodes of this graph_id
+            * sets :Input on nodes whose ids are in `inputs`
+        """
+        self._inputs = tuple(inputs)
+        ids: List[int] = list(self._inputs)
+
+        q_clear = """
+        MATCH (n:Input {graph_id: $graph_id})
+        REMOVE n:Input
+        """
+        q_set = """
+        UNWIND $ids AS vid
+        MATCH (n:Node {graph_id: $graph_id, id: vid})
+        SET n:Input
+        """
+
+        with self._get_session() as session:
+
+            def _tx(tx):
+                tx.run(q_clear, graph_id=self.graph_id)
+                tx.run(q_set, graph_id=self.graph_id, ids=ids)
+
+            session.execute_write(_tx)
+
     def remove_vertex(self, vertex: VT) -> None:
         """Removes the given vertex from the graph."""
         self.remove_vertices([vertex])

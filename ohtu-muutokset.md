@@ -445,3 +445,61 @@ g.set_outputs((4, 1))
 print(g.outputs())  # (1, 4)
 
 g.close()
+```
+
+## GraphNeo4j.set_inputs(self, inputs: Tuple[VT, ...])
+
+Sets the inputs of the graph.
+
+This mirrors the semantics of `BaseGraph.set_inputs` and updates both the in-memory input tuple (`self._inputs`) and the Neo4j labels used to mark input boundary nodes.
+
+### Behaviour
+
+- Updates the in-memory input tuple:
+
+  `self._inputs = tuple(inputs)`
+
+- Synchronizes Neo4j labels for the current `graph_id`:
+
+  1) Clears all existing input markers:
+     - removes label `:Input` from any node currently labeled `:Input`.
+
+  2) Marks the new input nodes:
+     - for each vertex id in `inputs`, matches `(:Node {graph_id, id})` and sets label `:Input`.
+
+Passing an empty tuple clears all input labels for the graph.
+
+### Parameters
+
+- inputs: `Tuple[VT, ...]`  
+  Tuple of vertex ids that should be treated as the inputs of this ZX-diagram.
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+g.add_vertices(4)         # ids: 0,1,2,3
+g.set_inputs((0, 2))      # marks nodes 0 and 2 as inputs
+g.set_inputs(tuple())     # clears inputs
+
+g.close()
+```
