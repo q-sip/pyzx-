@@ -963,6 +963,32 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
             session.execute_write(_tx)
 
+    def outputs(self) -> Tuple[VT, ...]:
+        """Gets the outputs of the graph.
+
+        Behaviour:
+        - Returns the in-memory outputs tuple (`self._outputs`) if it is non-empty.
+        - Otherwise attempts to read outputs from Neo4j labels (:Output) for this graph_id,
+          returns them ordered by vertex id.
+        - If neither exists, returns an empty tuple.
+        """
+        if getattr(self, "_outputs", None):
+            return self._outputs
+
+        query = """
+        MATCH (n:Output {graph_id: $graph_id})
+        RETURN n.id AS id
+        ORDER BY id
+        """
+        with self._get_session() as session:
+            rows = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+
+        ids: List[int] = [int(r["id"]) for r in rows]
+        self._outputs = tuple(ids)
+        return self._outputs
+
     def remove_vertex(self, vertex: VT) -> None:
         """Removes the given vertex from the graph."""
         self.remove_vertices([vertex])

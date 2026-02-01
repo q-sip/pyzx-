@@ -394,3 +394,54 @@ g.set_outputs((1, 3))      # marks nodes 1 and 3 as outputs
 g.set_outputs(tuple())     # clears outputs
 
 g.close()
+
+
+## GraphNeo4j.outputs(self) -> Tuple[VT, ...]
+
+Gets the outputs of the graph.
+
+### Behaviour
+
+- If `self._outputs` is already set and non-empty, returns it without querying Neo4j.
+- Otherwise reads output vertices from Neo4j using the `:Output` label for the current `graph_id`:
+
+  - matches `(:Output {graph_id})`
+  - returns their `id` values ordered by `id`
+
+- Caches the result by setting `self._outputs` to the returned tuple.
+
+If there are no output labels (and `self._outputs` is empty), returns an empty tuple.
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Tuple[VT, ...]`  
+  The output vertex ids, e.g. `(1, 4)`.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+g.add_vertices(5)
+g.set_outputs((4, 1))
+
+print(g.outputs())  # (1, 4)
+
+g.close()
