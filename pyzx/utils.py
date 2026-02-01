@@ -87,7 +87,6 @@ def get_w_io(g, v):
 class EdgeType(IntEnum):
     """Type of an edge in the graph."""
 
-    NOT_IN_GRAPH = 0
     SIMPLE = 1
     HADAMARD = 2
     W_IO = 3

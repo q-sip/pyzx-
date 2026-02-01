@@ -19,13 +19,15 @@ from typing import (
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
+from pyzx.symbolic import new_var, parse
+
 from ..utils import (
     EdgeType,
     FloatInt,
     FractionLike,
     VertexType,
 )
-from .base import BaseGraph
+from .base import BaseGraph, upair
 
 load_dotenv()
 
@@ -295,7 +297,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
 
-    def num_edges(self):
+    def num_edges(
+        self,
+        s: Optional[VT] = None,
+        t: Optional[VT] = None,
+        et: Optional[EdgeType] = None,
+    ) -> int:
         query = "MATCH ()-->() RETURN count(*) as count;"
         with self._get_session() as session:
             result = session.execute_read(
@@ -307,10 +314,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
     ) -> ET:
         """Adds a single edge of the given type and return its id"""
+        s, t = upair(*edge_pair)
 
-        id = self.num_edges()
+        edge_id = self.num_edges()
 
-        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype, "id": id}
+        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype, "id": edge_id}
 
         query = """
         UNWIND $edge AS e
@@ -323,7 +331,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id, edge=edge)
             )
 
-        return id
+        return s, t
 
     def remove_edges(self, edges: List[ET]) -> None:
         # Poistaa listan relationshippejä graafista
@@ -402,8 +410,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def edge_type(self, e: ET) -> EdgeType:
         """Returns the type of the given edge:
-        ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge,
-        0 if the edge is not in the graph."""
+        ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge
+        Raises KeyError if the edge is not in the graph.
+        """
 
         query = """MATCH
         (n1:Node {graph_id: $graph_id, id: $node1})
@@ -415,7 +424,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query, graph_id=self.graph_id, node1=e[0], node2=e[1]
                 ).data()
             )
-        return EdgeType(result[0]["r.t"]) if len(result) > 0 else EdgeType.NOT_IN_GRAPH
+
+        if len(result) <= 0:
+            raise KeyError(f"{e} has no edge type")
+
+        return EdgeType(result[0]["r.t"])
 
     def set_edge_type(self, e: ET, t: EdgeType) -> None:
         """Sets the type of the given edge."""
@@ -440,7 +453,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
             )
-        return VertexType(result[0]["n.t"]) if result else None
+        if not result:
+            raise KeyError(f"{vertex} has no type")
+
+        return VertexType(result[0]["n.t"])
 
     def set_type(self, vertex: VT, t: VertexType) -> None:
         """Sets the type of the given vertex to t."""
@@ -459,10 +475,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
             )
         if not result:
-            return None
+            return 0
         p = result[0]["n.phase"]
         if p is None:
-            return None
+            return 0
         try:
             return Fraction(p)
         except ValueError:
