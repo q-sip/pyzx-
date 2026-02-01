@@ -394,7 +394,7 @@ g.set_outputs((1, 3))      # marks nodes 1 and 3 as outputs
 g.set_outputs(tuple())     # clears outputs
 
 g.close()
-
+```
 
 ## GraphNeo4j.outputs(self) -> Tuple[VT, ...]
 
@@ -500,6 +500,57 @@ g = GraphNeo4j(
 g.add_vertices(4)         # ids: 0,1,2,3
 g.set_inputs((0, 2))      # marks nodes 0 and 2 as inputs
 g.set_inputs(tuple())     # clears inputs
+
+g.close()
+```
+
+## GraphNeo4j.inputs(self) -> Tuple[VT, ...]
+
+Gets the inputs of the graph.
+
+### Behaviour
+
+- If `self._inputs` is already set and non-empty, returns it without querying Neo4j.
+- Otherwise reads input vertices from Neo4j using the `:Input` label for the current `graph_id`:
+
+  - matches `(:Input {graph_id})`
+  - returns their `id` values ordered by `id`
+
+- Caches the result by setting `self._inputs` to the returned tuple.
+
+If there are no input labels (and `self._inputs` is empty), returns an empty tuple.
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Tuple[VT, ...]`  
+  The input vertex ids, e.g. `(1, 4)`.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+g.add_vertices(5)
+g.set_inputs((4, 1))
+
+print(g.inputs())  # (1, 4)
 
 g.close()
 ```
