@@ -260,6 +260,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return str(phase)
 
     def vindex(self) -> int:
+        """returns private variable _vindex (int)"""
         return self._vindex
 
     def num_vertices(self):
