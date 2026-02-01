@@ -4,9 +4,7 @@ Docstring for pyzx.graph.graph_neo4j
 
 import os
 from fractions import Fraction
-from ..symbolic import Poly, parse, new_var
 from typing import (
-    TYPE_CHECKING,
     Any,
     Iterable,
     List,
@@ -219,9 +217,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 raise ValueError("edge_data must have same length as edge_pairs")
         n = self.num_edges()
         ids = [i + n for i in range(len(edges))]
-        print(f'ids = {ids}')
+        print(f"ids = {ids}")
         edges_payload = [
-            {"s": s, "t": t, "et": et.value, "id": eid} for (s, t), et, eid in zip(edges, edge_data, ids)
+            {"s": s, "t": t, "et": et.value, "id": eid}
+            for (s, t), et, eid in zip(edges, edge_data, ids)
         ]
 
         query = """
@@ -368,16 +367,19 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             RETURN startNode(r).id AS src, endNode(r).id AS tgt"""
             with self._get_session() as session:
                 result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, vertices=vertices_payload).data()
+                    lambda tx: tx.run(
+                        query, graph_id=self.graph_id, vertices=vertices_payload
+                    ).data()
                 )
-            return [(item['src'], item['tgt']) for item in result]
+            return [(item["src"], item["tgt"]) for item in result]
 
-        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id}) RETURN n1.id, n2.id"
+        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})"
+        query += " RETURN n1.id, n2.id"
         with self._get_session() as session:
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id).data()
             )
-        return [(item['n1.id'], item['n2.id']) for item in result]
+        return [(item["n1.id"], item["n2.id"]) for item in result]
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""
@@ -393,35 +395,40 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         with self._get_session() as session:
             result = session.execute_read(
-            lambda tx: tx.run(query, graph_id=self.graph_id, vertex=vertex).data()
+                lambda tx: tx.run(query, graph_id=self.graph_id, vertex=vertex).data()
             )
 
-        return [
-            (vertex, r["neighbor"])
-            for r in result
-        ]
-
+        return [(vertex, r["neighbor"]) for r in result]
 
     def edge_type(self, e: ET) -> EdgeType:
         """Returns the type of the given edge:
         ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge,
         0 if the edge is not in the graph."""
 
-        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2}) RETURN r.t"""
+        query = """MATCH
+        (n1:Node {graph_id: $graph_id, id: $node1})
+        -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        RETURN r.t"""
         with self._get_session() as session:
-                    result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=e[0], node2=e[1]).data()
-                )
-        return EdgeType(result[0]['r.t']) if len(result) > 0 else 0
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=e[0], node2=e[1]
+                ).data()
+            )
+        return EdgeType(result[0]["r.t"]) if len(result) > 0 else EdgeType.NOT_IN_GRAPH
 
     def set_edge_type(self, e: ET, t: EdgeType) -> None:
         """Sets the type of the given edge."""
-        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2}) SET r.t = $type"""
+        query = """MATCH
+        (n1:Node {graph_id: $graph_id, id: $node1})
+        -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        SET r.t = $type"""
         with self._get_session() as session:
-                    session.execute_write(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t)
+            session.execute_write(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t
                 )
-
+            )
 
     def type(self, vertex: VT) -> VertexType:
         """Returns the type of the given vertex:
@@ -430,10 +437,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.t"""
         with self._get_session() as session:
-                    result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
-                )
-        return VertexType(result[0]['n.t']) if result else None
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
+            )
+        return VertexType(result[0]["n.t"]) if result else None
 
     def set_type(self, vertex: VT, t: VertexType) -> None:
         """Sets the type of the given vertex to t."""
@@ -441,19 +448,19 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.t = $type"""
         with self._get_session() as session:
             session.execute_write(
-            lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=t)
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=t)
             )
 
     def phase(self, vertex: VT) -> FractionLike:
         """Returns the phase value of the given vertex."""
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.phase"""
         with self._get_session() as session:
-                    result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
-                )
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
+            )
         if not result:
             return None
-        p = result[0]['n.phase']
+        p = result[0]["n.phase"]
         if p is None:
             return None
         try:
@@ -469,7 +476,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.phase = $phase"""
         with self._get_session() as session:
             session.execute_write(
-            lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, phase=self._phase_to_str(phase))
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    id=vertex,
+                    phase=self._phase_to_str(phase),
+                )
             )
 
     def qubit(self, vertex: VT) -> FloatInt:
@@ -489,9 +501,13 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         with self._get_session() as session:
             session.execute_write(
-            lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, qubit=self._phase_to_str(q))
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    id=vertex,
+                    qubit=self._phase_to_str(q),
+                )
             )
-
 
     def row(self, vertex: VT) -> FloatInt:
         """Palauttaa sen rivin jolla verteksi on.
@@ -516,7 +532,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def clear_vdata(self, vertex: VT) -> None:
         """Removes all vdata associated to a vertex"""
-        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n = {id: $id, t: n.t, phase: n.phase, qubit: n.qubit, row: n.row, graph_id: $graph_id}"""
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id})
+        SET n = {id: $id, t: n.t, phase: n.phase, qubit: n.qubit,
+        row: n.row, graph_id: $graph_id}"""
 
         with self._get_session() as session:
             session.execute_write(
@@ -527,7 +545,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns an iterable of the vertex data key names.
         Used e.g. in making a copy of the graph in a backend-independent way."""
 
-        query = """ MATCH(n:Node {graph_id: $graph_id, id: $id}) RETURN keys(n) AS keys"""
+        query = (
+            """ MATCH(n:Node {graph_id: $graph_id, id: $id}) RETURN keys(n) AS keys"""
+        )
         with self._get_session() as session:
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
@@ -537,11 +557,15 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
         If this key has no value associated with it, it returns the default value."""
-        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n[$key] as value"""
+        query = (
+            """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n[$key] as value"""
+        )
 
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, key=key).single()
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, id=vertex, key=key
+                ).single()
             )
         return result["value"] if result and result["value"] is not None else default
 
@@ -551,17 +575,23 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         with self._get_session() as session:
             session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, key=key, val=val)
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, id=vertex, key=key, val=val
+                )
             )
 
     def clear_edata(self, edge: ET) -> None:
         """Removes all edata associated to an edge"""
 
-        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2}) SET r = {id: r.id, t: r.t}"""
+        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1})
+        -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2})
+        SET r = {id: r.id, t: r.t}"""
         with self._get_session() as session:
-                    session.execute_write(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1])
+            session.execute_write(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
                 )
+            )
 
     def edata_keys(self, edge: ET) -> Sequence[str]:
         """Returns an iterable of the edge data key names."""
@@ -571,9 +601,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         RETURN keys(r) AS propertyKey"""
 
         with self._get_session() as session:
-                    result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]).data()
-                )
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
+                ).data()
+            )
         return [r["propertyKey"] for r in result]
 
     def edata(self, edge: ET, key: str, default: Any = None) -> Any:
@@ -584,9 +616,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         RETURN r[$key] AS value"""
 
         with self._get_session() as session:
-                    result = session.execute_read(
-                    lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key).single()
-                )
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key
+                ).single()
+            )
         return result["value"] if result and result["value"] is not None else default
 
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
@@ -598,17 +632,21 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
         with self._get_session() as session:
             session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key, val=val)
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    node1=edge[0],
+                    node2=edge[1],
+                    key=key,
+                    val=val,
+                )
             )
 
-    #Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
+    # Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
     def clear_graph(self, query: str) -> None:
         """Clears the entire graph from the database."""
         with self._get_session() as session:
-            session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id)
-            )
-
+            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 
     # }}}
 
