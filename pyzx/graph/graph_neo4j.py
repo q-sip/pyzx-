@@ -306,7 +306,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
           - Isolated Z/X => absorbed into scalar via add_node(phase)
           - Isolated H_BOX => absorbed into scalar via add_phase(phase)
           - Degree-1 non-boundary vertex whose unique neighbor also has degree-1
-            and neither is boundary => remove both and update scalar depending on types and edge type.
+            and neither is boundary
+            => remove both and update scalar depending on types and edge type.
         """
         rem: List[VT] = []
 
@@ -837,6 +838,52 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             self.phase_index[v] = self.max_phase_index
             self.phase_mult[self.max_phase_index] = 1
         return v
+
+    def add_vertex_indexed(self, v: VT) -> None:
+        """Adds a vertex that is guaranteed to have the chosen index (i.e. 'name').
+        If the index isn't available, raises a ValueError.
+        This method is used in the editor and ZXLive to support undo,
+        which requires vertices to preserve their index.
+        """
+        # 1) Check availability
+        q_exists = """
+        MATCH (n:Node {graph_id: $graph_id, id: $id})
+        RETURN count(n) AS c
+        """
+        with self._get_session() as session:
+            rec = session.execute_read(
+                lambda tx: tx.run(q_exists, graph_id=self.graph_id, id=v).single()
+            )
+            if rec and int(rec["c"]) > 0:
+                raise ValueError("Vertex with this index already exists")
+
+        # 2) Create with defaults (same defaults as add_vertices)
+        q_create = """
+        CREATE (n:Node {
+            graph_id: $graph_id,
+            id: $id,
+            t: $t,
+            phase: $phase,
+            qubit: $qubit,
+            row: $row
+        })
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    q_create,
+                    graph_id=self.graph_id,
+                    id=v,
+                    t=VertexType.BOUNDARY.value,
+                    phase="0",
+                    qubit=-1,
+                    row=-1,
+                )
+            )
+
+        # 3) Maintain vindex contract
+        if v >= self._vindex:
+            self._vindex = v + 1
 
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs

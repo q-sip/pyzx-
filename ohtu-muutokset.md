@@ -273,6 +273,70 @@ g.remove_isolated_vertices()
 
 See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
 
+## GraphNeo4j.add_vertex_indexed(self, v: VT) -> None
+
+Adds a vertex that is guaranteed to have the chosen index (i.e. vertex “name” / id).
+
+This mirrors the semantics of `BaseGraph.add_vertex_indexed` and is primarily used by the editor / ZXLive undo stack: undo requires that re-created vertices preserve their original id.
+
+### Behaviour
+
+- Checks whether a node already exists with `(:Node {graph_id: self.graph_id, id: v})`.
+  - If it exists, raises `ValueError`.
+- Otherwise creates the node as:
+
+  `(:Node {graph_id, id, t, phase, qubit, row})`
+
+  with defaults:
+
+  - t: `VertexType.BOUNDARY`
+  - phase: `"0"`
+  - qubit: `-1`
+  - row: `-1`
+
+- Updates the internal vertex allocator:
+  - If `v >= self._vindex`, then sets `self._vindex = v + 1`.
+  - If `v < self._vindex`, `self._vindex` is unchanged.
+
+### Parameters
+
+- v: `VT`  
+  The explicit vertex id to allocate. Must be unused within the current `graph_id`.
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place.
+
+### Raises
+
+- `ValueError`  
+  If the index `v` is already in use for this graph (`graph_id`).
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+g.add_vertex_indexed(5)  # creates Node with id=5
+# g.add_vertex_indexed(5)  # would raise ValueError
+
+g.close()
+```
+
 
 
 
