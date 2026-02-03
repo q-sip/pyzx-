@@ -27,6 +27,37 @@ services:
       - path: ./.env.pyzx
     command: python ./neo4j_functionality_test.py
 
+  # You can run this with this:
+  # docker compose up --watch pyzx-dev
+  # And it will watch all the files.
+  # or you can run (in windows) to run that scrip over and over:
+  # $env:X="./neo4j_functionality_test.py"; docker compose up --watch pyzx-dev
+  pyzx-dev:
+    extends: pyzx
+    profiles: [ "pyzx-dev" ]
+    entrypoint: []
+    environment:
+      - X=${X:-}
+    command: >
+      /bin/sh -c " if [ -z \"$$X\" ]; then
+        python ./neo4j_functionality_test.py;
+      else
+        echo 'Running specific target: $$X';
+        echo 'Running specific target: ${X}';
+        python $$X;
+      fi; sleep infinity"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./neo4j_functionality_test.py
+          target: /usr/src/app/neo4j_functionality_test.py
+        - action: sync+restart
+          path: ./pyzx/graph/graph_neo4j.py
+          target: /usr/src/app/pyzx/graph/graph_neo4j.py
+        - action: sync+restart
+          path: ./pyzx
+          target: /usr/src/app/pyzx
+
   test:
     build:
       context: .
@@ -46,12 +77,39 @@ services:
     networks:
       - silta
 
-  # lint:
-  #   extends: pyzx-test
-  #   profiles: [ "tools" ]
-  #   volumes:
-  #     - .:/app
-  #   command: pylint --rcfile .pylintrc ./
+  # Can be run:
+  # docker compose up --watch test-dev
+  # to get it constantly do all tests on every change.
+  # Or can be run like (in windows) to target only those tests:
+  # $env:T="tests.test_graph_neo4j.test_neo4j_connection"; docker compose up --watch test-dev
+  test-dev:
+    extends: test
+    profiles: [ "test-dev" ]
+    entrypoint: []
+    environment:
+      - T=${T:-}
+    command: >
+      /bin/sh -c " if [ -z \"$$T\" ]; then
+        python -m unittest discover -v -s tests/test_graph_neo4j;
+      else
+        echo 'Running specific target: $$T';
+        echo 'Running specific target: ${T}';
+        python -m unittest -v $$T;
+      fi; sleep infinity"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./tests/test_graph_neo4j
+          target: /usr/src/app/tests/test_graph_neo4j
+          ignore:
+            - "**/__pycache__/**"
+            - ".pytest_cache/**"
+        - action: sync+restart
+          path: ./tests
+          target: /usr/src/app/tests
+          ignore:
+            - "**/__pycache__/**"
+            - ".pytest_cache/**"
 
 networks:
   silta:
