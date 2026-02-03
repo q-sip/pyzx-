@@ -2,9 +2,9 @@ name: Dockered tests
 
 on:
   push:
-    branches: ["dev", "master"]
+    branches: ["master"]
   pull_request:
-    branches: ["master", "dev"]
+    branches: ["master"]
 
 jobs:
   test:
