@@ -13,6 +13,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Make .env.pyzx
+        uses: SpicyPizza/create-envfile@v2.0
+        with:
+            env_key_NEO4J_URI: ${{ secrets.NEO4J_URI }}
+            env_key_NEO4J_USER: ${{ secrets.NEO4J_USER }}
+            env_key_NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+            file_name: .env.pyzx
+      - name: Make .env.neo4j
+        uses: SpicyPizza/create-envfile@v2.0
+        with:
+            env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+            file_name: .env.neo4j
+
       - name: Start Neo4j and Tests
         run: |
           # Start the neo4j and pyzx services (default)
