@@ -1,0 +1,24 @@
+name: Dockered tests
+
+on:
+  push:
+    branches: ["dev", "master"]
+  pull_request:
+    branches: ["master", "dev"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start Neo4j and Tests
+        run: |
+          # Start the neo4j and pyzx services (default)
+          # And start the 'test' profile service
+          docker compose --profile test up --build --exit-code-from test
+
+      - name: Cleanup
+        # if: always()
+        run: docker compose down --volumes
