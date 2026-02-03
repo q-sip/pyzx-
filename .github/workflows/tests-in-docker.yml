@@ -32,11 +32,19 @@ jobs:
       - name: ls 2
         run: ls
 
+    #   - name: Start Neo4j and Tests
+        # run: |
+        #   # Start the neo4j and pyzx services (default)
+        #   # And start the 'test' profile service
+        #   docker compose --profile test up --build --exit-code-from test
+
       - name: Start Neo4j and Tests
         run: |
-          # Start the neo4j and pyzx services (default)
-          # And start the 'test' profile service
-          docker compose --profile test up --build --exit-code-from test
+            docker compose --profile test \
+            --env-file .env.pyzx \
+            --env-file .env.neo4j \
+            up --build --exit-code-from test
+
 
       - name: ls 3
         run: ls
