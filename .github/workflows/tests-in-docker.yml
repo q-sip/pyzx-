@@ -13,6 +13,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: ls 1
+        run: ls -la
+
       - name: Make .env.pyzx
         uses: SpicyPizza/create-envfile@v2.0
         with:
@@ -26,11 +29,17 @@ jobs:
             env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
             file_name: .env.neo4j
 
+      - name: ls 2
+        run: ls -la
+
       - name: Start Neo4j and Tests
         run: |
           # Start the neo4j and pyzx services (default)
           # And start the 'test' profile service
           docker compose --profile test up --build --exit-code-from test
+
+      - name: ls 3
+        run: ls -la
 
       - name: Cleanup
         # if: always()
