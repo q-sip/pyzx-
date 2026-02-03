@@ -50,5 +50,5 @@ jobs:
         run: ls
 
       - name: Cleanup
-        # if: always()
+        if: always()
         run: docker compose down --volumes

@@ -22,6 +22,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Make .env.pyzx
+        uses: SpicyPizza/create-envfile@v2.0
+        with:
+            env_key_NEO4J_URI: ${{ vars.NEO4J_URI }}
+            env_key_NEO4J_USER: ${{ secrets.NEO4J_USER }}
+            env_key_NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+            file_name: .env.pyzx
+      - name: Make .env.neo4j
+        uses: SpicyPizza/create-envfile@v2.0
+        with:
+            env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+            file_name: .env.neo4j
+
+
+      - name: Start Neo4j
+        run: docker compose up -d neo4j --wait
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -35,3 +52,7 @@ jobs:
       - name: Test with unittest
         run: |
           python -m unittest discover -s "tests" -t "." --verbose
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down --volumes
