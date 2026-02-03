@@ -41,7 +41,10 @@ services:
     environment:
       - PYTEST_ADDOPTS=--color=yes
       - FORCE_COLOR=1
-    command: ./runtests.sh
+    env_file:
+      - path: ./.env.pyzx
+    networks:
+      - silta
 
   # lint:
   #   extends: pyzx-test
