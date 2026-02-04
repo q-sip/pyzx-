@@ -26,10 +26,10 @@ jobs:
       #       env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
       #       env_key_NEO4J_AUTH12: neo4j/kalakala
       #       file_name: .env.neo4j
-      - name: Verify file size
-        run: |
-          ls -l .env.neo4j
-          wc -l .env.neo4j 
+      # - name: Verify file size
+      #   run: |
+      #     ls -l .env.neo4j
+      #     wc -l .env.neo4j 
 
       - name: force it
         run: |
