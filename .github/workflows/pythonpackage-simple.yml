@@ -25,8 +25,8 @@ jobs:
         run: |
           echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.neo4j
           echo "NEO4J_URI=${{ vars.NEO4J_URI }}" > .env.pyzx
-          echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.pyzx
-          echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.pyzx
+          echo "NEO4J_USER=${{ secrets.NEO4J_USER }}" >> .env.pyzx
+          echo "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}" >> .env.pyzx
 
       - name: Verify file size2
         run: |
@@ -47,10 +47,6 @@ jobs:
         run: docker compose up -d neo4j --wait
 
       - name: mypy
-        # env:
-        #     NEO4J_URI: ${{ vars.NEO4J_URI }}
-        #     NEO4J_USER: ${{ secrets.NEO4J_USER }}
-        #     NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
           mypy pyzx/ tests/
 
