@@ -20,11 +20,11 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Make .env.neo4j
-        uses: SpicyPizza/create-envfile@v2.0
-        with:
-            env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-            file_name: .env.neo4j
+      # - name: Make .env.neo4j
+      #   uses: SpicyPizza/create-envfile@v2.0
+      #   with:
+      #       env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+      #       file_name: .env.neo4j
 
       - name: Install dependencies
         run: |
@@ -34,9 +34,13 @@ jobs:
 
 
       - name: Start Neo4j
-        run: docker compose up -d neo4j --wait
         env:
-          NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+          NEO4J_AUTH: none
+          # NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+          NEO4J_dbms_security_auth__minimum__password__length: 0
+          NEO4J_dbms_security_password__change__required: "false"
+        run: docker compose up -d neo4j --wait
+        # env:
 
       - name: mypy
         env:
