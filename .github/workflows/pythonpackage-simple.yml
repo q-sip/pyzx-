@@ -56,7 +56,7 @@ jobs:
             NEO4J_USER: ${{ secrets.NEO4J_USER }}
             NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
-          python -m unittest discover -s "tests/test_graph_neo4j" -t "." --verbose
+          python -m unittest discover -s "tests" -t "." --verbose
 
       - name: Cleanup
         if: always()
