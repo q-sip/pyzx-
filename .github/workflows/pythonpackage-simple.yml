@@ -34,7 +34,7 @@ jobs:
 
 
       - name: Start Neo4j
-        run: docker compose up -d neo4j --wait --wait-timeout 60
+        run: docker compose up -d neo4j --wait
         env:
           NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
 
@@ -57,6 +57,7 @@ jobs:
         
 
       - name: Logs Neo4j
+        if: always()
         run: docker compose logs neo4j
 
       - name: Cleanup
