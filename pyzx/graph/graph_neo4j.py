@@ -129,8 +129,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         input_ids = [vertices[i] for i in inputs] if inputs else []
         output_ids = [vertices[i] for i in outputs] if outputs else []
 
-        graph_id = self.graph_id
-
         with self._get_session() as session:
 
             def create_full_graph(tx):
@@ -147,7 +145,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         row: v.row
                     })
                 """,
-                    graph_id=graph_id,
+                    graph_id=self.graph_id,
                     vertices=all_vertices,
                 )
 
@@ -160,7 +158,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
                         CREATE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
                     """,
-                        graph_id=graph_id,
+                        graph_id=self.graph_id,
                         edges=all_edges,
                     )
 
@@ -172,7 +170,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         MATCH (n:Node {graph_id: $graph_id, id: vid})
                         SET n:Input
                     """,
-                        graph_id=graph_id,
+                        graph_id=self.graph_id,
                         ids=input_ids,
                     )
 
@@ -184,7 +182,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         MATCH (n:Node {graph_id: $graph_id, id: vid})
                         SET n:Output
                     """,
-                        graph_id=graph_id,
+                        graph_id=self.graph_id,
                         ids=output_ids,
                     )
 
@@ -412,7 +410,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return s, t
 
     def remove_edges(self, edges: List[ET]) -> None:
-        # Poistaa listan relationshippejä graafista
+        """Removes relationships from the graph"""
         if not edges:
             return
 

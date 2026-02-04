@@ -5,6 +5,7 @@ from pyzx.symbolic import Poly
 from fractions import Fraction
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
+from pyzx.simplify import full_reduce
 
 load_dotenv()
 
@@ -43,3 +44,5 @@ v_ids = g.create_graph(
     inputs=[0],
     outputs=[3],
 )
+
+full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],bool]]=None, quiet:bool=True, stats:Optional[Stats]=None) -> None:
