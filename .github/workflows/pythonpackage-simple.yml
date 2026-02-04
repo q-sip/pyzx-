@@ -1,4 +1,4 @@
-name: Python tests + mypy
+name: Python tests + mypy, single python
 
 on:
   push:
@@ -15,44 +15,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.11
 
-      - name: Make .env.pyzx
-        uses: SpicyPizza/create-envfile@v2.0
-        with:
-            env_key_NEO4J_URI: ${{ vars.NEO4J_URI }}
-            env_key_NEO4J_USER: ${{ secrets.NEO4J_USER }}
-            env_key_NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
-            file_name: .env.pyzx
       - name: Make .env.neo4j
         uses: SpicyPizza/create-envfile@v2.0
         with:
             env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
             file_name: .env.neo4j
 
-
-      - name: Start Neo4j
-        env: 
-            NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-        run: NEO4J_AUTH="${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" docker compose up -d neo4j --wait
-
       - name: Install dependencies
-        env:
-            # This injects them into os.environ directly
-            NEO4J_URI: ${{ vars.NEO4J_URI }}
-            NEO4J_USER: ${{ secrets.NEO4J_USER }}
-            NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
 
+
+      - name: Start Neo4j
+        run: docker compose up -d neo4j --wait --wait-timeout 60
+        env:
+          NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+
       - name: mypy
         env:
-            # This injects them into os.environ directly
             NEO4J_URI: ${{ vars.NEO4J_URI }}
             NEO4J_USER: ${{ secrets.NEO4J_USER }}
             NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
@@ -61,12 +48,16 @@ jobs:
 
       - name: Test with unittest
         env:
-            # This injects them into os.environ directly
             NEO4J_URI: ${{ vars.NEO4J_URI }}
             NEO4J_USER: ${{ secrets.NEO4J_USER }}
             NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
+          sleep 20
           python -m unittest discover -s "tests" -t "." --verbose
+        
+
+      - name: Logs Neo4j
+        run: docker compose logs neo4j
 
       - name: Cleanup
         if: always()
