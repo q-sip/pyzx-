@@ -13,41 +13,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: ls 1
-        run: ls
-
-      - name: Make .env.pyzx
-        uses: SpicyPizza/create-envfile@v2.0
-        with:
-            env_key_NEO4J_URI: ${{ vars.NEO4J_URI }}
-            env_key_NEO4J_USER: ${{ secrets.NEO4J_USER }}
-            env_key_NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
-            file_name: .env.pyzx
-      - name: Make .env.neo4j
-        uses: SpicyPizza/create-envfile@v2.0
-        with:
-            env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-            file_name: .env.neo4j
-
-      - name: ls 2
-        run: ls
-
-    #   - name: Start Neo4j and Tests
-        # run: |
-        #   # Start the neo4j and pyzx services (default)
-        #   # And start the 'test' profile service
-        #   docker compose --profile test up --build --exit-code-from test
-
-      - name: Start Neo4j and Tests
+      - name: Force env files
         run: |
-            docker compose --profile test \
-            --env-file .env.pyzx \
-            --env-file .env.neo4j \
-            up --build --exit-code-from test
+          echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.neo4j
+          echo "NEO4J_URI=${{ vars.NEO4J_URI }}" > .env.pyzx
+          echo "NEO4J_USER=${{ secrets.NEO4J_USER }}" >> .env.pyzx
+          echo "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}" >> .env.pyzx
 
+      - name: Run Tests and Neo4j both from docker compose
+        run: |
+            docker compose --profile test up --build --exit-code-from test
 
-      - name: ls 3
-        run: ls
 
       - name: Cleanup
         if: always()
