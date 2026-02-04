@@ -20,11 +20,15 @@ jobs:
         with:
           python-version: 3.11
 
-      # - name: Make .env.neo4j
-      #   uses: SpicyPizza/create-envfile@v2.0
-      #   with:
-      #       env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-      #       file_name: .env.neo4j
+      - name: Make .env.neo4j
+        uses: SpicyPizza/create-envfile@v2.0
+        with:
+            env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+            env_key_NEO4J_AUTH12: neo4j/kalakala
+            file_name: .env.neo4j
+      - name: insane
+        run: |
+          cat .env.neo4j
 
       - name: Install dependencies
         run: |
@@ -35,12 +39,9 @@ jobs:
 
       - name: Start Neo4j
         env:
-          NEO4J_AUTH: none
-          # NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-          NEO4J_dbms_security_auth__minimum__password__length: 0
-          NEO4J_dbms_security_password__change__required: "false"
-        run: docker compose up -d neo4j --wait
-        # env:
+          # NEO4J_AUTH: none
+          NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+        run: docker compose up -d neo4j --wait --env NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
 
       - name: mypy
         env:
@@ -56,13 +57,7 @@ jobs:
             NEO4J_USER: ${{ secrets.NEO4J_USER }}
             NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
-          sleep 20
           python -m unittest discover -s "tests" -t "." --verbose
-        
-
-      - name: Logs Neo4j
-        if: always()
-        run: docker compose logs neo4j
 
       - name: Cleanup
         if: always()
