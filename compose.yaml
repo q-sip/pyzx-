@@ -82,6 +82,10 @@ services:
   # to get it constantly do all tests on every change.
   # Or can be run like (in windows) to target only those tests:
   # $env:T="tests.test_graph_neo4j.test_neo4j_connection"; docker compose up --watch test-dev
+
+  # this is probably better one.
+  # docker compose up --watch test-dev --command "python -m unittest -v tests.test_graph_neo4j.test_file; sleep infinity"
+  #
   test-dev:
     extends: test
     profiles: [ "test-dev" ]
