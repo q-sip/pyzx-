@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-
 URI = os.getenv("NEO4J_URI")
 AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 
@@ -18,14 +17,16 @@ with GraphDatabase.driver(URI, auth=AUTH) as driver:
 
 
 g = GraphNeo4j(
-    uri=URI, user=os.getenv("NEO4J_USER"), password=os.getenv("NEO4J_PASSWORD"),
-    database="neo4j", 
-    graph_id="test_graph"
+    uri=URI,
+    user=os.getenv("NEO4J_USER"),
+    password=os.getenv("NEO4J_PASSWORD"),
+    database="neo4j",
+    graph_id="test_graph",
 )
 
-#Älkää välittäkö näistä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
-#query =""" MATCH (N) DETACH DELETE N"""
-#g.clear_graph(query)
+# Älkää välittäkö näistä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
+# query =""" MATCH (N) DETACH DELETE N"""
+# g.clear_graph(query)
 
 v_ids = g.create_graph(
     vertices_data=[
@@ -40,8 +41,5 @@ v_ids = g.create_graph(
         ((2, 3), EdgeType.SIMPLE),
     ],
     inputs=[0],
-    outputs=[3]
+    outputs=[3],
 )
-
-
-
