@@ -26,9 +26,13 @@ jobs:
             env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
             env_key_NEO4J_AUTH12: neo4j/kalakala
             file_name: .env.neo4j
-      - name: insane
+      - name: Verify file size
         run: |
-          cat .env.neo4j
+          ls
+          ls -l .env.neo4j
+          wc -l .env.neo4j 
+
+
 
       - name: Install dependencies
         run: |
@@ -39,9 +43,13 @@ jobs:
 
       - name: Start Neo4j
         env:
+          NEO4J_AUTH: none
+          NEO4J_dbms_security_auth__enabled: "false"
+          NEO4J_dbms_security_auth__rate__limit__enabled: "false"
+          NEO4J_dbms_security_password__change__required: "false"
           # NEO4J_AUTH: none
-          NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-        run: docker compose up -d neo4j --wait --env NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+          # NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
+        run: docker compose up -d neo4j --wait
 
       - name: mypy
         env:
