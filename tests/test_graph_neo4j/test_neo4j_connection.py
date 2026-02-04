@@ -1,9 +1,8 @@
 import os
 import unittest
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 
-# Load the specific file you created in the YAML
-# load_dotenv(dotenv_path=".env.pyzx")
+load_dotenv(dotenv_path=".env.pyzx")
 
 class TestConnectionWithNeo4j(unittest.TestCase):
 
@@ -16,5 +15,5 @@ class TestConnectionWithNeo4j(unittest.TestCase):
         self.assertIsNotNone(password)
 
 
-if __name__ == "__main__":
-    unittest.main()
+# if __name__ == "__main__":
+#     unittest.main()
