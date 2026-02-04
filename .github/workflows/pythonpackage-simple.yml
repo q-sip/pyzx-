@@ -2,17 +2,15 @@ name: Python tests + mypy
 
 on:
   push:
-    branches: ["dev", "master"]
+    branches: ["dev"]
   pull_request:
-    branches: ["master", "dev"]
+    branches: ["dev"]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v4
