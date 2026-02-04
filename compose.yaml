@@ -30,22 +30,18 @@ services:
   # You can run this with this:
   # docker compose up --watch pyzx-dev
   # And it will watch all the files.
-  # or you can run (in windows) to run that scrip over and over:
-  # $env:X="./neo4j_functionality_test.py"; docker compose up --watch pyzx-dev
   pyzx-dev:
     extends: pyzx
     profiles: [ "pyzx-dev" ]
-    entrypoint: []
-    environment:
-      - X=${X:-}
-    command: >
-      /bin/sh -c " if [ -z \"$$X\" ]; then
+    # entrypoint: []
+    # command: >
+    #   python ./neo4j_functionality_test.py; sleep infinity"
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
         python ./neo4j_functionality_test.py;
-      else
-        echo 'Running specific target: $$X';
-        echo 'Running specific target: ${X}';
-        python $$X;
-      fi; sleep infinity"
+        echo "PyZX finished. Sleeping...";
+        sleep infinity
     develop:
       watch:
         - action: sync+restart
@@ -80,26 +76,15 @@ services:
   # Can be run:
   # docker compose up --watch test-dev
   # to get it constantly do all tests on every change.
-  # Or can be run like (in windows) to target only those tests:
-  # $env:T="tests.test_graph_neo4j.test_neo4j_connection"; docker compose up --watch test-dev
-
-  # this is probably better one.
-  # docker compose up --watch test-dev --command "python -m unittest -v tests.test_graph_neo4j.test_file; sleep infinity"
-  #
   test-dev:
     extends: test
     profiles: [ "test-dev" ]
-    entrypoint: []
-    environment:
-      - T=${T:-}
-    command: >
-      /bin/sh -c " if [ -z \"$$T\" ]; then
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
         python -m unittest discover -v -s tests/test_graph_neo4j;
-      else
-        echo 'Running specific target: $$T';
-        echo 'Running specific target: ${T}';
-        python -m unittest -v $$T;
-      fi; sleep infinity"
+        echo "Tests finished. Sleeping...";
+        sleep infinity
     develop:
       watch:
         - action: sync+restart
@@ -108,12 +93,14 @@ services:
           ignore:
             - "**/__pycache__/**"
             - ".pytest_cache/**"
+            - ".mypy_cache"
         - action: sync+restart
           path: ./tests
           target: /usr/src/app/tests
           ignore:
             - "**/__pycache__/**"
             - ".pytest_cache/**"
+            - ".mypy_cache"
 
 networks:
   silta:
