@@ -20,25 +20,21 @@ jobs:
         with:
           python-version: 3.11
 
-      # - name: Make .env.neo4j
-      #   uses: SpicyPizza/create-envfile@v2.0
-      #   with:
-      #       env_key_NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
-      #       env_key_NEO4J_AUTH12: neo4j/kalakala
-      #       file_name: .env.neo4j
-      # - name: Verify file size
-      #   run: |
-      #     ls -l .env.neo4j
-      #     wc -l .env.neo4j 
 
       - name: force it
         run: |
           echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.neo4j
+          echo "NEO4J_URI=${{ vars.NEO4J_URI }}" > .env.pyzx
+          echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.pyzx
+          echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.pyzx
 
       - name: Verify file size2
         run: |
           ls -l .env.neo4j
-          wc -l .env.neo4j 
+          wc -l .env.neo4j
+          echo "vali moi"
+          ls -l .env.pyzx
+          wc -l .env.pyzx  
 
       - name: Install dependencies
         run: |
@@ -48,20 +44,13 @@ jobs:
 
 
       - name: Start Neo4j
-        # env:
-          # NEO4J_AUTH: none
-          # NEO4J_dbms_security_auth__enabled: "false"
-          # NEO4J_dbms_security_auth__rate__limit__enabled: "false"
-          # NEO4J_dbms_security_password__change__required: "false"
-          # NEO4J_AUTH: none
-          # NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
         run: docker compose up -d neo4j --wait
 
       - name: mypy
-        env:
-            NEO4J_URI: ${{ vars.NEO4J_URI }}
-            NEO4J_USER: ${{ secrets.NEO4J_USER }}
-            NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+        # env:
+        #     NEO4J_URI: ${{ vars.NEO4J_URI }}
+        #     NEO4J_USER: ${{ secrets.NEO4J_USER }}
+        #     NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
           mypy pyzx/ tests/
 
