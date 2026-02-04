@@ -35,6 +35,8 @@ jobs:
 
 
       - name: Start Neo4j
+        env: 
+            NEO4J_AUTH: ${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}
         run: docker compose up -d neo4j --wait
 
       - name: Install dependencies
