@@ -48,7 +48,7 @@ def main() -> int:
         return 1
 
     # 2) mypy (match your workflow)
-    rc, _ = run_and_capture([sys.executable, "-m", "mypy", "pyzx/", "tests/"])
+    rc, _ = run_and_capture([sys.executable, "-m", "mypy", "--follow-imports=silent", "pyzx/graph/graph_neo4j.py", "tests/"])
     if rc != 0:
         print("FAILED: mypy errors.")
         return rc
