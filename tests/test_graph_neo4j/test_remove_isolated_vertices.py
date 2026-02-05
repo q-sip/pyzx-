@@ -5,7 +5,6 @@ from pyzx.utils import EdgeType, VertexType
 
 from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
 
-
 class TestRemoveIsolatedVertices(Neo4jE2ETestCase):
     def _count_nodes(self) -> int:
         g = self.g
@@ -30,7 +29,7 @@ class TestRemoveIsolatedVertices(Neo4jE2ETestCase):
     def _count_edges(self) -> int:
         g = self.g
         query = """
-            MATCH (n:Node {graph_id: $gid})-[r:Wire]-(m:Node {graph_id: $gid})
+            MATCH (n:Node {graph_id: $gid})-[r:Wire]->(m:Node {graph_id: $gid})
             RETURN count(r) as count
         """
         with g._get_session() as session:
