@@ -50,7 +50,6 @@ class TestAddEdge(Neo4jE2ETestCase):
         (We query by graph_id to avoid coupling to global num_edges() implementation.)
         """
         g = self.g
-
         g.create_graph(
             vertices_data=[
                 {"ty": VertexType.Z, "qubit": 0, "row": 1},
