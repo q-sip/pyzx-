@@ -31,7 +31,6 @@ class TestEdgesE2E(Neo4jE2ETestCase):
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
         
         edges = sorted(g.edges())
-        print(edges)
         self.assertEqual(edges, [(0, 1), (1, 2), (2, 0)])
 
     def test_edges_singular(self):

@@ -17,7 +17,8 @@ class TestTypeE2E(Neo4jE2ETestCase):
             {"ty": VertexType.X, "qubit": 0, "row": 2},
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=[])
-        self.assertEqual(g.type(3), None)
+        with self.assertRaises(KeyError):
+            t = g.type(3)
 
     def test_type_X(self):
         g = self.g

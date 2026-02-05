@@ -5,10 +5,9 @@ from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
 
 
 class TestAddEdge(Neo4jE2ETestCase):
-    def test_add_edge_returns_current_num_edges(self):
+    def test_add_edge_returns_ET(self):
         """
-        Test that add_edge returns the edge id equal to the edge-count *before* insertion.
-        This is robust even if the DB is not empty, since the implementation uses num_edges().
+        Test that add_edge returns the vertex pair
         """
         g = self.g
 
@@ -19,14 +18,11 @@ class TestAddEdge(Neo4jE2ETestCase):
         ]
         g.create_graph(nodes, [])
 
-        expected = g.num_edges()
-        got = g.add_edge((0, 1), EdgeType.SIMPLE)
-        self.assertEqual(got, expected)
+        self.assertEqual(g.add_edge((0, 1), EdgeType.SIMPLE), (0, 1))
 
     def test_add_edge_id_increments_after_create_graph(self):
         """
-        After create_graph adds N edges, add_edge should return previous num_edges(),
-        i.e. base + N.
+        After create_graph adds N edges, add_edge should return previous num_edges() + N
         """
         g = self.g
 
@@ -42,12 +38,11 @@ class TestAddEdge(Neo4jE2ETestCase):
             ((2, 3), EdgeType.SIMPLE),
         ]
 
-        before = g.num_edges()
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
+        before = g.num_edges()
+        g.add_edge((0, 3))
 
-        expected = before + len(edges_data)
-        got = g.add_edge((3, 0))  # default type
-        self.assertEqual(got, expected)
+        self.assertEqual(g.num_edges(), before + 1)
 
     def test_correct_number_of_edges_in_this_graph(self):
         """

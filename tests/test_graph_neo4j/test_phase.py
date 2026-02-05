@@ -17,7 +17,7 @@ class TestPhaseE2E(Neo4jE2ETestCase):
             {"ty": VertexType.X, "qubit": 0, "row": 2},
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=[])
-        self.assertEqual(g.phase(3), None)
+        self.assertEqual(g.phase(3), 0)
 
     def test_phase_int(self):
         g = self.g
