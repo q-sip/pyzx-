@@ -1,0 +1,13 @@
+*.md
+*.png
+*.log
+Dockerfile*
+.dockerignore
+*.env*
+.git
+*.tmp
+*~
+/demos
+/doc
+/images
+/circuits

@@ -1,6 +1,10 @@
+"""
+Docstring for pyzx.graph.graph_neo4j
+"""
+
 import os
+from fractions import Fraction
 from typing import (
-    TYPE_CHECKING,
     Any,
     Iterable,
     List,
@@ -9,22 +13,21 @@ from typing import (
     Sequence,
     Set,
     Tuple,
-
 )
 
 # testing pylint
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
+from pyzx.symbolic import new_var, parse
+
 from ..utils import (
     EdgeType,
     FloatInt,
     FractionLike,
     VertexType,
-    toggle_edge,
-    vertex_is_zx,
 )
-from .base import BaseGraph
+from .base import BaseGraph, upair
 
 load_dotenv()
 
@@ -112,20 +115,19 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
 
         # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu nodejen ID:eiksi
-        all_edges = (
-            [
+        edge_ids = [self.num_edges() + x for x in range(len(edges_data))]
+        if edges_data:
+            all_edges = [
                 {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
                 for x in edges_data
             ]
-            if edges_data
-            else []
-        )
-
+            for edge, edge_id in zip(all_edges, edge_ids):
+                edge["id"] = edge_id
+        else:
+            all_edges = []
         # Valmistellaan input ja output nodejen ID:T
         input_ids = [vertices[i] for i in inputs] if inputs else []
         output_ids = [vertices[i] for i in outputs] if outputs else []
-
-        graph_id = self.graph_id
 
         with self._get_session() as session:
 
@@ -143,7 +145,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         row: v.row
                     })
                 """,
-                    graph_id=graph_id,
+                    graph_id=self.graph_id,
                     vertices=all_vertices,
                 )
 
@@ -154,9 +156,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         UNWIND $edges AS e
                         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
                         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-                        CREATE (n1)-[:Wire {t: e.et}]->(n2)
+                        CREATE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
                     """,
-                        graph_id=graph_id,
+                        graph_id=self.graph_id,
                         edges=all_edges,
                     )
 
@@ -168,7 +170,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         MATCH (n:Node {graph_id: $graph_id, id: vid})
                         SET n:Input
                     """,
-                        graph_id=graph_id,
+                        graph_id=self.graph_id,
                         ids=input_ids,
                     )
 
@@ -180,7 +182,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                         MATCH (n:Node {graph_id: $graph_id, id: vid})
                         SET n:Output
                     """,
-                        graph_id=graph_id,
+                        graph_id=self.graph_id,
                         ids=output_ids,
                     )
 
@@ -200,9 +202,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         *,
         edge_data: Optional[Iterable[EdgeType]] = None,
     ) -> None:
-
         """
-        Adds multiple edges in a single batch transaction.
+        Adds multiple edges at once.
         """
         edges = list(edge_pairs)
         if not edges:
@@ -214,17 +215,21 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             edge_data = list(edge_data)
             if len(edge_data) != len(edges):
                 raise ValueError("edge_data must have same length as edge_pairs")
-
-
+        n = self.num_edges()
+        ids = [i + n for i in range(len(edges))]
+        print(f"ids = {ids}")
         edges_payload = [
-            {"s": s, "t": t, "et": et.value} for (s, t), et in zip(edges, edge_data)
+            {"s": s, "t": t, "et": et.value, "id": eid}
+            for (s, t), et, eid in zip(edges, edge_data, ids)
         ]
 
         query = """
         UNWIND $edges AS e
         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-        MERGE (n1)-[:Wire {t: e.et}]->(n2)
+        MERGE (n1)-[r:Wire]->(n2)
+        ON CREATE SET r.t = e.et, r.id = e.id
+        ON MATCH SET r.t = e.et
         """
 
         with self._get_session() as session:
@@ -253,6 +258,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return str(phase)
 
     def vindex(self) -> int:
+        """returns private variable _vindex (int)"""
         return self._vindex
 
     def num_vertices(self):
@@ -290,122 +296,489 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._inputs = tuple(v for v in self._inputs if v not in vertex_list)
         self._outputs = tuple(v for v in self._outputs if v not in vertex_list)
 
-    def num_edges(self):
-        query = "MATCH ()-->() RETURN count(*) as count;"
-        with self._get_session() as session:
-            result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id).single()
-            )
-        return result["count"] if result else 0
+    def remove_isolated_vertices(self) -> None:
+        """Deletes all vertices and vertex pairs that are not connected to any other vertex.
 
-    def add_edge(self, edge_pair: Tuple[VT,VT], edgetype:EdgeType=EdgeType.SIMPLE) -> ET:
+        Mirrors BaseGraph.remove_isolated_vertices semantics:
+          - Isolated boundary vertex => TypeError
+          - Isolated Z/X => absorbed into scalar via add_node(phase)
+          - Isolated H_BOX => absorbed into scalar via add_phase(phase)
+          - Degree-1 non-boundary vertex whose unique neighbor also has degree-1
+            and neither is boundary
+            => remove both and update scalar depending on types and edge type.
+        """
+        rem: List[VT] = []
+
+        # IMPORTANT: vertices() hits the DB, but we want a snapshot because we’ll delete.
+        for v in list(self.vertices()):
+            d = self.vertex_degree(v)
+
+            # Completely isolated vertex
+            if d == 0:
+                rem.append(v)
+                ty = self.type(v)
+
+                if ty == VertexType.BOUNDARY:
+                    raise TypeError(
+                        "Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex."
+                    )
+                elif ty == VertexType.H_BOX:
+                    self.scalar.add_phase(self.phase(v))
+                else:
+                    self.scalar.add_node(self.phase(v))
+
+            # A dangling component of size 2: v--w and nothing else
+            if d == 1:
+                if v in rem:
+                    continue
+                if self.type(v) == VertexType.BOUNDARY:
+                    continue
+
+                ws = list(self.neighbors(v))
+                if not ws:
+                    continue
+                w = ws[0]
+
+                # Neighbor has other neighbors => not isolated pair
+                if len(list(self.neighbors(w))) > 1:
+                    continue
+                if self.type(w) == VertexType.BOUNDARY:
+                    continue
+
+                # Now v and w are only connected to each other
+                rem.append(v)
+                rem.append(w)
+
+                et = self.edge_type(self.edge(v, w))
+                t1 = self.type(v)
+                t2 = self.type(w)
+
+                # 1-ary H-box behaves like a Z-spider here
+                if t1 == VertexType.H_BOX:
+                    t1 = VertexType.Z
+                if t2 == VertexType.H_BOX:
+                    t2 = VertexType.Z
+
+                if t1 == t2:
+                    if et == EdgeType.SIMPLE:
+                        self.scalar.add_node(self.phase(v) + self.phase(w))
+                    else:
+                        self.scalar.add_spider_pair(self.phase(v), self.phase(w))
+                else:
+                    if et == EdgeType.SIMPLE:
+                        self.scalar.add_spider_pair(self.phase(v), self.phase(w))
+                    else:
+                        self.scalar.add_node(self.phase(v) + self.phase(w))
+
+        # Perform deletions in one go (Neo4j DETACH DELETE handles incident relationships)
+        self.remove_vertices(rem)
+
+    def num_edges(
+        self,
+        s: Optional[VT] = None,
+        t: Optional[VT] = None,
+        et: Optional[EdgeType] = None,
+    ) -> int:
+        """Returns the number of edges in the graph.
+        
+        Jos source ja target nodet on annettu erikseen, laskee niiden väliset kaaret.
+        Jos kaaren tyyppi on annettu, laskee vain sen tyyppiset kaaret
+        """
+        if s is not None and t is not None:
+            # Count edges between specific vertices, s being the source and t being the target
+            if et is not None:
+                query = """
+                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire {t: $et}]-(n2:Node {graph_id: $graph_id, id: $t})
+                RETURN count(r) as count
+                """
+                params = {"graph_id": self.graph_id, "s": s, "t": t, "et": et.value}
+            else:
+                query = """
+                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: $t})
+                RETURN count(r) as count
+                """
+                params = {"graph_id": self.graph_id, "s": s, "t": t}
+
+            with self._get_session() as session:
+                result = session.execute_read(
+                    lambda tx: tx.run(query, **params).single()
+                )
+            count = result["count"] if result else 0
+
+            if s != t:
+                count = count // 2
+            return count
+        elif s is not None:
+            # Count edges incident to a specific vertex
+            return self.vertex_degree(s)
+        else:
+            # Count all edges
+            query = """
+            MATCH (:Node {graph_id: $graph_id})-[r:Wire]->(:Node {graph_id: $graph_id})
+            RETURN count(r) as count
+            """
+            with self._get_session() as session:
+                result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id).single()
+                )
+            return result["count"] if result else 0
+
+    def add_edge(
+        self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
+    ) -> ET:
         """Adds a single edge of the given type and return its id"""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        s, t = upair(*edge_pair)
+
+        edge_id = self.num_edges()
+
+        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype, "id": edge_id}
+
+        query = """
+        UNWIND $edge AS e
+        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
+        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
+        MERGE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, edge=edge)
+            )
+
+        return s, t
 
     def remove_edges(self, edges: List[ET]) -> None:
-        """Removes the list of edges from the graph."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        """Removes relationships from the graph"""
+        if not edges:
+            return
+
+        edges_payload = [{"s": s, "t": t} for s, t in edges]
+
+        query = """
+        UNWIND $edges AS e
+        MATCH (n1:Node {graph_id: $graph_id, id: e.s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: e.t})
+        DELETE r
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, edges=edges_payload)
+            )
 
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
 
-    def edges(self, s: Optional[VT]=None, t: Optional[VT]=None) -> Iterable[ET]:
+        query = """MATCH (n:Node {graph_id: $graph_id}) RETURN n.id AS id"""
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+        return [r["id"] for r in result]
+
+    def edges(self, s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]:
         """Iterator that returns all the edges in the graph,
         or all the edges connecting the pair of vertices.
         Output type depends on implementation in backend."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        if s is not None and t is not None:
+            vertices_payload = [{"s": s, "t": t}]
+
+            query = """
+            UNWIND $vertices as v
+            MATCH (n1:Node {graph_id: $graph_id, id: v.s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: v.t})
+            RETURN startNode(r).id AS src, endNode(r).id AS tgt"""
+            with self._get_session() as session:
+                result = session.execute_read(
+                    lambda tx: tx.run(
+                        query, graph_id=self.graph_id, vertices=vertices_payload
+                    ).data()
+                )
+            return [(item["src"], item["tgt"]) for item in result]
+
+        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})"
+        query += " RETURN n1.id, n2.id"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+        return [(item["n1.id"], item["n2.id"]) for item in result]
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        return edge
+
 
     def incident_edges(self, vertex: VT) -> Sequence[ET]:
         """Returns all neighboring edges of the given vertex."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """
+        MATCH (n:Node {graph_id: $graph_id, id: $vertex})-[r:Wire]-(m:Node {graph_id: $graph_id})
+        RETURN m.id AS neighbor
+        """
+
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, vertex=vertex).data()
+            )
+
+        return [(vertex, r["neighbor"]) for r in result]
 
     def edge_type(self, e: ET) -> EdgeType:
         """Returns the type of the given edge:
-        ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge,
-        0 if the edge is not in the graph."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        ``EdgeType.SIMPLE`` if it is regular, ``EdgeType.HADAMARD`` if it is a Hadamard edge
+        Raises KeyError if the edge is not in the graph.
+        """
+
+        query = """MATCH
+        (n1:Node {graph_id: $graph_id, id: $node1})
+        -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        RETURN r.t"""
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=e[0], node2=e[1]
+                ).data()
+            )
+
+        if len(result) <= 0:
+            raise KeyError(f"{e} has no edge type")
+
+        return EdgeType(result[0]["r.t"])
 
     def set_edge_type(self, e: ET, t: EdgeType) -> None:
         """Sets the type of the given edge."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        query = """MATCH
+        (n1:Node {graph_id: $graph_id, id: $node1})
+        -[r:Wire]-(n2:Node {graph_id: $graph_id, id: $node2})
+        SET r.t = $type"""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t
+                )
+            )
 
     def type(self, vertex: VT) -> VertexType:
         """Returns the type of the given vertex:
         VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
         VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.t"""
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
+            )
+        if not result:
+            raise KeyError(f"{vertex} has no type")
+
+        return VertexType(result[0]["n.t"])
 
     def set_type(self, vertex: VT, t: VertexType) -> None:
         """Sets the type of the given vertex to t."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.t = $type"""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=t)
+            )
 
     def phase(self, vertex: VT) -> FractionLike:
         """Returns the phase value of the given vertex."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.phase"""
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
+            )
+        if not result:
+            return 0
+        p = result[0]["n.phase"]
+        if p is None:
+            return 0
+        try:
+            return Fraction(p)
+        except ValueError:
+            try:
+                return parse(p, lambda x: new_var(x, False))
+            except Exception:
+                return Fraction(0)
 
     def set_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Sets the phase of the vertex to the given value."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.phase = $phase"""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    id=vertex,
+                    phase=self._phase_to_str(phase),
+                )
+            )
 
     def qubit(self, vertex: VT) -> FloatInt:
         """Returns the qubit index associated to the vertex.
         If no index has been set, returns -1."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.qubit AS qubit
+        """
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+            )
+        return result["qubit"] if result else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    id=vertex,
+                    qubit=str(q) if q is not None else "0"
+                )
+            )
 
     def row(self, vertex: VT) -> FloatInt:
-        """Returns the row that the vertex is positioned at.
-        If no row has been set, returns -1."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        """Palauttaa sen rivin jolla verteksi on.
+        Jos ei ole asetettu, palauttaa -1 -1."""
+        query = "MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.row AS r"
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+            )
+        return result["r"] if result and result["r"] is not None else -1
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
-        """Sets the row the vertex should be positioned at."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        """Asettaa rivin verteksille."""
+        query = """
+        MATCH (n:Node {graph_id: $graph_id, id: $id})
+        SET n.row = $r
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, r=r)
+            )
 
     def clear_vdata(self, vertex: VT) -> None:
         """Removes all vdata associated to a vertex"""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $id})
+        SET n = {id: $id, t: n.t, phase: n.phase, qubit: n.qubit,
+        row: n.row, graph_id: $graph_id}"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex)
+            )
 
     def vdata_keys(self, vertex: VT) -> Sequence[str]:
         """Returns an iterable of the vertex data key names.
         Used e.g. in making a copy of the graph in a backend-independent way."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
-    def vdata(self, vertex: VT, key: str, default: Any=None) -> Any:
+        query = (
+            """ MATCH(n:Node {graph_id: $graph_id, id: $id}) RETURN keys(n) AS keys"""
+        )
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+            )
+        return result["keys"]
+
+    def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
         If this key has no value associated with it, it returns the default value."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = (
+            """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n[$key] as value"""
+        )
+
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, id=vertex, key=key
+                ).single()
+            )
+        return result["value"] if result and result["value"] is not None else default
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
-        raise NotImplementedError("Not implemented on backend" + type(self).backend)
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n[$key] = $val"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, id=vertex, key=key, val=val
+                )
+            )
 
     def clear_edata(self, edge: ET) -> None:
         """Removes all edata associated to an edge"""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+
+        query = """MATCH (n1:Node {graph_id: $graph_id, id: $node1})
+        -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2})
+        SET r = {id: r.id, t: r.t}"""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
+                )
+            )
 
     def edata_keys(self, edge: ET) -> Sequence[str]:
         """Returns an iterable of the edge data key names."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
 
-    def edata(self, edge: ET, key: str, default: Any=None) -> Any:
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2})
+        RETURN keys(r) AS propertyKey"""
+
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
+                ).data()
+            )
+        return [r["propertyKey"] for r in result]
+
+    def edata(self, edge: ET, key: str, default: Any = None) -> Any:
         """Returns the data value of the given edge associated to the key.
         If this key has no value associated with it, it returns the default value."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2})
+        RETURN r[$key] AS value"""
+
+        with self._get_session() as session:
+            result = session.execute_read(
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key
+                ).single()
+            )
+        return result["value"] if result and result["value"] is not None else default
 
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
-    # }}}
 
+        query = """
+        MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2})
+        SET r[$key] = $val"""
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    query,
+                    graph_id=self.graph_id,
+                    node1=edge[0],
+                    node2=edge[1],
+                    key=key,
+                    val=val,
+                )
+            )
+
+    # Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
+    def clear_graph(self, query: str) -> None:
+        """Clears the entire graph from the database."""
+        with self._get_session() as session:
+            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
+
+    # }}}
 
     # OPTIONAL OVERRIDES{{{
 
@@ -419,7 +792,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns the set of vertices connected to a ground."""
         return set(v for v in self.vertices() if self.is_ground(v))
 
-    def set_ground(self, vertex: VT, flag: bool=True) -> None:
+    def set_ground(self, vertex: VT, flag: bool = True) -> None:
         """Connect or disconnect the vertex to a ground."""
         raise NotImplementedError("Not implemented on backend" + type(self).backend)
 
@@ -432,50 +805,54 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def multigraph(self) -> bool:
         return False
 
-
     # Backends may wish to override these methods to implement them more efficiently
 
     # These methods return mappings from vertices to various pieces of data. If the backend
     # stores these e.g. as Python dicts, just return the relevant dicts.
     def phases(self) -> Mapping[VT, FractionLike]:
         """Returns a mapping of vertices to their phase values."""
-        return { v: self.phase(v) for v in self.vertices() }
+        return {v: self.phase(v) for v in self.vertices()}
 
     def types(self) -> Mapping[VT, VertexType]:
         """Returns a mapping of vertices to their types."""
-        return { v: self.type(v) for v in self.vertices() }
+        return {v: self.type(v) for v in self.vertices()}
 
-    def qubits(self) -> Mapping[VT,FloatInt]:
+    def qubits(self) -> Mapping[VT, FloatInt]:
         """Returns a mapping of vertices to their qubit index."""
-        return { v: self.qubit(v) for v in self.vertices() }
+        return {v: self.qubit(v) for v in self.vertices()}
 
     def rows(self) -> Mapping[VT, FloatInt]:
         """Returns a mapping of vertices to their row index."""
-        return { v: self.row(v) for v in self.vertices() }
+        return {v: self.row(v) for v in self.vertices()}
 
-    def edge(self, s:VT, t:VT, et: EdgeType=EdgeType.SIMPLE) -> ET:
+    def edge(self, s: VT, t: VT, et: Optional[EdgeType] = None) -> ET:
         """Returns the name of the first edge with the given source/target and type.
         Behaviour is undefined if the vertices are not connected."""
         for e in self.incident_edges(s):
-            if t in self.edge_st(e) and et == self.edge_type(e):
-                return e
-        raise ValueError(f"No edge of type {et} between {s} and {t}")
+            if t in self.edge_st(e):
+                if et is None or et == self.edge_type(e):
+                    return e
+        if et is not None:
+            raise ValueError(f"No edge of type {et} between {s} and {t}")
+        else:
+            raise ValueError(f"No edge between {s} and {t}")
 
-    def connected(self,v1: VT,v2: VT) -> bool:
+    def connected(self, v1: VT, v2: VT) -> bool:
         """Returns whether vertices v1 and v2 share an edge."""
         for e in self.incident_edges(v1):
             if v2 in self.edge_st(e):
                 return True
         return False
 
-    def add_vertex(self,
-                   ty:VertexType=VertexType.BOUNDARY,
-                   qubit:FloatInt=-1,
-                   row:FloatInt=-1,
-                   phase:Optional[FractionLike]=None,
-                   ground:bool=False,
-                   index: Optional[VT] = None
-                   ) -> VT:
+    def add_vertex(
+        self,
+        ty: VertexType = VertexType.BOUNDARY,
+        qubit: FloatInt = -1,
+        row: FloatInt = -1,
+        phase: Optional[FractionLike] = None,
+        ground: bool = False,
+        index: Optional[VT] = None,
+    ) -> VT:
         """Add a single vertex to the graph and return its index.
         The optional parameters allow you to respectively set
         the type, qubit index, row index and phase of the vertex."""
@@ -486,8 +863,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             v = self.add_vertices(1)[0]
         self.set_type(v, ty)
         if phase is None:
-            if ty == VertexType.H_BOX: phase = 1
-            else: phase = 0
+            if ty == VertexType.H_BOX:
+                phase = 1
+            else:
+                phase = 0
         self.set_qubit(v, qubit)
         self.set_row(v, row)
         if phase:
@@ -500,6 +879,185 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             self.phase_mult[self.max_phase_index] = 1
         return v
 
+    def add_vertex_indexed(self, v: VT) -> None:
+        """Adds a vertex that is guaranteed to have the chosen index (i.e. 'name').
+        If the index isn't available, raises a ValueError.
+        This method is used in the editor and ZXLive to support undo,
+        which requires vertices to preserve their index.
+        """
+        # 1) Check availability
+        q_exists = """
+        MATCH (n:Node {graph_id: $graph_id, id: $id})
+        RETURN count(n) AS c
+        """
+        with self._get_session() as session:
+            rec = session.execute_read(
+                lambda tx: tx.run(q_exists, graph_id=self.graph_id, id=v).single()
+            )
+            if rec and int(rec["c"]) > 0:
+                raise ValueError("Vertex with this index already exists")
+
+        # 2) Create with defaults (same defaults as add_vertices)
+        q_create = """
+        CREATE (n:Node {
+            graph_id: $graph_id,
+            id: $id,
+            t: $t,
+            phase: $phase,
+            qubit: $qubit,
+            row: $row
+        })
+        """
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(
+                    q_create,
+                    graph_id=self.graph_id,
+                    id=v,
+                    t=VertexType.BOUNDARY.value,
+                    phase="0",
+                    qubit=-1,
+                    row=-1,
+                )
+            )
+
+        # 3) Maintain vindex contract
+        if v >= self._vindex:
+            self._vindex = v + 1
+
+    def add_vertices(self, amount: int) -> List[VT]:
+        """Adds ``amount`` number of vertices and returns a list containing their IDs
+
+        Neo4j nodes are stored as (:Node {graph_id, id, t, phase, qubit, row})
+
+        Default values:
+            t = VertexType.BOUNDARY
+            phase = "0"
+            qubit = -1
+            row = -1
+        """
+        if amount < 0:
+            raise ValueError("Amount of vertices added must be >= 0")
+        if amount == 0:
+            return []
+
+        vertex_ids: List[VT] = list(range(self._vindex, self._vindex + amount))
+        payload = [
+            {
+                "id": v_id,
+                "t": VertexType.BOUNDARY.value,
+                "phase": "0",
+                "qubit": -1,
+                "row": -1,
+            }
+            for v_id in vertex_ids
+        ]
+
+        query = """
+        UNWIND $vertices AS v
+        CREATE (n:Node {
+            graph_id: $graph_id,
+            id: v.id,
+            t: v.t,
+            phase: v.phase,
+            qubit: v.qubit,
+            row: v.row
+        })
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query, graph_id=self.graph_id, vertices=payload)
+            )
+
+        self._vindex += amount
+        return vertex_ids
+
+    def set_outputs(self, outputs: Tuple[VT, ...]):
+        """Sets the outputs of the graph.
+
+        Behaviour:
+        - Updates the in-memory outputs tuple (`self._outputs`).
+        - Synchronizes Neo4j labels:
+            * removes :Output from all nodes of this graph_id
+            * sets :Output on nodes whose ids are in `outputs`
+        """
+        self._outputs = tuple(outputs)
+        ids: List[int] = list(self._outputs)
+
+        q_clear = """
+        MATCH (n:Output {graph_id: $graph_id})
+        REMOVE n:Output
+        """
+        q_set = """
+        UNWIND $ids AS vid
+        MATCH (n:Node {graph_id: $graph_id, id: vid})
+        SET n:Output
+        """
+
+        with self._get_session() as session:
+
+            def _tx(tx):
+                tx.run(q_clear, graph_id=self.graph_id)
+                tx.run(q_set, graph_id=self.graph_id, ids=ids)
+
+            session.execute_write(_tx)
+
+    def outputs(self) -> Tuple[VT, ...]:
+        """Gets the outputs of the graph.
+
+        Behaviour:
+        - Returns the in-memory outputs tuple (`self._outputs`) if it is non-empty.
+        - Otherwise attempts to read outputs from Neo4j labels (:Output) for this graph_id,
+          returns them ordered by vertex id.
+        - If neither exists, returns an empty tuple.
+        """
+        if getattr(self, "_outputs", None):
+            return self._outputs
+
+        query = """
+        MATCH (n:Output {graph_id: $graph_id})
+        RETURN n.id AS id
+        ORDER BY id
+        """
+        with self._get_session() as session:
+            rows = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+
+        ids: List[int] = [int(r["id"]) for r in rows]
+        self._outputs = tuple(ids)
+        return self._outputs
+
+    def set_inputs(self, inputs: Tuple[VT, ...]):
+        """Sets the inputs of the graph.
+
+        Behaviour:
+        - Updates the in-memory inputs tuple (`self._inputs`).
+        - Synchronizes Neo4j labels:
+            * removes :Input from all nodes of this graph_id
+            * sets :Input on nodes whose ids are in `inputs`
+        """
+        self._inputs = tuple(inputs)
+        ids: List[int] = list(self._inputs)
+
+        q_clear = """
+        MATCH (n:Input {graph_id: $graph_id})
+        REMOVE n:Input
+        """
+        q_set = """
+        UNWIND $ids AS vid
+        MATCH (n:Node {graph_id: $graph_id, id: vid})
+        SET n:Input
+        """
+
+        with self._get_session() as session:
+
+            def _tx(tx):
+                tx.run(q_clear, graph_id=self.graph_id)
+                tx.run(q_set, graph_id=self.graph_id, ids=ids)
+
+            session.execute_write(_tx)
 
     def remove_vertex(self, vertex: VT) -> None:
         """Removes the given vertex from the graph."""
@@ -511,7 +1069,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def add_to_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Add the given phase to the phase value of the given vertex."""
-        self.set_phase(vertex,self.phase(vertex)+phase)
+        self.set_phase(vertex, self.phase(vertex) + phase)
 
     def num_inputs(self) -> int:
         """Gets the number of inputs of the graph."""
@@ -530,7 +1088,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns all neighboring vertices of the given vertex."""
         vs: Set[VT] = set()
         for e in self.incident_edges(vertex):
-            s,t = self.edge_st(e)
+            s, t = self.edge_st(e)
             vs.add(s if t == vertex else t)
         return list(vs)
 
@@ -546,7 +1104,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns the target of the given edge."""
         return self.edge_st(edge)[1]
 
-
     def vertex_set(self) -> Set[VT]:
         """Returns the vertices of the graph as a Python set.
         Should be overloaded if the backend supplies a cheaper version than this."""
@@ -557,3 +1114,165 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         Should be overloaded if the backend supplies a cheaper version than this.
         Note this ignores parallel edges."""
         return set(self.edges())
+
+    def inputs(self) -> Tuple[VT, ...]:
+        """Gets the inputs of the graph.
+
+        Behaviour:
+        - Returns the in-memory inputs tuple (`self._inputs`) if it is non-empty.
+        - Otherwise attempts to read inputs from Neo4j labels (:Input) for this graph_id,
+          returns them ordered by vertex id.
+        - If neither exists, returns an empty tuple.
+        """
+        if getattr(self, "_inputs", None):
+            return self._inputs
+
+        query = """
+        MATCH (n:Input {graph_id: $graph_id})
+        RETURN n.id AS id
+        ORDER BY id
+        """
+        with self._get_session() as session:
+            rows = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
+            )
+
+        ids: List[int] = [int(r["id"]) for r in rows]
+        self._inputs = tuple(ids)
+        return self._inputs
+
+    def clone(self) -> "GraphNeo4j":
+        """Return an identical copy of the graph without relabeling vertices/edges.
+
+        For the Neo4j backend, this means copying all (:Node) vertices and (:Wire)
+        relationships belonging to this instance's ``graph_id`` into a fresh
+        ``graph_id`` namespace, preserving the ``id`` fields and all properties.
+        """
+        import uuid
+
+        # Fresh namespace so the copy won't clash with existing data.
+        new_graph_id = f"{self.graph_id}_clone_{uuid.uuid4().hex}"
+        cpy = GraphNeo4j(
+            uri=self.uri,
+            user=self.user,
+            password=self.password,
+            graph_id=new_graph_id,
+            database=self.database,
+        )
+
+        # Copy BaseGraph-level state that is not stored in the DB.
+        cpy.scalar = self.scalar.copy()
+        cpy.track_phases = self.track_phases
+        cpy.phase_index = self.phase_index.copy()
+        cpy.phase_master = self.phase_master
+        cpy.phase_mult = self.phase_mult.copy()
+        cpy.max_phase_index = self.max_phase_index
+        cpy.merge_vdata = self.merge_vdata
+
+        # Preserve backend bookkeeping.
+        cpy._vindex = self._vindex
+        cpy._maxr = self._maxr
+
+        # Snapshot the current graph from Neo4j.
+        q_nodes = """
+        MATCH (n:Node {graph_id: $graph_id})
+        RETURN n.id AS id, properties(n) AS props, labels(n) AS labels
+        ORDER BY id
+        """
+
+        q_edges = """
+        MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})
+        RETURN n1.id AS s, n2.id AS t, properties(r) AS props
+        """
+
+        with self._get_session() as session:
+            nodes_rows = session.execute_read(
+                lambda tx: tx.run(q_nodes, graph_id=self.graph_id).data()
+            )
+
+            # Empty graph: just copy scalar/state.
+            if not nodes_rows:
+                cpy._inputs = tuple(self.inputs())
+                cpy._outputs = tuple(self.outputs())
+                return cpy
+
+            edges_rows = session.execute_read(
+                lambda tx: tx.run(q_edges, graph_id=self.graph_id).data()
+            )
+
+            node_payload = []
+            label_inputs = []
+            label_outputs = []
+
+            for row in nodes_rows:
+                props = dict(row.get("props") or {})
+                props["graph_id"] = new_graph_id  # move to new namespace
+                node_payload.append(props)
+
+                labels = row.get("labels") or []
+                if "Input" in labels:
+                    label_inputs.append(int(props["id"]))
+                if "Output" in labels:
+                    label_outputs.append(int(props["id"]))
+
+            # Preserve ordering if present in-memory; otherwise fall back to label-derived order.
+            input_ids = list(self._inputs) if getattr(self, "_inputs", None) else []
+            output_ids = list(self._outputs) if getattr(self, "_outputs", None) else []
+            if not input_ids:
+                input_ids = label_inputs
+            if not output_ids:
+                output_ids = label_outputs
+
+            edges_payload = [
+                {
+                    "s": int(r["s"]),
+                    "t": int(r["t"]),
+                    "props": dict(r.get("props") or {}),
+                }
+                for r in (edges_rows or [])
+            ]
+
+            q_create_nodes = """
+            UNWIND $nodes AS p
+            CREATE (n:Node)
+            SET n = p
+            """
+
+            q_create_edges = """
+            UNWIND $edges AS e
+            MATCH (s:Node {graph_id: $new_graph_id, id: e.s})
+            MATCH (t:Node {graph_id: $new_graph_id, id: e.t})
+            CREATE (s)-[r:Wire]->(t)
+            SET r = e.props
+            """
+
+            q_set_inputs = """
+            UNWIND $ids AS vid
+            MATCH (n:Node {graph_id: $new_graph_id, id: vid})
+            SET n:Input
+            """
+
+            q_set_outputs = """
+            UNWIND $ids AS vid
+            MATCH (n:Node {graph_id: $new_graph_id, id: vid})
+            SET n:Output
+            """
+
+            def _write(tx):
+                tx.run(q_create_nodes, nodes=node_payload)
+                if edges_payload:
+                    tx.run(
+                        q_create_edges, new_graph_id=new_graph_id, edges=edges_payload
+                    )
+                if input_ids:
+                    tx.run(q_set_inputs, new_graph_id=new_graph_id, ids=input_ids)
+                if output_ids:
+                    tx.run(q_set_outputs, new_graph_id=new_graph_id, ids=output_ids)
+
+            session.execute_write(_write)
+
+        # Sync in-memory IO.
+        cpy._inputs = tuple(input_ids)
+        cpy._outputs = tuple(output_ids)
+
+        return cpy

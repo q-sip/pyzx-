@@ -7,24 +7,100 @@ services:
     networks:
       - silta
     healthcheck:
-      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/7474"]
+      test: [ "CMD", "bash", "-c", "</dev/tcp/localhost/7474" ]
       interval: 10s
       timeout: 5s
       retries: 5
-    env_file: 
+    env_file:
       - path: ./.env.neo4j
 
-
   pyzx:
-    build: .
-    image: pyzx:latest
+    build:
+      context: .
+      target: product
     depends_on:
       neo4j:
         condition: service_healthy
     networks:
       - silta
-    env_file: 
+    env_file:
       - path: ./.env.pyzx
+    command: python ./neo4j_functionality_test.py
+
+  # You can run this with this:
+  # docker compose up --watch pyzx-dev
+  # And it will watch all the files.
+  pyzx-dev:
+    extends: pyzx
+    profiles: [ "pyzx-dev" ]
+    # entrypoint: []
+    # command: >
+    #   python ./neo4j_functionality_test.py; sleep infinity"
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        python ./neo4j_functionality_test.py;
+        echo "PyZX finished. Sleeping...";
+        sleep infinity
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./neo4j_functionality_test.py
+          target: /usr/src/app/neo4j_functionality_test.py
+        - action: sync+restart
+          path: ./pyzx/graph/graph_neo4j.py
+          target: /usr/src/app/pyzx/graph/graph_neo4j.py
+        - action: sync+restart
+          path: ./pyzx
+          target: /usr/src/app/pyzx
+
+  test:
+    build:
+      context: .
+      target: tester
+    profiles: [ "test" ]
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    ports: []
+    tty: true
+    stdin_open: true
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
+    env_file:
+      - path: ./.env.pyzx
+    networks:
+      - silta
+
+  # Can be run:
+  # docker compose up --watch test-dev
+  # to get it constantly do all tests on every change.
+  test-dev:
+    extends: test
+    profiles: [ "test-dev" ]
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        python -m unittest discover -v -s tests/test_graph_neo4j;
+        echo "Tests finished. Sleeping...";
+        sleep infinity
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./tests/test_graph_neo4j
+          target: /usr/src/app/tests/test_graph_neo4j
+          ignore:
+            - "**/__pycache__/**"
+            - ".pytest_cache/**"
+            - ".mypy_cache"
+        - action: sync+restart
+          path: ./tests
+          target: /usr/src/app/tests
+          ignore:
+            - "**/__pycache__/**"
+            - ".pytest_cache/**"
+            - ".mypy_cache"
 
 networks:
   silta:

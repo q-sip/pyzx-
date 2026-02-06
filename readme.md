@@ -89,8 +89,18 @@ NEO4J_AUTH=neo4j/testkala
 </pre>
 
 The information in neo4j determines what you should put in to the .env.pyzx values.
+<pre>
+docker compose up --watch test-dev
+</pre>
+Runs the tests with hot reload
 
-## precommit hooks
+<pre>
+docker compose up --watch pyzx-dev 
+</pre>
+Runs the tests again if PyZX changes
+
+
+## Precommit hooks
 
 Inside your virtual environment, do (one time):
 ```
