@@ -597,7 +597,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query,
                     graph_id=self.graph_id,
                     id=vertex,
-                    qubit=self._phase_to_str(q),
+                    qubit=self.phase_to(q),
                 )
             )
 
