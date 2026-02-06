@@ -92,14 +92,14 @@ The information in neo4j determines what you should put in to the .env.pyzx valu
 
 docker compose up --watch test-dev
 
-ajaa testit hot reloadilla
+Runs the tests with hot reload
 
 docker compose up --watch pyzx-dev 
 
-ajaa testit uusiks jos pyzx muuttuu
+Runs the tests again if PyZX changes
 
 
-## precommit hooks
+## Precommit hooks
 
 Inside your virtual environment, do (one time):
 ```
