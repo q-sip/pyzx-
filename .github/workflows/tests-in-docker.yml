@@ -19,7 +19,7 @@ jobs:
           echo "NEO4J_URI=${{ vars.NEO4J_URI }}" > .env.pyzx
           echo "NEO4J_USER=${{ secrets.NEO4J_USER }}" >> .env.pyzx
           echo "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}" >> .env.pyzx
-          echo "${{DOCKER_ENV_PYZX}}" > .env.pyzx
+          echo "${{ secrets.DOCKER_ENV_PYZX}}" > .env.pyzx
 
       - name: Run Tests and Neo4j both from docker compose
         run: |
