@@ -7,4 +7,4 @@ class TestQubit(Neo4jE2ETestCase):
         g.set_qubit(1, 2)
         check_qubit=g.qubit(1)
 
-        self.assertEqual(check_qubit, 2)
+        self.assertEqual(check_qubit, "2")
