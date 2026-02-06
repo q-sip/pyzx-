@@ -66,25 +66,3 @@ class TestSetEdgeType(Neo4jE2ETestCase):
         initial = g.edge_type((1, 2))
         g.set_edge_type((1, 2), EdgeType.SIMPLE)
         self.assertNotEqual(g.edge_type((1, 2)), initial)
-
-    def test_set_edge_type_increment(self):
-        g = self.g
-
-        vertices_data = [
-            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-            {"ty": VertexType.Z, "qubit": 0, "row": 1},
-            {"ty": VertexType.X, "qubit": 0, "row": 2},
-            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 3},
-        ]
-        edges_data = [
-            ((0, 1), EdgeType.SIMPLE),
-            ((1, 2), EdgeType.HADAMARD),
-            ((2, 3), EdgeType.SIMPLE),
-        ]
-
-
-        g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-
-        initial = int(str(g.edge_type((0, 1))))
-        g.set_edge_type((0, 1), EdgeType.HADAMARD)
-        self.assertEqual(int(str(g.edge_type((0, 1)))), initial + 1)

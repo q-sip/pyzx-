@@ -15,37 +15,37 @@ load_dotenv()
 URI = os.getenv("NEO4J_URI")
 AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 
-with GraphDatabase.driver(URI, auth=AUTH) as driver:
-    driver.verify_connectivity()
-    g = zx.Graph(backend='neo4j')
-    print("Putsataan vanhaa graafia")
-    query =""" MATCH (N) DETACH DELETE N"""
-    g.clear_graph(query)
+# with GraphDatabase.driver(URI, auth=AUTH) as driver:
+#     driver.verify_connectivity()
+#     g = zx.Graph(backend='neo4j')
+#     print("Putsataan vanhaa graafia")
+#     query =""" MATCH (N) DETACH DELETE N"""
+#     g.clear_graph(query)
     
 
-    print("Luodaan graafi")
+#     print("Luodaan graafi")
 
-    try: 
-        g = zx.generate.cliffordT(3, 20, backend='neo4j')
+#     try: 
+#         g = zx.generate.cliffordT(3, 20, backend='neo4j')
 
-    except ImportError:
-        print("Neo4j backend ei saatavilla")
-        raise
-    except Exception as e:
-        print(f"Virhe graafin luonnissa {e}")
-        raise  
+#     except ImportError:
+#         print("Neo4j backend ei saatavilla")
+#         raise
+#     except Exception as e:
+#         print(f"Virhe graafin luonnissa {e}")
+#         raise  
     
-    print("-"*30)
-    print(f"Alkuperäisessä graafissa: {g.num_vertices()} nodea, {g.num_edges()} kaarta")
+#     print("-"*30)
+#     print(f"Alkuperäisessä graafissa: {g.num_vertices()} nodea, {g.num_edges()} kaarta")
 
-    try:
-        full_reduce(g)
-    except Exception as e:
-        print(f"full_reduce hajos: {e}")
-        raise
+#     try:
+#         full_reduce(g)
+#     except Exception as e:
+#         print(f"full_reduce hajos: {e}")
+#         raise
 
-    print("-" * 30)
-    print(f"Lopullisessa graafissa: {g.num_vertices()} nodea, {g.num_edges()} kaarta")
+#     print("-" * 30)
+#     print(f"Lopullisessa graafissa: {g.num_vertices()} nodea, {g.num_edges()} kaarta")
                                         
 
 
@@ -54,16 +54,16 @@ with GraphDatabase.driver(URI, auth=AUTH) as driver:
 
 #MANUAALINEN GRAAFI TESTAUKSEEN!
 
-"""g = GraphNeo4j(
+g = GraphNeo4j(
     uri=URI,
     user=os.getenv("NEO4J_USER"),
     password=os.getenv("NEO4J_PASSWORD"),
     database="neo4j",
     graph_id="test_graph",
-)"""
+)
 
 
-"""v_ids = g.create_graph(
+v_ids = g.create_graph(
     vertices_data=[
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
         {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -77,8 +77,8 @@ with GraphDatabase.driver(URI, auth=AUTH) as driver:
     ],
     inputs=[0],
     outputs=[3],
-)"""
-
+)
+print(g.type(3))
 
 
 

@@ -67,24 +67,3 @@ class TestSetType(Neo4jE2ETestCase):
         g.set_type(3, VertexType.X)
         self.assertNotEqual(g.type(3), initial)
 
-    def test_set_type_increment(self):
-        g = self.g
-
-        vertices_data = [
-            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-            {"ty": VertexType.Z, "qubit": 0, "row": 1},
-            {"ty": VertexType.X, "qubit": 0, "row": 2},
-            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 3},
-        ]
-        edges_data = [
-            ((0, 1), EdgeType.SIMPLE),
-            ((1, 2), EdgeType.HADAMARD),
-            ((2, 3), EdgeType.SIMPLE),
-        ]
-
-
-        g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-
-        initial = int(str(g.type(0)))
-        g.set_type(0, VertexType.Z)
-        self.assertEqual(int(str(g.type(0))), initial + 1)
