@@ -379,12 +379,49 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         t: Optional[VT] = None,
         et: Optional[EdgeType] = None,
     ) -> int:
-        query = "MATCH ()-->() RETURN count(*) as count;"
-        with self._get_session() as session:
-            result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id).single()
-            )
-        return result["count"] if result else 0
+        """Returns the number of edges in the graph.
+        
+        Jos source ja target nodet on annettu erikseen, laskee niiden väliset kaaret.
+        Jos kaaren tyyppi on annettu, laskee vain sen tyyppiset kaaret
+        """
+        if s is not None and t is not None:
+            # Count edges between specific vertices, s being the source and t being the target
+            if et is not None:
+                query = """
+                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire {t: $et}]-(n2:Node {graph_id: $graph_id, id: $t})
+                RETURN count(r) as count
+                """
+                params = {"graph_id": self.graph_id, "s": s, "t": t, "et": et.value}
+            else:
+                query = """
+                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: $t})
+                RETURN count(r) as count
+                """
+                params = {"graph_id": self.graph_id, "s": s, "t": t}
+
+            with self._get_session() as session:
+                result = session.execute_read(
+                    lambda tx: tx.run(query, **params).single()
+                )
+            count = result["count"] if result else 0
+
+            if s != t:
+                count = count // 2
+            return count
+        elif s is not None:
+            # Count edges incident to a specific vertex
+            return self.vertex_degree(s)
+        else:
+            # Count all edges
+            query = """
+            MATCH (:Node {graph_id: $graph_id})-[r:Wire]->(:Node {graph_id: $graph_id})
+            RETURN count(r) as count
+            """
+            with self._get_session() as session:
+                result = session.execute_read(
+                    lambda tx: tx.run(query, graph_id=self.graph_id).single()
+                )
+            return result["count"] if result else 0
 
     def add_edge(
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
@@ -467,7 +504,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""
-        raise NotImplementedError("Not implemented on backend " + type(self).backend)
+        return edge
+
 
     def incident_edges(self, vertex: VT) -> Sequence[ET]:
         """Returns all neighboring edges of the given vertex."""
@@ -787,13 +825,17 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns a mapping of vertices to their row index."""
         return {v: self.row(v) for v in self.vertices()}
 
-    def edge(self, s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET:
+    def edge(self, s: VT, t: VT, et: Optional[EdgeType] = None) -> ET:
         """Returns the name of the first edge with the given source/target and type.
         Behaviour is undefined if the vertices are not connected."""
         for e in self.incident_edges(s):
-            if t in self.edge_st(e) and et == self.edge_type(e):
-                return e
-        raise ValueError(f"No edge of type {et} between {s} and {t}")
+            if t in self.edge_st(e):
+                if et is None or et == self.edge_type(e):
+                    return e
+        if et is not None:
+            raise ValueError(f"No edge of type {et} between {s} and {t}")
+        else:
+            raise ValueError(f"No edge between {s} and {t}")
 
     def connected(self, v1: VT, v2: VT) -> bool:
         """Returns whether vertices v1 and v2 share an edge."""
@@ -1232,4 +1274,5 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         # Sync in-memory IO.
         cpy._inputs = tuple(input_ids)
         cpy._outputs = tuple(output_ids)
+
         return cpy
