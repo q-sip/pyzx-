@@ -595,9 +595,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             session.execute_write(
                 lambda tx: tx.run(
                     query,
-                    graph_id=self.graph_id,
-                    id=vertex,
-                    qubit=self.phase_to(q),
+                    graph_id = self.graph_id,
+                    id = vertex,
+                    qubit = str(q) if not None else qubit = str(0)
                 )
             )
 
