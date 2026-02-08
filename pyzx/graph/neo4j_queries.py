@@ -1,3 +1,17 @@
+"""
+Optimized Cypher rewrite queries for ZX-calculus simplification on Neo4j.
+
+Usage:
+- All queries that operate on (:Node) should be run with parameter graph_id so only
+  one graph is modified. Add "AND n.graph_id = $graph_id" (and similar for other
+  matched nodes) to each MATCH when using with GraphNeo4j.
+- SPIDER_FUSION_2 was written for Memgraph (collections.contains); a Neo4j-compatible
+  version uses "node IN list" and startNode(r)/endNode(r).
+- GADGET_FUSION_RED_GREEN: PROFILE has been removed for production; use EXPLAIN/PROFILE
+  only when analyzing performance.
+"""
+
+
 class CypherRewrites:
     HADAMARD_EDGE_CANCELLATION = """
     // Find all marked patterns
@@ -8,7 +22,7 @@ class CypherRewrites:
     WITH DISTINCT s.pattern_id AS pattern_id
     MATCH path = (start)-[:Wire*2..6]-(end)
     WHERE ALL(edge IN relationships(path) WHERE edge.pattern_id = pattern_id)
-    AND start.pattern_id IS NULL AND end.pattern_id IS NULL AND id(start) < id(end)
+    AND start.pattern_id IS NULL AND end.pattern_id IS NULL AND elementId(start) < elementId(end)
 
     WITH start, end, pattern_id,
          [node IN nodes(path)[1..-1] WHERE node.pattern_id = pattern_id] as nodes_to_delete
@@ -28,7 +42,7 @@ class CypherRewrites:
     """
 
     SPIDER_FUSION = """
-    CALL {
+    CALL () {
       // Find all marked patterns
       MATCH ()-[s:Wire]-()
       WHERE s.pattern_id IS NOT NULL
@@ -38,7 +52,7 @@ class CypherRewrites:
       MATCH path = (start)-[:Wire*1..3]-(end)
       WHERE ALL(edge IN relationships(path) WHERE edge.pattern_id = pattern_id)
         AND ALL(n IN nodes(path) WHERE n.pattern_id = pattern_id)
-        AND id(start) < id(end)
+        AND elementId(start) < elementId(end)
         AND start.pattern_id = pattern_id
         AND end.pattern_id = pattern_id
 
@@ -102,11 +116,11 @@ class CypherRewrites:
              COLLECT(DISTINCT total_phase) AS summed_phases,
              SUM(connections_created) AS total_connections_created
     }
-    CALL {
+    CALL () {
       MATCH (n)
       REMOVE n.pattern_id
     }
-    CALL{
+    CALL () {
       MATCH ()-[r]-()
       REMOVE r.pattern_id
     }
@@ -116,7 +130,7 @@ class CypherRewrites:
     PIVOT_TWO_INTERIOR_PAULI = """
     // Find pivot candidates: two t=1 nodes with integer phases connected by t=2 edge
     MATCH (a {t: 1})-[pivot_edge:Wire {t: 2}]-(b {t: 1})
-    WHERE id(a) < id(b)  // Process each pair once
+    WHERE elementId(a) < elementId(b)  // Process each pair once
       AND a.phase IS NOT NULL 
       AND b.phase IS NOT NULL
       // Check if phases are integer multiples of pi (phase = k for integer k)
@@ -142,7 +156,7 @@ class CypherRewrites:
     WITH a, b, pivot_edge, neighbors_a, neighbors_b, COLLECT(DISTINCT shared) as shared_neighbors
 
     // neighbors_a × neighbors_b
-    CALL {
+    CALL () {
       WITH neighbors_a, neighbors_b
       UNWIND neighbors_a AS node_a
       UNWIND neighbors_b AS node_b
@@ -154,7 +168,7 @@ class CypherRewrites:
     }
 
     // neighbors_a × shared_neighbors
-    CALL {
+    CALL () {
       WITH neighbors_a, shared_neighbors
       UNWIND neighbors_a AS node_a
       UNWIND shared_neighbors AS shared_node
@@ -166,7 +180,7 @@ class CypherRewrites:
     }
 
     // neighbors_b x shared_neighbors
-    CALL {
+    CALL () {
       WITH neighbors_b, shared_neighbors
       UNWIND neighbors_b AS node_b
       UNWIND shared_neighbors AS shared_node
@@ -202,7 +216,7 @@ class CypherRewrites:
     MATCH (a {t: 1})-[:Wire {t : 2}]-(b {t: 1})
     WHERE a.phase = round(a.phase) 
       AND b.phase = round(b.phase)
-      //AND id(a) < id(b)
+      //AND elementId(a) < elementId(b)
     //RETURN a.id, b.id
     // Check b's connectivity: exactly one boundary (t=0) and one non-boundary
     //WITH a, b
@@ -286,7 +300,7 @@ class CypherRewrites:
     UNWIND range(0, size(neighbors)-2) AS i
     UNWIND range(i+1, size(neighbors)-1) AS j
     WITH pid, center, neighbors, neighbors[i] AS n1, neighbors[j] AS n2
-    //WHERE id(n1) < id(n2)
+    //WHERE elementId(n1) < elementId(n2)
     OPTIONAL MATCH (n1)-[e:Wire]-(n2)
     FOREACH (_ IN CASE WHEN e IS NULL THEN [1] ELSE [] END |
       CREATE (n1)-[:Wire {t: 2}]->(n2)
@@ -316,9 +330,9 @@ class CypherRewrites:
 
     GADGET_FUSION_RED_GREEN = """
     // 1. Find all t=1 nodes and explicitly calculate their degree.
-    PROFILE MATCH (p:Node {t: 1})//-[r:Wire]-(neighbor)
-    WHERE degree(p) = 1
-    WITH p //, count(r) AS degree
+    MATCH (p:Node {t: 1})-[r:Wire]-(neighbor)
+    WHERE p.graph_id = $graph_id AND degree(p) = 1
+    WITH p
 
     // 2. Filter for nodes that have a degree of exactly 1. These are our phase spiders.
     //WHERE degree = 1
@@ -334,8 +348,8 @@ class CypherRewrites:
     // 5. Group gadgets by their identical set of external neighbors.
     // A sorted list of neighbor IDs serves as a unique key for the group.
     WITH p, x, n 
-    //ORDER BY id(n)
-    WITH p, x, COLLECT(id(n)) AS neighbor_key
+    //ORDER BY elementId(n)
+    WITH p, x, COLLECT(elementId(n)) AS neighbor_key
 
     // 6. For each group (identified by neighbor_key), collect the phase spiders and their corresponding X-spiders.
     WITH neighbor_key, COLLECT(p) AS phase_spiders, COLLECT(x) AS x_spiders
@@ -392,8 +406,8 @@ class CypherRewrites:
 
     // 5. Group gadgets by their identical set of external neighbors.
     // A sorted list of neighbor IDs serves as a unique key for the group.
-    WITH p, z_center, n ORDER BY id(n)
-    WITH p, z_center, COLLECT(id(n)) AS neighbor_key
+    WITH p, z_center, n ORDER BY elementId(n)
+    WITH p, z_center, COLLECT(elementId(n)) AS neighbor_key
 
     // 6. For each group (identified by neighbor_key), collect the phase spiders and their corresponding central spiders.
     WITH neighbor_key, COLLECT(p) AS phase_spiders, COLLECT(z_center) AS central_spiders
@@ -615,12 +629,12 @@ class CypherRewrites:
 
     // Gather n1's neighbors (except n2), and the relationship types
     OPTIONAL MATCH (n1)-[edge1]-(nb1)
-    WHERE id(nb1) <> id(n2)
+    WHERE elementId(nb1) <> elementId(n2)
     WITH n1, n2, w, collect(nb1) AS n1_neighs, collect(edge1) AS n1_edges
 
     // Gather n2's neighbors (except n1), and the relationship types
     OPTIONAL MATCH (n2)-[edge2]-(nb2)
-    WHERE id(nb2) <> id(n1)
+    WHERE elementId(nb2) <> elementId(n1)
     WITH n1, n2, w, n1_neighs, n1_edges, collect(nb2) AS n2_neighs, collect(edge2) AS n2_edges
 
     // Prepare to multiply nodes
@@ -630,12 +644,12 @@ class CypherRewrites:
 
     // Create new nodes for n1 (t:2)
     UNWIND n1_idx AS i1
-    CREATE (new_n1:Node {t:2, uuid: randomUUID(), original: id(n1)})
+    CREATE (new_n1:Node {t:2, uuid: randomUUID(), original: elementId(n1)})
     WITH n1, n2, w, n1_neighs, n1_edges, n2_neighs, n2_edges, collect(new_n1) AS new_n1s, n2_idx
 
     // Create new nodes for n2 (t:1)
     UNWIND n2_idx AS i2
-    CREATE (new_n2:Node {t:1, uuid: randomUUID(), original: id(n2)})
+    CREATE (new_n2:Node {t:1, uuid: randomUUID(), original: elementId(n2)})
     WITH n1, n2, w, n1_neighs, n1_edges, n2_neighs, n2_edges, new_n1s, collect(new_n2) AS new_n2s
 
     // Reconnect previous edges for new_n1 nodes (index-safe)
@@ -667,12 +681,12 @@ class CypherRewrites:
 
     // Gather n1's neighbors (except n2), and the relationship types
     OPTIONAL MATCH (n1)-[edge1]-(nb1)
-    WHERE id(nb1) <> id(n2)
+    WHERE elementId(nb1) <> elementId(n2)
     WITH n1, n2, w, collect(nb1) AS n1_neighs, collect(edge1) AS n1_edges
 
     // Gather n2's neighbors (except n1), and the relationship types
     OPTIONAL MATCH (n2)-[edge2]-(nb2)
-    WHERE id(nb2) <> id(n1)
+    WHERE elementId(nb2) <> elementId(n1)
     WITH n1, n2, w, n1_neighs, n1_edges, collect(nb2) AS n2_neighs, collect(edge2) AS n2_edges
 
     // Prepare to multiply nodes
@@ -713,7 +727,7 @@ class CypherRewrites:
     """
 
     BIALGEBRA_SIMPLIFICATION = """
-    CALL {
+    CALL () {
     // For each pattern
     MATCH (a)
     WHERE a.pattern_id IS NOT NULL
@@ -753,7 +767,7 @@ class CypherRewrites:
     FOREACH (n IN oldANodes + oldBNodes | DETACH DELETE n)
     RETURN pid, newA, newB
     }
-    CALL {
+    CALL () {
       MATCH (n)
       REMOVE n.pattern_id
     }
@@ -775,7 +789,7 @@ class CypherRewrites:
 
     // Sort by some deterministic criteria to pick one center per query execution
     //WITH center, neighbors
-    //ORDER BY id(center)
+    //ORDER BY elementId(center)
     //LIMIT 1
 
     // Complement: toggle all edges between neighbor pairs
@@ -825,8 +839,8 @@ class CypherRewrites:
 
     // 5. Group gadgets by their center type, edge type, and identical set of external neighbors
     WITH p, center, edge_type, n 
-    //ORDER BY id(n)
-    WITH p, center, edge_type, COLLECT(id(n)) AS neighbor_key
+    //ORDER BY elementId(n)
+    WITH p, center, edge_type, COLLECT(elementId(n)) AS neighbor_key
 
     // 6. Group by (edge_type, neighbor_key) to separate Z-gadgets from X-gadgets
     WITH edge_type, neighbor_key, COLLECT(p) AS phase_spiders, COLLECT(center) AS centers
@@ -849,7 +863,7 @@ class CypherRewrites:
     """
 
     SPIDER_FUSION_2 = """
-    // Match all candidate edges satisfying the condition
+    // Match all candidate edges satisfying the condition (Neo4j-compatible; was Memgraph collections.contains)
     MATCH (a:Node)-[r:Wire]->(b:Node)
     WHERE (a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2) AND r.t = 1
     WITH collect(DISTINCT r) AS allEdges
@@ -857,10 +871,10 @@ class CypherRewrites:
     // Keep only edges where neither endpoint already appears
     WITH reduce( acc = {matchedEdges: [], matchedNodes: []}, e IN allEdges |
       CASE
-        WHEN collections.contains(acc.matchedNodes, startNode(e)) OR collections.contains(acc.matchedNodes, endNode(e))
+        WHEN startNode(e) IN acc.matchedNodes OR endNode(e) IN acc.matchedNodes
           THEN acc
         ELSE {
-          matchedEdges: acc.matchedEdges + e,
+          matchedEdges: acc.matchedEdges + [e],
           matchedNodes: acc.matchedNodes + [startNode(e), endNode(e)]
         }
       END

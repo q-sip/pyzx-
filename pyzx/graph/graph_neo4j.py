@@ -780,6 +780,25 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 
+    def run_cypher_rewrite(
+        self,
+        rule_name: str,
+        variant_id: Optional[str] = None,
+        query_config: Optional[Mapping[str, str]] = None,
+        measure_time: bool = False,
+    ) -> Tuple[Optional[Mapping[str, Any]], Optional[float]]:
+        """Run a named Cypher rewrite from neo4j_queries with this graph's session and graph_id.
+        See neo4j_rewrite_runner for rule names and variant selection (env/config)."""
+        from .neo4j_rewrite_runner import run_rewrite
+        return run_rewrite(
+            self._get_session,
+            self.graph_id,
+            rule_name,
+            variant_id=variant_id,
+            query_config=dict(query_config) if query_config else None,
+            measure_time=measure_time,
+        )
+
     # }}}
 
     # OPTIONAL OVERRIDES{{{
