@@ -68,17 +68,21 @@ v_ids = g.create_graph(
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
         {"ty": VertexType.Z, "qubit": 0, "row": 1},
         {"ty": VertexType.X, "qubit": 0, "row": 2},
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 3},
+        {"ty": VertexType.X, "qubit": 0, "row": 3},
+        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 4},
     ],
     edges_data=[
         ((0, 1), EdgeType.SIMPLE),
         ((1, 2), EdgeType.HADAMARD),
-        ((2, 3), EdgeType.SIMPLE),
+        ((2, 3), EdgeType.HADAMARD),
+        ((3, 4), EdgeType.SIMPLE),
     ],
     inputs=[0],
     outputs=[3],
 )
 print(g.type(3))
+
+
 
 
 
