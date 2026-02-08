@@ -620,15 +620,13 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
-            )
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single())
         return result["qubit"] if result else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
         query = (
-            """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit"""
-        )
+            """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit""")
 
         with self._get_session() as session:
             session.execute_write(
@@ -636,9 +634,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query,
                     graph_id=self.graph_id,
                     id=vertex,
-                    qubit=str(q) if q is not None else "0",
-                )
-            )
+                    qubit=self._phase_to_str(q)))
 
     def row(self, vertex: VT) -> FloatInt:
         """Palauttaa sen rivin jolla verteksi on.
