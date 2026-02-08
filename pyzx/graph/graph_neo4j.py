@@ -380,7 +380,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         et: Optional[EdgeType] = None,
     ) -> int:
         """Returns the number of edges in the graph.
-        
+
         Jos source ja target nodet on annettu erikseen, laskee niiden väliset kaaret.
         Jos kaaren tyyppi on annettu, laskee vain sen tyyppiset kaaret
         """
@@ -506,7 +506,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns a tuple of source/target of the given edge."""
         return edge
 
-
     def incident_edges(self, vertex: VT) -> Sequence[ET]:
         """Returns all neighboring edges of the given vertex."""
 
@@ -627,7 +626,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
-        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit"""
+        query = (
+            """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit"""
+        )
 
         with self._get_session() as session:
             session.execute_write(
@@ -635,7 +636,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query,
                     graph_id=self.graph_id,
                     id=vertex,
-                    qubit=str(q) if q is not None else "0"
+                    qubit=str(q) if q is not None else "0",
                 )
             )
 
@@ -736,7 +737,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
                 ).data()
             )
-        return [r["propertyKey"] for r in result]
+
+        if len(result) > 1:
+            raise ValueError(
+                f"Expected single Wire between {edge}, found {len(result)}"
+            )
+        return result[0]["propertyKey"] if result else []
 
     def edata(self, edge: ET, key: str, default: Any = None) -> Any:
         """Returns the data value of the given edge associated to the key.
