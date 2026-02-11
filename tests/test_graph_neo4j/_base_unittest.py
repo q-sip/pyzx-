@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from pyzx.graph.graph_neo4j import GraphNeo4j
 
 
-
 def _neo4j_env_present() -> bool:
     return all(os.getenv(k) for k in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD"))
 
@@ -15,7 +14,7 @@ def _ensure_phase_to_str_exists() -> None:
     # Safety patch for older forks/branches.
     if not hasattr(GraphNeo4j, "_phase_to_str"):
 
-        def _phase_to_str(self, phase):
+        def _phase_to_str(_, phase):
             return "0" if phase is None else str(phase)
 
         setattr(GraphNeo4j, "_phase_to_str", _phase_to_str)
@@ -31,20 +30,27 @@ class Neo4jUnitTestCase(unittest.TestCase):
         _ensure_phase_to_str_exists()
         self.graph_id = f"test_graph_{uuid.uuid4().hex}"
         self.g = GraphNeo4j(
-            uri="bolt://unit-test-does-not-connect",
-            user="neo4j",
-            password="password",
+            uri=os.getenv("NEO4J_URI", ""),
+            user=os.getenv("NEO4J_USER", ""),
+            password=os.getenv("NEO4J_PASSWORD", ""),
             graph_id=self.graph_id,
             database=os.getenv("NEO4J_DATABASE"),
         )
 
+        with self.g._get_session() as session:
+            session.run("MATCH (n) SET n:$('ccc')")
+
     def tearDown(self):
         try:
+            with self.g._get_session() as session:
+                session.run("MATCH (n) WHERE NOT n:ccc DETACH DELETE n")
+                session.run("MATCH (n:ccc) REMOVE n:ccc")
             self.g.close()
         except Exception:
             pass
 
 
+# pylint: disable=W0212
 class Neo4jE2ETestCase(unittest.TestCase):
     """
     Base class for end-to-end tests: requires reachable Neo4j.
@@ -72,6 +78,7 @@ class Neo4jE2ETestCase(unittest.TestCase):
         try:
             with self.g._get_session() as session:
                 session.run("RETURN 1").single()
+                session.run("MATCH (n) SET n:$('ccc')")
         except Exception as e:
             try:
                 self.g.close()
@@ -79,15 +86,10 @@ class Neo4jE2ETestCase(unittest.TestCase):
                 raise unittest.SkipTest(f"Neo4j not reachable: {e}")
 
     def tearDown(self):
-        # cleanup graph data for this graph_id
         try:
             with self.g._get_session() as session:
-                session.execute_write(
-                    lambda tx: tx.run(
-                        "MATCH (n:Node {graph_id: $gid}) DETACH DELETE n",
-                        gid=self.g.graph_id,
-                    )
-                )
+                session.run("MATCH (n) WHERE NOT n:ccc DETACH DELETE n")
+                session.run("MATCH (n:ccc) REMOVE n:ccc")
         except Exception:
             pass
 
@@ -95,3 +97,7 @@ class Neo4jE2ETestCase(unittest.TestCase):
             self.g.close()
         except Exception:
             pass
+
+
+if __name__ == "__main__":
+    unittest.main()
