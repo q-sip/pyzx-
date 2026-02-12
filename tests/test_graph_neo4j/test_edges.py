@@ -29,9 +29,8 @@ class TestEdgesE2E(Neo4jE2ETestCase):
             ((2, 0), EdgeType.SIMPLE)
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-        
-        edges = sorted(g.edges())
-        self.assertEqual(edges, [(0, 1), (1, 2), (2, 0)])
+        edges = sorted(g.edges(), key=lambda x: (x[0], x[1]))
+        self.assertEqual(edges, sorted([(0, 1), (1, 2), (0, 2)], key=lambda x: (x[0], x[1])))
 
     def test_edges_singular(self):
         """Test that edges returns correct edges between 2 vertices"""

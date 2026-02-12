@@ -57,6 +57,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._driver = None
 
         self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        # Clear any existing data for this ID to be safe (id reuse)
+        if graph_id is None:
+             self.remove_all_data()
+
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
@@ -71,6 +75,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 self.uri, auth=(self.user, self.password)
             )
         return self._driver
+
+    def remove_all_data(self) -> None:
+        """Removes ALL nodes and relationships for this graph_id."""
+        query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
+        with self._get_session() as session:
+            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 
     def _get_session(self):
         """Returns driver session"""
@@ -205,19 +215,37 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """
         Adds multiple edges at once.
         """
-        edges = list(edge_pairs)
-        if not edges:
+        edges_list = list(edge_pairs)
+        if not edges_list:
             return
 
         if edge_data is None:
-            edge_data = [edgetype] * len(edges)
+            data_list = [edgetype] * len(edges_list)
         else:
-            edge_data = list(edge_data)
-            if len(edge_data) != len(edges):
+            data_list = list(edge_data)
+            if len(data_list) != len(edges_list):
                 raise ValueError("edge_data must have same length as edge_pairs")
+
+        existing = set(self.edges())
+        edges = []
+        edge_data = []
+        for e, et in zip(edges_list, data_list):
+            s, t = upair(*e)
+            if s == t:
+                if et == EdgeType.HADAMARD:
+                    self.add_to_phase(s, 1)
+                continue
+
+            if e in existing:
+                self.set_edge_type(e, et)
+            else:
+                edges.append(e)
+                edge_data.append(et)
+
+        if not edges:
+             return
         n = self.num_edges()
         ids = [i + n for i in range(len(edges))]
-        print(f"ids = {ids}")
         edges_payload = [
             {"s": s, "t": t, "et": et.value, "id": eid}
             for (s, t), et, eid in zip(edges, edge_data, ids)
@@ -262,12 +290,13 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return self._vindex
 
     def num_vertices(self):
-        query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
+        query = "MATCH (n:Node {graph_id: $graph_id}) RETURN n.id as id"
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
             )
-        return result["count"] if result else 0
+        ids = [r['id'] for r in result]
+        return len(ids)
 
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
@@ -429,9 +458,18 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Adds a single edge of the given type and return its id"""
         s, t = upair(*edge_pair)
 
+        if s == t:
+            if edgetype == EdgeType.HADAMARD:
+                self.add_to_phase(s, 1)
+            return edge_pair
+
+        if edge_pair in self.edges():
+            self.set_edge_type(edge_pair, edgetype)
+            return edge_pair
+
         edge_id = self.num_edges()
 
-        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype, "id": edge_id}
+        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype.value, "id": edge_id}
 
         query = """
         UNWIND $edge AS e
@@ -494,7 +532,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 )
             return [(item["src"], item["tgt"]) for item in result]
 
-        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})"
+        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]-(n2:Node {graph_id: $graph_id})"
+        query += " WHERE n1.id <= n2.id"
         query += " RETURN n1.id, n2.id"
         with self._get_session() as session:
             result = session.execute_read(
@@ -552,7 +591,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         with self._get_session() as session:
             session.execute_write(
                 lambda tx: tx.run(
-                    query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t
+                    query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t.value
                 )
             )
 
@@ -620,8 +659,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single())
-        return result["qubit"] if result else -1
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data())
+        # If multiple nodes, take the first one (robustness against duplicates)
+        return result[0]["qubit"] if result else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
@@ -642,9 +682,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         query = "MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.row AS r"
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
             )
-        return result["r"] if result and result["r"] is not None else -1
+        return result[0]["r"] if result and result[0]["r"] is not None else -1
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
         """Asettaa rivin verteksille."""
@@ -677,9 +717,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         )
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).data()
             )
-        return result["keys"]
+        return result[0]["keys"] if result else []
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
@@ -692,9 +732,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(
                     query, graph_id=self.graph_id, id=vertex, key=key
-                ).single()
+                ).data()
             )
-        return result["value"] if result and result["value"] is not None else default
+        return result[0]["value"] if result and result[0]["value"] is not None else default
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
@@ -751,9 +791,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(
                     query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key
-                ).single()
+                ).data()
             )
-        return result["value"] if result and result["value"] is not None else default
+        return result[0]["value"] if result and result[0]["value"] is not None else default
 
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""

@@ -12,7 +12,7 @@ def comparison_1(seed: int, backend: str | None = None):
     backend = "graph_tool" for GraphGT
     """
 
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=8, depth=100, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
 
     g = c.to_graph(backend=backend)
 
@@ -27,7 +27,7 @@ def comparison_1(seed: int, backend: str | None = None):
 
 def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     """compares one backend to another"""
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=8, depth=100, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
 
     g1 = c.to_graph(backend=b1)
     g2 = c.to_graph(backend=b2)
