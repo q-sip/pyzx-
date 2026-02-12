@@ -815,8 +815,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
 
     # Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
-    def clear_graph(self, query: str) -> None:
+    def clear_graph(self) -> None:
         """Clears the entire graph from the database."""
+        query = "MATCH(N {graph_id: $graph_id}) DETACH DELETE N"
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 
