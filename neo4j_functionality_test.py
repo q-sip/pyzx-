@@ -62,27 +62,43 @@ g = GraphNeo4j(
     graph_id="test_graph",
 )
 
+def graph_at_one_go():
+    v_ids = g.create_graph(
+        vertices_data=[
+            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+            {"ty": VertexType.Z, "qubit": 0, "row": 0},
+            {"ty": VertexType.X, "qubit": 0, "row": 0},
+            {"ty": VertexType.X, "qubit": 0, "row": 0},
+            {"ty": VertexType.X, "qubit": 0, "row": 0},
+            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+        ],
+        edges_data=[
+            ((0, 1), EdgeType.SIMPLE),
+            ((1, 2), EdgeType.HADAMARD),
+            ((2, 3), EdgeType.HADAMARD),
+            ((3, 4), EdgeType.HADAMARD),
+            ((4, 5), EdgeType.HADAMARD),
+            ((1, 5), EdgeType.SIMPLE),
+        ],
+        inputs=[0],
+        outputs=[3],
+    )
+    print(g.type(3))    
 
-v_ids = g.create_graph(
-    vertices_data=[
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-        {"ty": VertexType.Z, "qubit": 0, "row": 1},
-        {"ty": VertexType.X, "qubit": 0, "row": 2},
-        {"ty": VertexType.X, "qubit": 0, "row": 3},
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 4},
-    ],
-    edges_data=[
-        ((0, 1), EdgeType.SIMPLE),
-        ((1, 2), EdgeType.HADAMARD),
-        ((2, 3), EdgeType.HADAMARD),
-        ((3, 4), EdgeType.SIMPLE),
-    ],
-    inputs=[0],
-    outputs=[3],
-)
-print(g.type(3))
+def graph_step_by_step():
+    i = g.add_vertex(0,0,0)
+    v = g.add_vertex(1,0,1, Fraction(1,2))
+    w = g.add_vertex(2,0,2, Fraction(-1,2))
+    o = g.add_vertex(0,0,3)
+    g.add_edges([(i,v), (v,w), (w,o)])
 
+def graph_full_reduce():
+    graph = zx.generate.cliffordT(3,20, backend="neo4j")
+    zx.simplify.full_reduce(graph)
+    #graph.normalise()
 
+#graph_step_by_step()
+graph_full_reduce()
 
 
 
