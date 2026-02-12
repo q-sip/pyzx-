@@ -236,7 +236,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     self.add_to_phase(s, 1)
                 continue
 
-            if e in existing:
+            if (s, t) in existing:
                 self.set_edge_type(e, et)
             else:
                 edges.append(e)
@@ -463,7 +463,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 self.add_to_phase(s, 1)
             return edge_pair
 
-        if edge_pair in self.edges():
+        if (s, t) in self.edges():
             self.set_edge_type(edge_pair, edgetype)
             return edge_pair
 
@@ -900,10 +900,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def connected(self, v1: VT, v2: VT) -> bool:
         """Returns whether vertices v1 and v2 share an edge."""
-        for e in self.incident_edges(v1):
-            if v2 in self.edge_st(e):
-                return True
-        return False
+        query = """MATCH(n:Node {graph_id: $graph_id, id: $vid1})-[r:Wire]-(m:Node {graph_id: $graph_id, id: $vid2}) RETURN r"""
+        with self._get_session() as session:
+            r = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, vid1=v1, vid2=v2).data()
+            )
+        return len(r) != 0
 
     def add_vertex(
         self,
