@@ -654,3 +654,95 @@ print(sorted(g2.vertices()))  # [0, 1, 2]
 g.close()
 g2.close()
 ```
+## GraphNeo4j.row(vertex: VT) -> FloatInt
+
+Returns the `row` value associated to the vertex. If no row has been set, returns `-1`.
+
+Vertices in Neo4j are stored as `(:Node {graph_id, id, t, phase, qubit, row})` with the following defaults:
+
+- t: `VertexType.BOUNDARY`
+- phase: `"0"`
+- qubit: `-1`
+- row: `-1`
+
+### Parameters
+
+- vertex: `VT` (int)  
+  The id of the vertex whose row value is to be retrieved.
+
+### Returns
+
+- `FloatInt` (float or int)  
+  The row index of the vertex, or `-1` if not set.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vs = g.add_vertices(1)
+r = g.row(vs[0])
+print(r)  # -1 (default)
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.set_row(vertex: VT, r: FloatInt) -> None
+
+Sets the `row` value associated to the vertex.
+
+Vertices in Neo4j are stored as `(:Node {graph_id, id, t, phase, qubit, row})`. The row property is used to determine the depth/layer of the vertex in the circuit layout.
+
+### Parameters
+
+- vertex: `VT` (int)  
+  The id of the vertex whose row is to be set.
+- r: `FloatInt` (float or int)  
+  The row index to assign to the vertex.
+
+### Returns
+
+- `None`  
+  Updates the row value in the database. Does not return anything.
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vs = g.add_vertices(1)
+g.set_row(vs[0], 2)
+print(g.row(vs[0]))  # 2
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
