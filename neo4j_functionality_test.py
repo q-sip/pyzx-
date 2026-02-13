@@ -106,7 +106,6 @@ def iterable_graph_creation():
     num = 0
     choices = [VertexType.X, VertexType.Z]
     while True:
-        g.clear_graph()
         g.add_vertex(VertexType.BOUNDARY, 0, 0)
         g.add_vertex(VertexType.BOUNDARY, 0, 0)
         g.add_vertex(VertexType.Z, 0, 0)
@@ -129,9 +128,10 @@ def iterable_graph_creation():
                     random.randint(2, g.num_vertices() - 1),
                 )
             )
+        #tää ei sit toimi varmaa, koska full reduce poistaa joitain nodeja. Ainaki mulla crashas, koska vertex 2 ei ollu tyyppiä
         zx.full_reduce(g)
         print(f"{num} succesful")
         num += 1
 
 
-iterable_graph_creation()
+#iterable_graph_creation()

@@ -62,4 +62,4 @@ print("Multigraph:", comparison_1(42, "multigraph"))
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
 print("Neo4j:", comparison_1(42, "neo4j"))
 
-print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))
+#print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))
