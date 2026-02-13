@@ -746,3 +746,422 @@ g.close()
 ```
 
 See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.create_graph(vertices_data, edges_data, inputs, outputs) -> List[VT]
+
+Creates a complete graph with given vertices and edges in a single transaction. This is an efficient way to construct a full graph structure at once.
+
+### Behaviour
+
+- Allocates consecutive vertex IDs starting from `self._vindex`
+- Creates all vertices as `(:Node {graph_id, id, t, phase, qubit, row})` with default values
+- Creates directed `[:Wire]` relationships between specified vertex pairs
+- Marks input vertices with `:Input` label
+- Marks output vertices with `:Output` label
+- Updates `self._vindex`, `self._inputs`, and `self._outputs`
+- Returns empty list if `vertices_data` is empty
+
+### Parameters
+
+- vertices_data: `List[dict]`  
+  List of vertex specifications. Each dict may contain:
+  - `ty`: `VertexType` (default: `VertexType.BOUNDARY`)
+  - `phase`: phase value (default: `0`)
+  - `qubit`: qubit index (default: `-1`)
+  - `row`: row index (default: `-1`)
+
+- edges_data: `List[Tuple[Tuple[int, int], EdgeType]]`  
+  List of edges as `((source_index, target_index), edge_type)` where indices refer to positions in `vertices_data`
+
+- inputs: `Optional[List[int]]`  
+  Indices in `vertices_data` to mark as inputs (default: `None`)
+
+- outputs: `Optional[List[int]]`  
+  Indices in `vertices_data` to mark as outputs (default: `None`)
+
+### Returns
+
+- `List[VT]`  
+  List of the created vertex IDs
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.utils import VertexType, EdgeType
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+# Create a simple 3-vertex graph
+vertices_data = [
+    {"ty": VertexType.BOUNDARY, "row": 0, "qubit": 0},
+    {"ty": VertexType.Z, "row": 1, "qubit": 0, "phase": 0.5},
+    {"ty": VertexType.BOUNDARY, "row": 2, "qubit": 0},
+]
+edges_data = [
+    ((0, 1), EdgeType.SIMPLE),
+    ((1, 2), EdgeType.SIMPLE),
+]
+
+vertex_ids = g.create_graph(
+    vertices_data=vertices_data,
+    edges_data=edges_data,
+    inputs=[0],
+    outputs=[2]
+)
+
+print(vertex_ids)  # e.g. [0, 1, 2]
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.add_edge(edge_pair, edgetype) -> ET
+
+Adds a single edge between two vertices with the specified type and returns the edge identifier.
+
+### Behaviour
+
+- Handles self-loops on ZX-like vertices (Hadamard self-loops add π to the phase)
+- If vertices are already connected, applies ZX-calculus fusion rules:
+  - Same-colored spiders with fusing edge: no change
+  - Same-colored spiders with opposite edge types: converts to fusing edge, adds π to phase, updates scalar
+  - Same-colored spiders with double Hopf edge: removes edge, updates scalar
+- For Z-like/H-box combinations with simple edges: returns existing edge
+- Creates new edge if vertices are not connected
+- Updates scalar according to ZX-calculus rules when appropriate
+
+### Parameters
+
+- edge_pair: `Tuple[VT, VT]`  
+  Pair of vertex IDs to connect
+
+- edgetype: `EdgeType` (default: `EdgeType.SIMPLE`)  
+  Type of edge: `EdgeType.SIMPLE` (regular) or `EdgeType.HADAMARD`
+
+### Returns
+
+- `ET` (edge tuple)  
+  The edge identifier as `(source, target)` tuple
+
+### Raises
+
+- `ValueError`  
+  If attempting self-loop on non-ZX vertex or parallel edges on incompatible vertex types
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.utils import VertexType, EdgeType
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+v1, v2 = g.add_vertices(2)
+g.set_type(v1, VertexType.Z)
+g.set_type(v2, VertexType.Z)
+
+edge = g.add_edge((v1, v2), EdgeType.SIMPLE)
+print(edge)  # (0, 1) or (1, 0)
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.add_edges(edge_pairs, edgetype, edge_data) -> None
+
+Adds multiple edges at once in a single transaction. More efficient than calling `add_edge` multiple times.
+
+### Behaviour
+
+- Processes each edge pair through ZX-calculus rules (self-loops, existing edges)
+- Skips self-loops on non-Hadamard edges
+- Updates existing edge types if edges already exist
+- Creates new edges for unconnected vertex pairs
+- Uses `MERGE` in Neo4j to handle concurrent modifications safely
+
+### Parameters
+
+- edge_pairs: `Iterable[tuple[int, int]]`  
+  Iterable of `(source, target)` vertex ID pairs
+
+- edgetype: `EdgeType` (default: `EdgeType.SIMPLE`)  
+  Default edge type for all edges
+
+- edge_data: `Optional[Iterable[EdgeType]]` (keyword-only)  
+  Optional iterable of edge types, one per edge pair. Must match length of `edge_pairs` if provided.
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place
+
+### Raises
+
+- `ValueError`  
+  If `edge_data` length doesn't match `edge_pairs` length
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.utils import VertexType, EdgeType
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vertices = g.add_vertices(4)
+
+# Add multiple edges at once
+g.add_edges(
+    [(vertices[0], vertices[1]), (vertices[1], vertices[2]), (vertices[2], vertices[3])],
+    edgetype=EdgeType.SIMPLE
+)
+
+# Or with different types per edge
+g.add_edges(
+    [(vertices[0], vertices[2]), (vertices[1], vertices[3])],
+    edge_data=[EdgeType.HADAMARD, EdgeType.SIMPLE]
+)
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.remove_edges(edges) -> None
+
+Removes multiple edges from the graph in a single transaction.
+
+### Behaviour
+
+- Deletes all `[:Wire]` relationships matching the specified edge pairs
+- Uses undirected matching (removes regardless of edge direction in Neo4j)
+- Does nothing if `edges` is empty
+- Does not update vertex properties or labels
+
+### Parameters
+
+- edges: `List[ET]`  
+  List of edge tuples `(source, target)` to remove
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.utils import EdgeType
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vertices = g.add_vertices(3)
+g.add_edges([(vertices[0], vertices[1]), (vertices[1], vertices[2])])
+
+# Remove multiple edges
+g.remove_edges([(vertices[0], vertices[1]), (vertices[1], vertices[2])])
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.remove_vertices(vertices) -> None
+
+Removes multiple vertices and their incident edges from the graph.
+
+### Behaviour
+
+- Uses `DETACH DELETE` to remove vertices and all connected relationships atomically
+- Updates `self._inputs` to remove deleted vertices
+- Updates `self._outputs` to remove deleted vertices
+- Does nothing if `vertices` is empty
+
+### Parameters
+
+- vertices: iterable of `VT`  
+  Vertex IDs to remove
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vertices = g.add_vertices(5)
+g.set_inputs((vertices[0],))
+g.set_outputs((vertices[4],))
+
+# Remove middle vertices
+g.remove_vertices([vertices[1], vertices[2], vertices[3]])
+
+print(list(g.vertices()))  # [0, 4]
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.remove_vertex(vertex) -> None
+
+Removes a single vertex and its incident edges from the graph. Convenience wrapper around `remove_vertices`.
+
+### Behaviour
+
+- Delegates to `remove_vertices([vertex])`
+- Removes the vertex node and all connected edges atomically
+- Updates inputs/outputs if the removed vertex was marked as input/output
+
+### Parameters
+
+- vertex: `VT`  
+  Vertex ID to remove
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vertices = g.add_vertices(3)
+g.remove_vertex(vertices[1])
+
+print(list(g.vertices()))  # [0, 2]
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+## GraphNeo4j.remove_edge(edge) -> None
+
+Removes a single edge from the graph. Convenience wrapper around `remove_edges`.
+
+### Behaviour
+
+- Delegates to `remove_edges([edge])`
+- Removes the `[:Wire]` relationship between the two vertices
+- Does not affect vertex properties
+
+### Parameters
+
+- edge: `ET`  
+  Edge tuple `(source, target)` to remove
+
+### Returns
+
+- `None`  
+  Mutates the graph in-place
+
+### Example
+
+```python
+from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.utils import EdgeType
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphNeo4j(
+    uri=os.getenv("NEO4J_URI", ""),
+    user=os.getenv("NEO4J_USER", ""),
+    password=os.getenv("NEO4J_PASSWORD", ""),
+    graph_id=gid,
+    database=os.getenv("NEO4J_DATABASE"),
+)
+
+vertices = g.add_vertices(2)
+edge = g.add_edge((vertices[0], vertices[1]), EdgeType.SIMPLE)
+
+g.remove_edge(edge)
+
+print(g.connected(vertices[0], vertices[1]))  # False
+
+g.close()
+```
+
+See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
