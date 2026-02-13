@@ -2,8 +2,10 @@ import os
 from fractions import Fraction
 from dotenv import load_dotenv
 from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.graph.graph_s import GraphS
 from pyzx.utils import VertexType, EdgeType
 import pyzx as zx
+import random
 
 load_dotenv()
 
@@ -98,5 +100,30 @@ def large_graph():
 # #graph_step_by_step()
 # graph_full_reduce()
 
-large_graph()
-print(g.num_edges())
+def iterable_graph_creation():
+    num = 0
+    choices = [VertexType.X, VertexType.Z]
+    while True:
+        g.add_vertex(VertexType.BOUNDARY, 0, 0)
+        g.add_vertex(VertexType.BOUNDARY, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        g.add_vertex(VertexType.X, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        g.add_vertex(VertexType.X, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        g.add_vertex(VertexType.Z, 0, 0)
+        for e in [(0, 2), (2, 3), (3, 4), (4, 1)]:
+            g.add_edge(e)
+        for x in range(num):
+            g.add_vertex(random.choice(choices), 0, 0)
+            g.add_vertex(random.choice(choices), 0, 0)
+            g.add_edge((random.randint(2, g.num_vertices()-1), random.randint(2, g.num_vertices()-1)))
+        zx.full_reduce(g)
+        print(f'{num} succesful')
+        num += 1
+
+
+print(sorted([100, 101, 65, 102, 103, 30, 104, 105, 106, 107, 31, 108, 109, 110, 111, 112, 84, 113, 85, 114, 115, 116, 117, 118, 41, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 79, 148, 149, 86, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 87, 163, 164, 165, 29, 166, 76, 88, 89, 167, 168, 169, 77, 81, 61, 82, 170, 95, 171, 60, 172, 173, 96, 174, 175, 176, 69, 90, 48, 91, 97, 99, 92, 32, 62, 98, 177, 93, 83, 39, 36, 178, 74, 0, 1, 2, 94, 3, 44, 57, 55, 35, 4, 5, 45, 40, 28, 46, 42, 6, 7, 8, 9, 64, 10, 11, 37, 43, 73, 56, 12, 13, 66, 14, 15, 38, 16, 80, 17, 67, 51, 18, 50, 59, 47, 34, 68, 19, 78, 20, 21, 71, 54, 22, 49, 23, 24, 25, 72, 33, 70, 52, 26, 58, 75, 27, 63, 53]))

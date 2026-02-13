@@ -860,6 +860,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 
+        self._vindex = 0
+        self._inputs = tuple()
+        self._outputs = tuple()
+
+
     def run_cypher_rewrite(
         self,
         rule_name: str,
