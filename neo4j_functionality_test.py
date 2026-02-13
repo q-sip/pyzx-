@@ -19,8 +19,6 @@ AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 #     driver.verify_connectivity()
 #     g = zx.Graph(backend='neo4j')
 #     print("Putsataan vanhaa graafia")
-#     query =""" MATCH (N) DETACH DELETE N"""
-#     g.clear_graph(query)
     
 
 #     print("Luodaan graafi")
@@ -62,28 +60,28 @@ g = GraphNeo4j(
     graph_id="test_graph",
 )
 
-def graph_at_one_go():
-    v_ids = g.create_graph(
-        vertices_data=[
-            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-            {"ty": VertexType.Z, "qubit": 0, "row": 0},
-            {"ty": VertexType.X, "qubit": 0, "row": 0},
-            {"ty": VertexType.X, "qubit": 0, "row": 0},
-            {"ty": VertexType.X, "qubit": 0, "row": 0},
-            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-        ],
-        edges_data=[
-            ((0, 1), EdgeType.SIMPLE),
-            ((1, 2), EdgeType.HADAMARD),
-            ((2, 3), EdgeType.HADAMARD),
-            ((3, 4), EdgeType.HADAMARD),
-            ((4, 5), EdgeType.HADAMARD),
-            ((1, 5), EdgeType.SIMPLE),
-        ],
-        inputs=[0],
-        outputs=[3],
-    )
-    print(g.type(3))    
+
+v_ids = g.create_graph(
+    vertices_data=[
+        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+        {"ty": VertexType.Z, "qubit": 0, "row": 1},
+        {"ty": VertexType.X, "qubit": 0, "row": 2},
+        {"ty": VertexType.X, "qubit": 0, "row": 3},
+        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 4},
+    ],
+    edges_data=[
+        ((0, 1), EdgeType.SIMPLE),
+        ((0, 1), EdgeType.HADAMARD),
+        ((0, 1), EdgeType.SIMPLE),
+        ((1, 2), EdgeType.HADAMARD),
+        ((1, 2), EdgeType.SIMPLE),
+        ((2, 3), EdgeType.HADAMARD),
+        ((3, 4), EdgeType.SIMPLE),
+    ],
+    inputs=[0],
+    outputs=[3],
+)
+print(g.type(3))
 
 
 def graph_step_by_step():
@@ -93,7 +91,7 @@ def graph_step_by_step():
     o = g.add_vertex(0,0,3)
     g.add_edges([(i,v), (v,w), (w,o)])
 
-def large_graph()
+def large_graph():
     v_ids = g.create_graph(
         vertices_data=[
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
