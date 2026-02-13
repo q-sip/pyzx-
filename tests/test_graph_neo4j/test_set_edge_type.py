@@ -35,10 +35,36 @@ class TestSetEdgeType(Neo4jE2ETestCase):
         ]
         edges_data = [
             ((0, 1), EdgeType.SIMPLE),
-            ((1, 2), EdgeTy
+            ((1, 2), EdgeType.HADAMARD),
+            ((2, 3), EdgeType.SIMPLE),
+        ]
+
+
+        g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
+
+        g.set_edge_type((1, 2), EdgeType.SIMPLE)
+        self.assertEqual(g.edge_type((1, 2)), EdgeType.SIMPLE)
+
+    def test_edge_type_is_different_after_set_edge_type(self):
+        g = self.g
+
+        vertices_data = [
+            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+            {"ty": VertexType.Z, "qubit": 0, "row": 1},
+            {"ty": VertexType.X, "qubit": 0, "row": 2},
+            {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 3},
+        ]
+        edges_data = [
+            ((0, 1), EdgeType.SIMPLE),
+            ((1, 2), EdgeType.HADAMARD),
+            ((2, 3), EdgeType.SIMPLE),
+        ]
 
 
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
         initial = g.edge_type((1, 2))
-        g.set_edge_type((1, 2), EdgeType.S
+        g.set_edge_type((1, 2), EdgeType.SIMPLE)
+        self.assertNotEqual(g.edge_type((1, 2)), initial)
+
+        self.assertNotEqual(False)
