@@ -67,4 +67,4 @@ class TestSetEdgeType(Neo4jE2ETestCase):
         g.set_edge_type((1, 2), EdgeType.SIMPLE)
         self.assertNotEqual(g.edge_type((1, 2)), initial)
 
-        self.assertNotEqual(False)
+        self.assertEqual(0, 1)
