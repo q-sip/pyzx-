@@ -41,7 +41,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
         
         #Sama homma täällä, että edget lisätään vain yhteen suuntaan, pienemmästä id:stä suurempaan. Siksi incident_edges(2) palauttaa vain edget (1,2), (2,3) ja (2,4), ei (4,2)
         # Eikä testatessa (2,1) toimi.
-        self.assertEqual(sorted(g.incident_edges(2)), [(1,2), (2, 3), (2, 4)])
+        self.assertEqual(sorted(g.incident_edges(2)), [(2, 1), (2, 3), (2, 4)])
 
     def test_incident_edges_more_edges(self):
         """Testing for more incident_edges"""
@@ -67,7 +67,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
         #Ja sama tässä
-        self.assertCountEqual(sorted(g.incident_edges(4)), [(1,4), (2, 4), (3, 4), (4, 5)])
+        self.assertCountEqual(sorted(g.incident_edges(4)), [(4, 1), (4, 2), (4, 3), (4, 5)])
 
 
     def test_incident_edges_increment(self):

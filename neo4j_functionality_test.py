@@ -87,13 +87,16 @@ def large_graph():
         inputs=[0],
         outputs=[8],
     )
-    print(g.type(3))
+    # print(g.type(3))
 
-def graph_full_reduce():
-    """Neo4j graafin full reduce"""
-    graph = zx.generate.cliffordT(3,20, backend="neo4j")
-    zx.simplify.full_reduce(graph)
-    #graph.normalise()
+# def graph_full_reduce():
+#     """Neo4j graafin full reduce"""
+#     graph = zx.generate.cliffordT(3,20, backend="neo4j")
+#     zx.simplify.full_reduce(graph)
+#     #graph.normalise()
 
-#graph_step_by_step()
-graph_full_reduce()
+# #graph_step_by_step()
+# graph_full_reduce()
+
+large_graph()
+print(g.num_edges())
