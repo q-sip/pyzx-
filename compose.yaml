@@ -88,19 +88,37 @@ services:
     develop:
       watch:
         - action: sync+restart
-          path: ./tests/test_graph_neo4j
-          target: /usr/src/app/tests/test_graph_neo4j
+          path: ./
+          target: /usr/src/app/
           ignore:
             - "**/__pycache__/**"
             - ".pytest_cache/**"
             - ".mypy_cache"
-        - action: sync+restart
-          path: ./tests
-          target: /usr/src/app/tests
-          ignore:
-            - "**/__pycache__/**"
-            - ".pytest_cache/**"
-            - ".mypy_cache"
+
+  # This is if you want to dev inside the container, run this insanite:
+  # docker compose run --rm test-dev3
+  # After you add GIT_USER and GIT_EMAIL to the .env.pyzx
+  test-dev3:
+    build:
+      context: .
+      target: tester
+    profiles: [ "test-dev3" ]
+    networks:
+      - silta
+    env_file:
+      - path: ./.env.pyzx
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    tty: true
+    stdin_open: true
+    volumes:
+      - .:/usr/src/app
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "git config --global user.name \"$$GIT_USER\" && 
+       git config --global user.email \"$$GIT_EMAIL\" && 
+       exec /bin/bash"
 
 networks:
   silta:
