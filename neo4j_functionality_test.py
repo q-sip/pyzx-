@@ -1,12 +1,8 @@
 import os
-from time import time
+from fractions import Fraction
+from dotenv import load_dotenv
 from pyzx.graph.graph_neo4j import GraphNeo4j
 from pyzx.utils import VertexType, EdgeType
-from pyzx.symbolic import Poly
-from fractions import Fraction
-from neo4j import GraphDatabase
-from dotenv import load_dotenv
-from pyzx.simplify import full_reduce
 import pyzx as zx
 
 load_dotenv()
@@ -19,20 +15,17 @@ AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 #     driver.verify_connectivity()
 #     g = zx.Graph(backend='neo4j')
 #     print("Putsataan vanhaa graafia")
-    
 
 #     print("Luodaan graafi")
 
-#     try: 
+#     try:
 #         g = zx.generate.cliffordT(3, 20, backend='neo4j')
-
 #     except ImportError:
 #         print("Neo4j backend ei saatavilla")
 #         raise
 #     except Exception as e:
 #         print(f"Virhe graafin luonnissa {e}")
-#         raise  
-    
+#         raise
 #     print("-"*30)
 #     print(f"Alkuperäisessä graafissa: {g.num_vertices()} nodea, {g.num_edges()} kaarta")
 
@@ -44,7 +37,6 @@ AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 
 #     print("-" * 30)
 #     print(f"Lopullisessa graafissa: {g.num_vertices()} nodea, {g.num_edges()} kaarta")
-                                        
 
 
 
@@ -60,31 +52,8 @@ g = GraphNeo4j(
     graph_id="test_graph",
 )
 
-
-v_ids = g.create_graph(
-    vertices_data=[
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
-        {"ty": VertexType.Z, "qubit": 0, "row": 1},
-        {"ty": VertexType.X, "qubit": 0, "row": 2},
-        {"ty": VertexType.X, "qubit": 0, "row": 3},
-        {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 4},
-    ],
-    edges_data=[
-        ((0, 1), EdgeType.SIMPLE),
-        ((0, 1), EdgeType.HADAMARD),
-        ((0, 1), EdgeType.SIMPLE),
-        ((1, 2), EdgeType.HADAMARD),
-        ((1, 2), EdgeType.SIMPLE),
-        ((2, 3), EdgeType.HADAMARD),
-        ((3, 4), EdgeType.SIMPLE),
-    ],
-    inputs=[0],
-    outputs=[3],
-)
-print(g.type(3))
-
-
 def graph_step_by_step():
+    """Testaa graafin luomista askel askeleelta"""
     i = g.add_vertex(0,0,0)
     v = g.add_vertex(1,0,1, Fraction(1,2))
     w = g.add_vertex(2,0,2, Fraction(-1,2))
@@ -92,6 +61,7 @@ def graph_step_by_step():
     g.add_edges([(i,v), (v,w), (w,o)])
 
 def large_graph():
+    """Suurempi graafi"""
     v_ids = g.create_graph(
         vertices_data=[
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
@@ -120,13 +90,10 @@ def large_graph():
     print(g.type(3))
 
 def graph_full_reduce():
+    """Neo4j graafin full reduce"""
     graph = zx.generate.cliffordT(3,20, backend="neo4j")
     zx.simplify.full_reduce(graph)
     #graph.normalise()
 
 #graph_step_by_step()
 graph_full_reduce()
-
-
-
-    

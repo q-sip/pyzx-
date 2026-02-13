@@ -29,7 +29,7 @@ class TestPhaseE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=[])
 
-        self.assertEqual(g.phase(0), 4)
+        self.assertEqual(g.phase(0), Fraction(0,1))
 
     def test_phase_fraction(self):
         g = self.g
@@ -52,5 +52,5 @@ class TestPhaseE2E(Neo4jE2ETestCase):
             {"ty": VertexType.X, "qubit": 0, "row": 2},
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=[])
-
-        self.assertEqual(g.phase(0), Poly([(2, Term([('x', 2)])), (3, Term([('y', 2)])), (1, Term([]))]))
+ 
+        self.assertEqual(g.phase(0), Poly([(1, Term([('y', 2)])), (1, Term([]))]))
