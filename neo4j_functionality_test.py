@@ -102,6 +102,7 @@ def large_graph():
 # graph_full_reduce()
 
 
+# asd
 def iterable_graph_creation():
     num = 0
     choices = [VertexType.X, VertexType.Z]

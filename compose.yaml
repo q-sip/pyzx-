@@ -114,11 +114,19 @@ services:
     stdin_open: true
     volumes:
       - .:/usr/src/app
+      # - ~/.gitconfig:/root/.gitconfig:ro
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
-      "git config --global user.name \"$$GIT_USER\" && 
+      "pre-commit install &&
+      git config --global user.name \"$$GIT_USER\" && 
        git config --global user.email \"$$GIT_EMAIL\" && 
        exec /bin/bash"
+    # command: >
+    #   bash -c "git config --global --add safe.directory /usr/src/app && 
+    #            pre-commit install &&
+    #            git config --global user.name \"$$GIT_USER\" && 
+    #            git config --global user.email \"$$GIT_EMAIL\" && 
+    #            exec /bin/bash"
 
 networks:
   silta:

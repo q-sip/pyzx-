@@ -40,7 +40,9 @@ def main() -> int:
     print("\n" * 10)
     print("-" * 10)
     print("Starting pylint:")
-    rc, out = run_and_capture([sys.executable, "-m", "pylint", PYLINT_FILE])
+    rc, out = run_and_capture(
+        [sys.executable, "-m", "pylint", "-j", "0", PYLINT_FILE]
+    )
     score = extract_pylint_score(out)
     if score is None:
         print("FAILED: Could not determine pylint score.")
