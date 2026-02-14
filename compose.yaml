@@ -116,7 +116,8 @@ services:
       - .:/usr/src/app
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
-      "git config --global user.name \"$$GIT_USER\" && 
+      "pre-commit install &&
+      git config --global user.name \"$$GIT_USER\" && 
        git config --global user.email \"$$GIT_EMAIL\" && 
        exec /bin/bash"
 
