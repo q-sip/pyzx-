@@ -1,8 +1,8 @@
 from pyzx.utils import VertexType, EdgeType
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestIncidentEdgesE2E(Neo4jE2ETestCase):
+class TestIncidentEdgesE2E(Neo4jUnitTestCase):
     def test_incident_edges_empty(self):
         g = self.g
 
@@ -17,7 +17,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
     def test_incident_edges_after_creation(self):
         """Test that incident_edges increments after creating edges"""
         g = self.g
-        
+
         vertices_data=[
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
         {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -38,7 +38,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
-        
+
         #Sama homma täällä, että edget lisätään vain yhteen suuntaan, pienemmästä id:stä suurempaan. Siksi incident_edges(2) palauttaa vain edget (1,2), (2,3) ja (2,4), ei (4,2)
         # Eikä testatessa (2,1) toimi.
         self.assertEqual(sorted(g.incident_edges(2)), [(2, 1), (2, 3), (2, 4)])
@@ -46,7 +46,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
     def test_incident_edges_more_edges(self):
         """Testing for more incident_edges"""
         g = self.g
-        
+
         vertices_data=[
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
         {"ty": VertexType.Z, "qubit": 0, "row": 1},

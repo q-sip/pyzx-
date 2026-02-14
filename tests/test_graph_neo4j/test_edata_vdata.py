@@ -1,8 +1,8 @@
 import unittest
 from pyzx.utils import VertexType, EdgeType
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
-class TestVdataEdataE2E(Neo4jE2ETestCase):
+class TestVdataEdataE2E(Neo4jUnitTestCase):
 
     def _setup_standard_graph(self):
         #Luodaan perus graafi testejä varten
@@ -20,10 +20,10 @@ class TestVdataEdataE2E(Neo4jE2ETestCase):
         #Testataan arvojen asettaminen, hakeminen ja avainten listaaminen metodeilla
         self._setup_standard_graph()
         g = self.g
-        
+
         g.set_vdata(0, "jordan", 123)
         self.assertEqual(g.vdata(0, "jordan"), 123)
-        
+
         keys = g.vdata_keys(0)
         self.assertIn("jordan", keys)
 
@@ -31,10 +31,10 @@ class TestVdataEdataE2E(Neo4jE2ETestCase):
         #Testataan, että noden datan poistaminen ei tuhoa nodea kokonaan
         self._setup_standard_graph()
         g = self.g
-        
+
         g.set_vdata(0, "michael", 456)
         g.clear_vdata(0)
-        
+
         val = g.vdata(0, "michael", default=None)
         self.assertIsNone(val)
 
@@ -44,10 +44,10 @@ class TestVdataEdataE2E(Neo4jE2ETestCase):
         #Testataan kaaren arvojen asettaminen, hakeminen ja avainten listaaminen metodeilla
         self._setup_standard_graph()
         g = self.g
-        
+
         g.set_edata((0,1), "weight", 3.14)
         self.assertEqual(g.edata((0,1), "weight"), 3.14)
-        
+
         keys = g.edata_keys((0,1))
 
         self.assertTrue(any("weight" in k for k in keys))
@@ -56,10 +56,10 @@ class TestVdataEdataE2E(Neo4jE2ETestCase):
         #Testataan, että kaaren datan poistaminen ei tuhoa kaarta kokonaan
         self._setup_standard_graph()
         g = self.g
-        
+
         g.set_edata((0,1), "temp", "keep_me")
         g.clear_edata((0,1))
-        
+
         val = g.edata((0,1), "temp", default="empty")
         self.assertEqual(val, "empty")
 
@@ -69,6 +69,6 @@ class TestVdataEdataE2E(Neo4jE2ETestCase):
         #Testataan, että vdata metodi palauttaa oletusarvon, jos avainta ei ole olemassa
         self._setup_standard_graph()
         g = self.g
-        
+
         val = g.vdata(0, "non_existent", default="default")
         self.assertEqual(val, "default")

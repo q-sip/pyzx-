@@ -1,10 +1,10 @@
 # tests/test_graph_neo4j/test_set_edge_type.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestSetEdgeType(Neo4jE2ETestCase):
+class TestSetEdgeType(Neo4jUnitTestCase):
     def test_set_edge_type_HADAMARD(self):
         g = self.g
 

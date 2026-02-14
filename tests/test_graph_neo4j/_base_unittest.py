@@ -19,39 +19,7 @@ def _ensure_phase_to_str_exists() -> None:
 
         setattr(GraphNeo4j, "_phase_to_str", _phase_to_str)
 
-
 class Neo4jUnitTestCase(unittest.TestCase):
-    """
-    Base class for unit tests: creates a GraphNeo4j instance that should never
-    actually connect. Tests must patch g._get_session per-test.
-    """
-
-    def setUp(self):
-        _ensure_phase_to_str_exists()
-        self.graph_id = f"test_graph_{uuid.uuid4().hex}"
-        self.g = GraphNeo4j(
-            uri=os.getenv("NEO4J_URI", ""),
-            user=os.getenv("NEO4J_USER", ""),
-            password=os.getenv("NEO4J_PASSWORD", ""),
-            graph_id=self.graph_id,
-            database=os.getenv("NEO4J_DATABASE"),
-        )
-
-        with self.g._get_session() as session:
-            session.run("MATCH (n) SET n:$('ccc')")
-
-    def tearDown(self):
-        try:
-            with self.g._get_session() as session:
-                session.run("MATCH (n) WHERE NOT n:ccc DETACH DELETE n")
-                session.run("MATCH (n:ccc) REMOVE n:ccc")
-            self.g.close()
-        except Exception:
-            pass
-
-
-# pylint: disable=W0212
-class Neo4jE2ETestCase(unittest.TestCase):
     """
     Base class for end-to-end tests: requires reachable Neo4j.
     Creates a unique graph_id per test and cleans up nodes for that graph_id.

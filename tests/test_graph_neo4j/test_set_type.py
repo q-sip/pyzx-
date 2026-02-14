@@ -1,10 +1,10 @@
 # tests/test_graph_neo4j/test_set_type.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestSetType(Neo4jE2ETestCase):
+class TestSetType(Neo4jUnitTestCase):
     def test_set_type_BOUNDARY(self):
         g = self.g
 
@@ -66,4 +66,3 @@ class TestSetType(Neo4jE2ETestCase):
         initial = g.type(3)
         g.set_type(3, VertexType.X)
         self.assertNotEqual(g.type(3), initial)
-

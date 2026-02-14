@@ -1,10 +1,11 @@
 # tests/test_graph_neo4j/test_add_edge.py
 from pyzx.utils import EdgeType, VertexType
+import time
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestAddEdge(Neo4jE2ETestCase):
+class TestAddEdge(Neo4jUnitTestCase):
     def test_add_edge_returns_ET(self):
         """
         Test that add_edge returns the vertex pair

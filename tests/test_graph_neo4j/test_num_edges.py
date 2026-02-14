@@ -1,7 +1,7 @@
 # tests/test_graph_neo4j/test_num_edges_increment.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class _FakeSessionEdgesCount:
@@ -35,7 +35,7 @@ class TestNumEdgesUnit(Neo4jUnitTestCase):
         self.assertEqual(g.num_edges(), 0)
 
 
-class TestNumEdgesE2E(Neo4jE2ETestCase):
+class TestNumEdgesE2E(Neo4jUnitTestCase):
     def test_num_edges_increases_after_creation(self):
         g = self.g
 

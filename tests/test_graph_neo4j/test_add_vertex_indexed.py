@@ -147,10 +147,6 @@ class TestGraphNeo4jAddVertexIndexed(unittest.TestCase):
         finally:
             g.close()
 
-    @unittest.skipUnless(
-        _neo4j_env_present(),
-        "Neo4j env vars missing (NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD).",
-    )
     def test_add_vertex_indexed_e2e_creates_node_and_enforces_uniqueness(self) -> None:
         g = GraphNeo4j(
             uri=os.getenv("NEO4J_URI", ""),

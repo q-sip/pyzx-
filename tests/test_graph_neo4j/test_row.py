@@ -1,8 +1,8 @@
 import unittest
 from pyzx.utils import VertexType
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
-class TestRow(Neo4jE2ETestCase):
+class TestRow(Neo4jUnitTestCase):
     def test_row_returns_correct_value(self):
         """
         Ensures that row correctly gets an already existing value.
@@ -10,7 +10,7 @@ class TestRow(Neo4jE2ETestCase):
         g = self.g
         # Initialize with a known row value
         g.create_graph([{"ty": VertexType.Z, "row": 4.5}], [])
-        
+
         val = g.row(0)
         self.assertEqual(val, 4.5)
 
@@ -20,7 +20,7 @@ class TestRow(Neo4jE2ETestCase):
         """
         g = self.g
         g.create_graph([{"ty": VertexType.X}], [])
-        
+
         # Force remove the property to be certain
         with g._get_session() as session:
             session.run("MATCH (n {graph_id: $gid, id: 0}) REMOVE n.row", gid=g.graph_id)

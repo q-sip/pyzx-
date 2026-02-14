@@ -1,7 +1,7 @@
 # tests/test_graph_neo4j/test_remove_vertices.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class _FakeTx:
@@ -58,7 +58,7 @@ class TestRemoveVerticesUnit(Neo4jUnitTestCase):
         self.assertEqual(len(fake_session.tx.calls), 0)
 
 
-class TestRemoveVerticesE2E(Neo4jE2ETestCase):
+class TestRemoveVerticesE2E(Neo4jUnitTestCase):
     def test_remove_vertices_e2e_deletes_nodes_and_edges(self):
         g = self.g
 

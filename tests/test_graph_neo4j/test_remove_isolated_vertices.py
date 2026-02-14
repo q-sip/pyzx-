@@ -3,9 +3,9 @@ from fractions import Fraction
 
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
-class TestRemoveIsolatedVertices(Neo4jE2ETestCase):
+class TestRemoveIsolatedVertices(Neo4jUnitTestCase):
     def _count_nodes(self) -> int:
         g = self.g
         query = """

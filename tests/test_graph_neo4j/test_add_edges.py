@@ -3,10 +3,10 @@ import unittest
 
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestAddEdges(Neo4jE2ETestCase):
+class TestAddEdges(Neo4jUnitTestCase):
     def test_add_edges_simple_enforces_edge_ids(self):
         """
         Ensures that edges created by add_edges have an id property (r.id) set.
@@ -79,9 +79,9 @@ class TestAddEdges(Neo4jE2ETestCase):
 
         self.assertIsNotNone(res)
         res_dict = dict(res)
-        
+
         self.assertEqual(res_dict["t"], EdgeType.HADAMARD.value)
-        
+
         # Enforce that edge id exists
         self.assertIn("id", res_dict)
         self.assertIsNotNone(res_dict["id"], msg="Edge 1->2 missing r.id")

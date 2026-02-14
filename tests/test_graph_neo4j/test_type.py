@@ -1,13 +1,13 @@
 # tests/test_graph_neo4j/test_type.py
 from pyzx.utils import VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 
 
 
-class TestTypeE2E(Neo4jE2ETestCase):
+class TestTypeE2E(Neo4jUnitTestCase):
     def test_type_empty(self):
         g = self.g
 

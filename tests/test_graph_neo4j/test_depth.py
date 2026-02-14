@@ -1,7 +1,7 @@
 # tests/test_graph_neo4j/test_depth.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class _FakeRecord(dict):
@@ -41,7 +41,7 @@ class TestDepthUnit(Neo4jUnitTestCase):
         self.assertEqual(g._maxr, 7)
 
 
-class TestDepthE2E(Neo4jE2ETestCase):
+class TestDepthE2E(Neo4jUnitTestCase):
     def test_depth_e2e_from_created_rows(self):
         g = self.g
 

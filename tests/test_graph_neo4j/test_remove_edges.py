@@ -1,10 +1,10 @@
 # tests/test_graph_neo4j/test_remove_edges.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestRemoveEdges(Neo4jE2ETestCase):
+class TestRemoveEdges(Neo4jUnitTestCase):
     def _count_edges(self) -> int:
         g = self.g
         query = """

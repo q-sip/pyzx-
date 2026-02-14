@@ -92,10 +92,6 @@ class TestGraphNeo4jAddVertices(unittest.TestCase):
         finally:
             g.close()
 
-    @unittest.skipUnless(
-        _neo4j_env_present(),
-        "Neo4j env vars missing (NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD).",
-    )
     def test_add_vertices_e2e_creates_nodes_with_defaults(self):
         g = GraphNeo4j(
             uri=os.getenv("NEO4J_URI", ""),

@@ -1,8 +1,8 @@
 from pyzx.utils import VertexType, EdgeType
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestEdgesE2E(Neo4jE2ETestCase):
+class TestEdgesE2E(Neo4jUnitTestCase):
     def test_edges_empty(self):
         g = self.g
 
@@ -17,7 +17,7 @@ class TestEdgesE2E(Neo4jE2ETestCase):
     def test_edges_after_creation(self):
         """Test that edges increments after creating edges"""
         g = self.g
-        
+
         vertices_data = [
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
             {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -30,14 +30,14 @@ class TestEdgesE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
-        
+
         edges = sorted(g.edges())
         self.assertCountEqual(edges, [(0, 1), (1, 2), (0, 2)])
 
     def test_edges_singular(self):
         """Test that edges returns correct edges between 2 vertices"""
         g = self.g
-        
+
         vertices_data = [
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
             {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -52,7 +52,7 @@ class TestEdgesE2E(Neo4jE2ETestCase):
             ((3, 0), EdgeType.HADAMARD)
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-        
+
         #Metodeita muutettu siten, että edget lisätään graafiin aina yhteen suuntaan, pienemmästä id:stä --> suurempaan. Kun koittaa nyt lisätä
         #graafiin edgeä 3,0, se lisää vain edgen 0,3.
         edges = sorted(g.edges(0, 3))

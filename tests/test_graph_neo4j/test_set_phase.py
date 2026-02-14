@@ -1,11 +1,11 @@
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 from fractions import Fraction
 from pyzx.symbolic import Poly, Term
 
 
-class TestSetPhase(Neo4jE2ETestCase):
+class TestSetPhase(Neo4jUnitTestCase):
     def test_set_phase_int(self):
         g = self.g
 
