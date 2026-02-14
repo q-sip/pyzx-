@@ -7,6 +7,7 @@ Docstring for pyzx.graph.graph_neo4j
 """
 
 import os
+import uuid
 from fractions import Fraction
 from typing import (
     Any,
@@ -24,6 +25,7 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
 from pyzx.symbolic import new_var, parse
+from .neo4j_rewrite_runner import run_rewrite
 
 from ..utils import (
     EdgeType,
@@ -67,7 +69,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
         # Clear any existing data for this ID to be safe (id reuse)
         if graph_id is None:
-             self.remove_all_data()
+            self.remove_all_data()
 
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
@@ -260,7 +262,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 edge_data.append(et)
 
         if not edges:
-             return
+            return
         n = self.num_edges()
         ids = [i + n for i in range(len(edges))]
         #Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan. Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
@@ -907,7 +909,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     ) -> Tuple[Optional[Mapping[str, Any]], Optional[float]]:
         """Run a named Cypher rewrite from neo4j_queries with this graph's session and graph_id.
         See neo4j_rewrite_runner for rule names and variant selection (env/config)."""
-        from .neo4j_rewrite_runner import run_rewrite
         return run_rewrite(
             self._get_session,
             self.graph_id,
@@ -1288,10 +1289,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Tällä metodilla saa luotua kopion neo4j graafista.
         Käytetään BaseGraph copy metodia.
         """
-        #Jos halutaan graafista kopio mahdollisesti johonkin toisen backendiin, voi käyttää perus copy metodia
+        # Jos halutaan graafista kopio mahdollisesti johonkin toisen backendiin 
+        # voi käyttää perus copy metodia
         if adjoint or (backend is not None and backend != "neo4j"):
             return super().copy(adjoint=adjoint, backend=backend)
-        
+
         #Kutsutaan kloonaus metodia.
         return self.clone()
 
@@ -1302,7 +1304,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         relationships belonging to this instance's ``graph_id`` into a fresh
         ``graph_id`` namespace, preserving the ``id`` fields and all properties.
         """
-        import uuid
+        
 
         # Fresh namespace so the copy won't clash with existing data.
         new_graph_id = f"{self.graph_id}_clone_{uuid.uuid4().hex}"
