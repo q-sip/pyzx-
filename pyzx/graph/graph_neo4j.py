@@ -102,11 +102,6 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             self._driver.close()
             self._driver = None
 
-    def clear_graph(self):
-        query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
-        with self._get_session() as session:
-            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
-
     def create_graph(
         self,
         vertices_data: List[dict],
