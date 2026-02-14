@@ -55,8 +55,11 @@ class TestEdgesE2E(Neo4jUnitTestCase):
 
         #Metodeita muutettu siten, että edget lisätään graafiin aina yhteen suuntaan, pienemmästä id:stä --> suurempaan. Kun koittaa nyt lisätä
         #graafiin edgeä 3,0, se lisää vain edgen 0,3.
-        edges = sorted(g.edges(0, 3))
-        self.assertEqual(edges, [(0, 3), (3, 0)])
+        res = set(g.edges(0, 3))
+        exp = set()
+        t = tuple([0, 3])
+        exp.add(t)
+        self.assertEqual(res, exp)
 
 
     def test_edges_increment(self):
