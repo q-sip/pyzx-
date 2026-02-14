@@ -145,7 +145,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             #Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan. Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
             #Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee: src --> tgt ja vielä uusi edge, joka tgt --> src.
             all_edges = [
-                {"s": min(vertices[x[0][0]], vertices[x[0][1]]), 
+                {"s": min(vertices[x[0][0]], vertices[x[0][1]]),
                  "t": max(vertices[x[0][0]], vertices[x[0][1]]), 
                  "et": x[1].value}
                 for x in edges_data
@@ -372,7 +372,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     raise TypeError(
                         "Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex."
                     )
-                elif ty == VertexType.H_BOX:
+                if ty == VertexType.H_BOX:
                     self.scalar.add_phase(self.phase(v))
                 else:
                     self.scalar.add_node(self.phase(v))
@@ -456,7 +456,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 )
             count = result["count"] if result else 0
             return count
-        elif s is not None:
+        if s is not None:
             # Count edges incident to a specific vertex
             return self.vertex_degree(s)
         else:
@@ -974,8 +974,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     return e
         if et is not None:
             raise ValueError(f"No edge of type {et} between {s} and {t}")
-        else:
-            raise ValueError(f"No edge between {s} and {t}")
+
+        raise ValueError(f"No edge between {s} and {t}")
 
     def connected(self, v1: VT, v2: VT) -> bool:
         """Returns whether vertices v1 and v2 share an edge."""
@@ -1289,7 +1289,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Tällä metodilla saa luotua kopion neo4j graafista.
         Käytetään BaseGraph copy metodia.
         """
-        # Jos halutaan graafista kopio mahdollisesti johonkin toisen backendiin 
+        # Jos halutaan graafista kopio mahdollisesti johonkin toisen backendiin
         # voi käyttää perus copy metodia
         if adjoint or (backend is not None and backend != "neo4j"):
             return super().copy(adjoint=adjoint, backend=backend)
@@ -1304,7 +1304,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         relationships belonging to this instance's ``graph_id`` into a fresh
         ``graph_id`` namespace, preserving the ``id`` fields and all properties.
         """
-        
+
 
         # Fresh namespace so the copy won't clash with existing data.
         new_graph_id = f"{self.graph_id}_clone_{uuid.uuid4().hex}"
