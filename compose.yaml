@@ -28,7 +28,7 @@ services:
       - silta
     env_file:
       - path: ./.env.pyzx
-    command: python ./neo4j_functionality_test.py
+    command: python ./manual_neo4j/neo4j_functionality_test.py
 
   # You can run this with this:
   # docker compose up --watch pyzx-dev
@@ -42,20 +42,11 @@ services:
       - FORCE_COLOR=1
     command:
       - |
-        python ./neo4j_functionality_test.py;
+        python ./manual_neo4j/neo4j_functionality_test.py;
         echo "PyZX finished. Sleeping...";
         sleep infinity
     develop:
       watch:
-        # - action: sync+restart
-        #   path: ./neo4j_functionality_test.py
-        #   target: /usr/src/app/neo4j_functionality_test.py
-        # - action: sync+restart
-        #   path: ./pyzx/graph/graph_neo4j.py
-        #   target: /usr/src/app/pyzx/graph/graph_neo4j.py
-        # - action: sync+restart
-        #   path: ./pyzx
-        #   target: /usr/src/app/pyzx
         - action: sync+restart
           path: ./
           target: /usr/src/app/
