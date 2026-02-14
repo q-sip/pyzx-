@@ -24,6 +24,11 @@ jobs:
         with:
           fetch-depth: 0  # OR "2" -> To retrieve the preceding commit.
 
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -e 
+      
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
