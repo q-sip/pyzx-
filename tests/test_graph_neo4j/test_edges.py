@@ -1,9 +1,12 @@
+"""unit tests for edges()"""
 from pyzx.utils import VertexType, EdgeType
 from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class TestEdgesE2E(Neo4jUnitTestCase):
+    """unit tests for for edges"""
     def test_edges_empty(self):
+        """test for empty edges"""
         g = self.g
 
         vertices_data = [
@@ -53,7 +56,9 @@ class TestEdgesE2E(Neo4jUnitTestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
-        #Metodeita muutettu siten, että edget lisätään graafiin aina yhteen suuntaan, pienemmästä id:stä --> suurempaan. Kun koittaa nyt lisätä
+        #Metodeita muutettu siten, että edget lisätään graafiin
+        # aina yhteen suuntaan, pienemmästä id:stä --> suurempaan.
+        # Kun koittaa nyt lisätä
         #graafiin edgeä 3,0, se lisää vain edgen 0,3.
         res = set(g.edges(0, 3))
         exp = set()
@@ -67,5 +72,7 @@ class TestEdgesE2E(Neo4jUnitTestCase):
         g = self.g
 
         initial = len(g.edges())
-        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1}, {"ty": VertexType.Z, "qubit": 0, "row": 1}], edges_data=[((0, 1), EdgeType.HADAMARD)])
+        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1},
+            {"ty": VertexType.Z, "qubit": 0, "row": 1}],
+        edges_data=[((0, 1), EdgeType.HADAMARD)])
         self.assertEqual(len(g.edges()), initial + 1)

@@ -1,9 +1,12 @@
+"""incident edges tests"""
 from pyzx.utils import VertexType, EdgeType
 from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class TestIncidentEdgesE2E(Neo4jUnitTestCase):
+    """test incident edges"""
     def test_incident_edges_empty(self):
+        """test empty incident edges"""
         g = self.g
 
         vertices_data=[
@@ -39,7 +42,9 @@ class TestIncidentEdgesE2E(Neo4jUnitTestCase):
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
 
-        #Sama homma täällä, että edget lisätään vain yhteen suuntaan, pienemmästä id:stä suurempaan. Siksi incident_edges(2) palauttaa vain edget (1,2), (2,3) ja (2,4), ei (4,2)
+        #Sama homma täällä, että edget lisätään vain yhteen suuntaan,
+        #  pienemmästä id:stä suurempaan. Siksi incident_edges(2) palauttaa
+        #  vain edget (1,2), (2,3) ja (2,4), ei (4,2)
         # Eikä testatessa (2,1) toimi.
         self.assertEqual(sorted(g.incident_edges(2)), [(1, 2), (2, 3), (2, 4)])
 
@@ -75,5 +80,7 @@ class TestIncidentEdgesE2E(Neo4jUnitTestCase):
         g = self.g
 
         initial = len(g.incident_edges(0))
-        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1}, {"ty": VertexType.Z, "qubit": 0, "row": 1}], edges_data=[((0, 1), EdgeType.HADAMARD)])
+        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1},
+            {"ty": VertexType.Z, "qubit": 0, "row": 1}],
+        edges_data=[((0, 1), EdgeType.HADAMARD)])
         self.assertEqual(len(g.incident_edges(0)), initial + 1)
