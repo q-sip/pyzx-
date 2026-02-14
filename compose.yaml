@@ -21,6 +21,9 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
     networks:
       - silta
     env_file:
@@ -33,10 +36,10 @@ services:
   pyzx-dev:
     extends: pyzx
     profiles: [ "pyzx-dev" ]
-    # entrypoint: []
-    # command: >
-    #   python ./neo4j_functionality_test.py; sleep infinity"
     entrypoint: [ "/bin/sh", "-c" ]
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
     command:
       - |
         python ./neo4j_functionality_test.py;
@@ -44,15 +47,22 @@ services:
         sleep infinity
     develop:
       watch:
+        # - action: sync+restart
+        #   path: ./neo4j_functionality_test.py
+        #   target: /usr/src/app/neo4j_functionality_test.py
+        # - action: sync+restart
+        #   path: ./pyzx/graph/graph_neo4j.py
+        #   target: /usr/src/app/pyzx/graph/graph_neo4j.py
+        # - action: sync+restart
+        #   path: ./pyzx
+        #   target: /usr/src/app/pyzx
         - action: sync+restart
-          path: ./neo4j_functionality_test.py
-          target: /usr/src/app/neo4j_functionality_test.py
-        - action: sync+restart
-          path: ./pyzx/graph/graph_neo4j.py
-          target: /usr/src/app/pyzx/graph/graph_neo4j.py
-        - action: sync+restart
-          path: ./pyzx
-          target: /usr/src/app/pyzx
+          path: ./
+          target: /usr/src/app/
+          ignore:
+            - "**/__pycache__/**"
+            - ".pytest_cache/**"
+            - ".mypy_cache"
 
   test:
     build:
@@ -101,8 +111,11 @@ services:
   test-dev3:
     build:
       context: .
-      target: tester
+      target: test-base
     profiles: [ "test-dev3" ]
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
     networks:
       - silta
     env_file:
@@ -116,8 +129,7 @@ services:
       - .:/usr/src/app
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
-      "pre-commit install &&
-      git config --global user.name \"$$GIT_USER\" && 
+      "pre-commit install && git config --global user.name \"$$GIT_USER\" && 
        git config --global user.email \"$$GIT_EMAIL\" && 
        exec /bin/bash"
 

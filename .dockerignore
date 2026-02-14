@@ -4,10 +4,14 @@
 Dockerfile*
 .dockerignore
 *.env*
-.git
+# .git
 *.tmp
 *~
 /demos
 /doc
 /images
 /circuits
+/misc
+/scratchpads
+/internal
+/pynguin
