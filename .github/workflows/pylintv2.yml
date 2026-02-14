@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - lint-testing
+      - dev
+
+jobs:
+  # -------------------------------------------------------------
+  # Using GitHub's API is not supported for push events
+  # -------------------------------------------------------------
+  # 
+  # ----------------------------------------------------------------------------------------------
+  # Using local .git history
+  # ----------------------------------------------------------------------------------------------
+  # Event `push`: Compare the preceding remote commit -> to the current commit of the main branch 
+  # ----------------------------------------------------------------------------------------------
+  changed_files:
+    runs-on: ubuntu-latest  # windows-latest || macos-latest
+    name: Lint files in git hub
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # OR "2" -> To retrieve the preceding commit.
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
+        with:
+          files: |
+            **/*.py
+
+      - name: List all changed files
+        if: always()
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
+
+      - name: Install Pylint
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: pip install pylint
+
+      - name: Lint changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          # Now only runs on .py files
+          pylint ${{ steps.changed-files.outputs.all_changed_files }}
+
