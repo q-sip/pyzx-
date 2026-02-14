@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - lint-testing
+      - dev
 
 jobs:
   # -------------------------------------------------------------
@@ -26,9 +27,12 @@ jobs:
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
-      # NOTE: `since_last_remote_commit: true` is implied by default and falls back to the previous local commit.
+        with:
+          files: |
+            **/*.py
 
       - name: List all changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
         env:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
@@ -43,5 +47,6 @@ jobs:
       - name: Lint changed files
         if: steps.changed-files.outputs.any_changed == 'true'
         run: |
-          # Only runs on the files added or modified in this push
+          # Now only runs on .py files
           pylint ${{ steps.changed-files.outputs.all_changed_files }}
+
