@@ -142,8 +142,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu edgejen ID:ksi.
         edge_ids = [self.num_edges() + x for x in range(len(edges_data))]
         if edges_data:
-            #Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan. Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
-            #Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee: src --> tgt ja vielä uusi edge, joka tgt --> src.
+            # Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan.
+            # Tälleen voidaan pitää edgejen id:t järjestyksessä
+            # ja relationshippien suunta pysyy aina samana
+            # Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee:
+            # src --> tgt ja vielä uusi edge, joka tgt --> src.
             all_edges = [
                 {"s": min(vertices[x[0][0]], vertices[x[0][1]]),
                  "t": max(vertices[x[0][0]], vertices[x[0][1]]), 
@@ -265,8 +268,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             return
         n = self.num_edges()
         ids = [i + n for i in range(len(edges))]
-        #Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan. Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
-        #Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee: src --> tgt ja vielä uusi edge, joka tgt --> src.
+        # Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan.
+        # Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
+        # Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee:
+        # src --> tgt ja vielä uusi edge, joka tgt --> src.
         edges_payload = [
             {"s": min(s, t), "t": max(s, t), "et": et.value, "id": eid}
             for (s, t), et, eid in zip(edges, edge_data, ids)
