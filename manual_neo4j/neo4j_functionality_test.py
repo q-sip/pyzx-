@@ -1,11 +1,12 @@
+"""Manual Neo4j graph exercises for local testing."""
+
 import os
 import random
 from fractions import Fraction
 
-import pyzx as zx
 from dotenv import load_dotenv
+import pyzx as zx
 from pyzx.graph.graph_neo4j import GraphNeo4j
-from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType, VertexType
 
 load_dotenv()
@@ -64,7 +65,7 @@ def graph_step_by_step():
 
 def large_graph():
     """Suurempi graafi"""
-    v_ids = g.create_graph(
+    _ = g.create_graph(
         vertices_data=[
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
             {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -103,6 +104,7 @@ def large_graph():
 
 
 def iterable_graph_creation():
+    """Create and repeatedly reduce graphs of increasing size."""
     num = 0
     choices = [VertexType.X, VertexType.Z]
     while True:
@@ -119,7 +121,7 @@ def iterable_graph_creation():
         g.add_vertex(VertexType.Z, 0, 0)
         for e in [(0, 2), (2, 3), (3, 4), (4, 1)]:
             g.add_edge(e)
-        for x in range(num):
+        for _ in range(num):
             g.add_vertex(random.choice(choices), 0, 0)
             g.add_vertex(random.choice(choices), 0, 0)
             g.add_edge(
@@ -128,7 +130,8 @@ def iterable_graph_creation():
                     random.randint(2, g.num_vertices() - 1),
                 )
             )
-        #tää ei sit toimi varmaa, koska full reduce poistaa joitain nodeja. Ainaki mulla crashas, koska vertex 2 ei ollu tyyppiä
+        # tää ei sit toimi varmaa, koska full reduce poistaa joitain nodeja.
+        # Ainaki mulla crashas, koska vertex 2 ei ollu tyyppia.
         zx.full_reduce(g)
         print(f"{num} succesful")
         num += 1
