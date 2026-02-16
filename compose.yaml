@@ -28,7 +28,7 @@ services:
       - silta
     env_file:
       - path: ./.env.pyzx
-    command: python ./manual_neo4j/neo4j_functionality_test.py
+    command: python -m manual_neo4j.main_switch
 
   # You can run this with this:
   # docker compose up --watch pyzx-dev
@@ -42,7 +42,7 @@ services:
       - FORCE_COLOR=1
     command:
       - |
-        python ./manual_neo4j/neo4j_functionality_test.py;
+        python ./manual_neo4j/main_switch.py;
         echo "PyZX finished. Sleeping...";
         sleep infinity
     develop:
