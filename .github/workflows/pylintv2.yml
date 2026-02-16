@@ -53,5 +53,5 @@ jobs:
         if: steps.changed-files.outputs.any_changed == 'true'
         run: |
           # Now only runs on .py files
-          pylint ${{ steps.changed-files.outputs.all_changed_files }}
+          pylint -sn ${{ steps.changed-files.outputs.all_changed_files }}
 

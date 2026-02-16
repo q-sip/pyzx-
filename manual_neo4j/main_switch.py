@@ -4,8 +4,10 @@
 # pylint: disable=W0611
 if __name__ == "__main__":
     print("Hello there!")
-    # import full_test
+
+    # Here the imports and usages:
     from . import neo4j_functionality_test
+
     # from . import full_test
-    
+
     print("\n All things done :)")
