@@ -21,11 +21,14 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
     networks:
       - silta
     env_file:
       - path: ./.env.pyzx
-    command: python ./neo4j_functionality_test.py
+    command: python -m manual_neo4j.main_switch
 
   # You can run this with this:
   # docker compose up --watch pyzx-dev
@@ -33,26 +36,24 @@ services:
   pyzx-dev:
     extends: pyzx
     profiles: [ "pyzx-dev" ]
-    # entrypoint: []
-    # command: >
-    #   python ./neo4j_functionality_test.py; sleep infinity"
     entrypoint: [ "/bin/sh", "-c" ]
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
     command:
       - |
-        python ./neo4j_functionality_test.py;
+        python ./manual_neo4j/main_switch.py;
         echo "PyZX finished. Sleeping...";
         sleep infinity
     develop:
       watch:
         - action: sync+restart
-          path: ./neo4j_functionality_test.py
-          target: /usr/src/app/neo4j_functionality_test.py
-        - action: sync+restart
-          path: ./pyzx/graph/graph_neo4j.py
-          target: /usr/src/app/pyzx/graph/graph_neo4j.py
-        - action: sync+restart
-          path: ./pyzx
-          target: /usr/src/app/pyzx
+          path: ./
+          target: /usr/src/app/
+          ignore:
+            - "**/__pycache__/**"
+            - ".pytest_cache/**"
+            - ".mypy_cache"
 
   test:
     build:
@@ -88,19 +89,40 @@ services:
     develop:
       watch:
         - action: sync+restart
-          path: ./tests/test_graph_neo4j
-          target: /usr/src/app/tests/test_graph_neo4j
+          path: ./
+          target: /usr/src/app/
           ignore:
             - "**/__pycache__/**"
             - ".pytest_cache/**"
             - ".mypy_cache"
-        - action: sync+restart
-          path: ./tests
-          target: /usr/src/app/tests
-          ignore:
-            - "**/__pycache__/**"
-            - ".pytest_cache/**"
-            - ".mypy_cache"
+
+  # This is if you want to dev inside the container, run this insanite:
+  # docker compose run --rm test-dev3
+  # After you add GIT_USER and GIT_EMAIL to the .env.pyzx
+  test-dev3:
+    build:
+      context: .
+      target: test-base
+    profiles: [ "test-dev3" ]
+    environment:
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
+    networks:
+      - silta
+    env_file:
+      - path: ./.env.pyzx
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    tty: true
+    stdin_open: true
+    volumes:
+      - .:/usr/src/app
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "pre-commit install && git config --global user.name \"$$GIT_USER\" && 
+       git config --global user.email \"$$GIT_EMAIL\" && 
+       exec /bin/bash"
 
 networks:
   silta:

@@ -35,25 +35,44 @@ def extract_pylint_score(output: str) -> float | None:
 
 
 def main() -> int:
+    running_score = 0
     # 1) Pylint (score gate)
+    print("\n" * 10)
+    print("-" * 10)
+    print("Starting pylint:")
     rc, out = run_and_capture([sys.executable, "-m", "pylint", PYLINT_FILE])
     score = extract_pylint_score(out)
     if score is None:
         print("FAILED: Could not determine pylint score.")
-        return 1
+        running_score += 1
 
     print(f"Pylint score: {score:.2f}/10 (threshold {PYLINT_THRESHOLD})")
     if score < PYLINT_THRESHOLD:
         print(f"FAILED: pylint score {score:.2f} < {PYLINT_THRESHOLD}")
-        return 1
+        running_score += 1
 
     # 2) mypy (match your workflow)
-    rc, _ = run_and_capture([sys.executable, "-m", "mypy", "--follow-imports=silent", "pyzx/graph/graph_neo4j.py", "tests/test_graph_neo4j"])
+    print("\n" * 10)
+    print("-" * 10)
+    print("Starting mypy:")
+    rc, _ = run_and_capture(
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--follow-imports=silent",
+            "pyzx/graph/graph_neo4j.py",
+            "tests/test_graph_neo4j",
+        ]
+    )
+    running_score += rc
     if rc != 0:
         print("FAILED: mypy errors.")
-        return rc
 
     # 3) unit tests (match your workflow)
+    print("\n" * 10)
+    print("-" * 10)
+    print("Starting unit tests:")
     rc, _ = run_and_capture(
         [
             sys.executable,
@@ -67,12 +86,17 @@ def main() -> int:
             "--verbose",
         ]
     )
+    running_score += rc
     if rc != 0:
         print("FAILED: unit tests.")
-        return rc
 
-    print("PASS: local CI checks succeeded.")
-    return 0
+    print("\n" * 10)
+    print("-" * 10)
+
+    if running_score == 0:
+        print("PASS: local CI checks succeeded.")
+        return 0
+    return 1
 
 
 if __name__ == "__main__":

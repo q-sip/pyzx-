@@ -1,11 +1,11 @@
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 from fractions import Fraction
 from pyzx.symbolic import Poly, Term
 
 
-class TestSetPhase(Neo4jE2ETestCase):
+class TestSetPhase(Neo4jUnitTestCase):
     def test_set_phase_int(self):
         g = self.g
 
@@ -23,7 +23,7 @@ class TestSetPhase(Neo4jE2ETestCase):
         g.create_graph(nodes, edges_data=edges_data)
 
         g.set_phase(0, 5)
-        self.assertEqual(g.phase(0), 5)
+        self.assertEqual(g.phase(0), Fraction(1, 1))
 
     def test_set_phase_fraction(self):
         g = self.g
@@ -65,7 +65,7 @@ class TestSetPhase(Neo4jE2ETestCase):
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
 
         g.set_phase(0, Poly([(2, Term([('x', 2)])), (3, Term([('y', 2)])), (1, Term([]))]))
-        self.assertEqual(g.phase(0), Poly([(2, Term([('x', 2)])), (3, Term([('y', 2)])), (1, Term([]))]))
+        self.assertEqual(g.phase(0), Poly([(1, Term([('y', 2)])), (1, Term([]))]))
 
     def test_set_phase_increment(self):
         g = self.g

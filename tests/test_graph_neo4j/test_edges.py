@@ -1,9 +1,12 @@
+"""unit tests for edges()"""
 from pyzx.utils import VertexType, EdgeType
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestEdgesE2E(Neo4jE2ETestCase):
+class TestEdgesE2E(Neo4jUnitTestCase):
+    """unit tests for for edges"""
     def test_edges_empty(self):
+        """test for empty edges"""
         g = self.g
 
         vertices_data = [
@@ -17,7 +20,7 @@ class TestEdgesE2E(Neo4jE2ETestCase):
     def test_edges_after_creation(self):
         """Test that edges increments after creating edges"""
         g = self.g
-        
+
         vertices_data = [
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
             {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -26,17 +29,18 @@ class TestEdgesE2E(Neo4jE2ETestCase):
         edges_data = [
             ((0, 1), EdgeType.SIMPLE),
             ((1, 2), EdgeType.HADAMARD),
-            ((2, 0), EdgeType.SIMPLE)
+            ((0, 2), EdgeType.SIMPLE)
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-        
+
+
         edges = sorted(g.edges())
-        self.assertEqual(edges, [(0, 1), (1, 2), (2, 0)])
+        self.assertCountEqual(edges, [(0, 1), (1, 2), (0, 2)])
 
     def test_edges_singular(self):
         """Test that edges returns correct edges between 2 vertices"""
         g = self.g
-        
+
         vertices_data = [
             {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
             {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -51,9 +55,16 @@ class TestEdgesE2E(Neo4jE2ETestCase):
             ((3, 0), EdgeType.HADAMARD)
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-        
-        edges = sorted(g.edges(0, 3))
-        self.assertEqual(edges, [(0, 3), (3, 0)])
+
+        #Metodeita muutettu siten, että edget lisätään graafiin
+        # aina yhteen suuntaan, pienemmästä id:stä --> suurempaan.
+        # Kun koittaa nyt lisätä
+        #graafiin edgeä 3,0, se lisää vain edgen 0,3.
+        res = set(g.edges(0, 3))
+        exp = set()
+        t = tuple([0, 3])
+        exp.add(t)
+        self.assertEqual(res, exp)
 
 
     def test_edges_increment(self):
@@ -61,5 +72,7 @@ class TestEdgesE2E(Neo4jE2ETestCase):
         g = self.g
 
         initial = len(g.edges())
-        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1}, {"ty": VertexType.Z, "qubit": 0, "row": 1}], edges_data=[((0, 1), EdgeType.HADAMARD)])
+        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1},
+            {"ty": VertexType.Z, "qubit": 0, "row": 1}],
+        edges_data=[((0, 1), EdgeType.HADAMARD)])
         self.assertEqual(len(g.edges()), initial + 1)

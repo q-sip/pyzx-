@@ -1,13 +1,11 @@
 # tests/test_graph_neo4j/test_type.py
 from pyzx.utils import VertexType, EdgeType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 
-
-
-class TestEdgeTypeE2E(Neo4jE2ETestCase):
+class TestEdgeTypeE2E(Neo4jUnitTestCase):
     def test_edge_type_empty(self):
         g = self.g
 

@@ -1,7 +1,7 @@
 # tests/test_graph_neo4j/test_vertices.py
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class _FakeSessionVerticesEmpty:
@@ -30,7 +30,7 @@ class TestVerticesUnit(Neo4jUnitTestCase):
         self.assertEqual(g.vertices(), [])
 
 
-class TestVerticesE2E(Neo4jE2ETestCase):
+class TestVerticesE2E(Neo4jUnitTestCase):
     def test_vertices_after_creation(self):
         g = self.g
 

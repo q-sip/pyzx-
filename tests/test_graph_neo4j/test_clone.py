@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class _FakeTx:
@@ -166,7 +166,7 @@ class TestCloneUnit(Neo4jUnitTestCase):
         self.assertEqual(create_nodes_params["nodes"][0]["extra"], "v0")
 
 
-class TestCloneE2E(Neo4jE2ETestCase):
+class TestCloneE2E(Neo4jUnitTestCase):
     def test_clone_e2e_duplicates_graph_without_relabeling(self):
         g = self.g
 

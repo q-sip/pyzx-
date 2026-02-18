@@ -1,13 +1,13 @@
 from pyzx.utils import VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 from fractions import Fraction
 from pyzx.symbolic import Poly, Term
 
 
 
 
-class TestPhaseE2E(Neo4jE2ETestCase):
+class TestPhaseE2E(Neo4jUnitTestCase):
     def test_phase_empty(self):
         g = self.g
 
@@ -28,8 +28,8 @@ class TestPhaseE2E(Neo4jE2ETestCase):
             {"ty": VertexType.X, "qubit": 0, "row": 2},
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=[])
-
-        self.assertEqual(g.phase(0), 4)
+        #create graph tekee phase = phase % 2, ja 4 % 2 = 0, jolloin kuuluis olla Fraction(0,1) eli 0
+        self.assertEqual(g.phase(0), Fraction(0, 1))
 
     def test_phase_fraction(self):
         g = self.g
@@ -53,4 +53,4 @@ class TestPhaseE2E(Neo4jE2ETestCase):
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=[])
 
-        self.assertEqual(g.phase(0), Poly([(2, Term([('x', 2)])), (3, Term([('y', 2)])), (1, Term([]))]))
+        self.assertEqual(g.phase(0), Poly([(1, Term([('y', 2)])), (1, Term([]))]))

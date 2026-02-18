@@ -3,10 +3,10 @@ import unittest
 
 from pyzx.utils import EdgeType, VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestAddEdges(Neo4jE2ETestCase):
+class TestAddEdges(Neo4jUnitTestCase):
     def test_add_edges_simple_enforces_edge_ids(self):
         """
         Ensures that edges created by add_edges have an id property (r.id) set.
@@ -79,9 +79,9 @@ class TestAddEdges(Neo4jE2ETestCase):
 
         self.assertIsNotNone(res)
         res_dict = dict(res)
-        
+
         self.assertEqual(res_dict["t"], EdgeType.HADAMARD.value)
-        
+
         # Enforce that edge id exists
         self.assertIn("id", res_dict)
         self.assertIsNotNone(res_dict["id"], msg="Edge 1->2 missing r.id")
@@ -135,3 +135,37 @@ class TestAddEdges(Neo4jE2ETestCase):
         self.assertEqual(
             second["ids"][0], first_id, msg="Edge id changed after re-adding duplicate"
         )
+
+    def test_add_edges_duplicates_are_merged_type_overwrites_and_id_is_stable(self):
+        g = self.g
+        g.create_graph([{"ty": VertexType.BOUNDARY}, {"ty": VertexType.BOUNDARY}], [])
+
+        g.add_edges([(0, 1)], EdgeType.SIMPLE)
+
+        with g._get_session() as session:
+            first = session.run(
+                """
+                MATCH (n {graph_id: $gid, id: 0})-[r:Wire]->(m {graph_id: $gid, id: 1})
+                RETURN r.t as t, r.id as id
+                """,
+                gid=g.graph_id,
+            ).single()
+        self.assertIsNotNone(first)
+        first_id = first["id"]
+        self.assertEqual(first["t"], EdgeType.SIMPLE.value)
+
+        # Re-add same edge with different type
+        g.add_edges([(0, 1)], EdgeType.HADAMARD)
+
+        with g._get_session() as session:
+            second = session.run(
+                """
+                MATCH (n {graph_id: $gid, id: 0})-[r:Wire]->(m {graph_id: $gid, id: 1})
+                RETURN count(r) as c, r.t as t, r.id as id
+                """,
+                gid=g.graph_id,
+            ).single()
+
+        self.assertEqual(second["c"], 1)
+        self.assertEqual(second["id"], first_id)                 # id stable
+        self.assertEqual(second["t"], EdgeType.HADAMARD.value)   # type overwritten

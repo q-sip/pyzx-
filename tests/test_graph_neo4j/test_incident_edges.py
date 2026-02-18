@@ -1,9 +1,12 @@
+"""incident edges tests"""
 from pyzx.utils import VertexType, EdgeType
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
-class TestIncidentEdgesE2E(Neo4jE2ETestCase):
+class TestIncidentEdgesE2E(Neo4jUnitTestCase):
+    """test incident edges"""
     def test_incident_edges_empty(self):
+        """test empty incident edges"""
         g = self.g
 
         vertices_data=[
@@ -17,7 +20,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
     def test_incident_edges_after_creation(self):
         """Test that incident_edges increments after creating edges"""
         g = self.g
-        
+
         vertices_data=[
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
         {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -37,13 +40,18 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
             ((4, 5), EdgeType.SIMPLE),
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-        
-        self.assertEqual(sorted(g.incident_edges(2)), [(2, 1), (2, 3), (2, 4)])
+
+
+        #Sama homma täällä, että edget lisätään vain yhteen suuntaan,
+        #  pienemmästä id:stä suurempaan. Siksi incident_edges(2) palauttaa
+        #  vain edget (1,2), (2,3) ja (2,4), ei (4,2)
+        # Eikä testatessa (2,1) toimi.
+        self.assertEqual(sorted(g.incident_edges(2)), [(1, 2), (2, 3), (2, 4)])
 
     def test_incident_edges_more_edges(self):
         """Testing for more incident_edges"""
         g = self.g
-        
+
         vertices_data=[
         {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
         {"ty": VertexType.Z, "qubit": 0, "row": 1},
@@ -63,8 +71,8 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
             ((4, 5), EdgeType.SIMPLE),
         ]
         g.create_graph(vertices_data=vertices_data, edges_data=edges_data)
-        
-        self.assertEqual(sorted(g.incident_edges(4)), [(4, 1), (4, 2), (4, 3), (4, 5)])
+        #Ja sama tässä
+        self.assertCountEqual(sorted(g.incident_edges(4)), [(1, 4), (2, 4), (3, 4), (4, 5)])
 
 
     def test_incident_edges_increment(self):
@@ -72,5 +80,7 @@ class TestIncidentEdgesE2E(Neo4jE2ETestCase):
         g = self.g
 
         initial = len(g.incident_edges(0))
-        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1}, {"ty": VertexType.Z, "qubit": 0, "row": 1}], edges_data=[((0, 1), EdgeType.HADAMARD)])
+        g.create_graph(vertices_data=[{"ty": VertexType.Z, "qubit": 0, "row": 1},
+            {"ty": VertexType.Z, "qubit": 0, "row": 1}],
+        edges_data=[((0, 1), EdgeType.HADAMARD)])
         self.assertEqual(len(g.incident_edges(0)), initial + 1)

@@ -1,7 +1,7 @@
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 from pyzx.utils import EdgeType, VertexType
 
-class TestQubit(Neo4jE2ETestCase):
+class TestQubit(Neo4jUnitTestCase):
     def test_qubit_added_to_vertex(self):
         g = self.g
         g.create_graph(
@@ -17,4 +17,4 @@ class TestQubit(Neo4jE2ETestCase):
         g.set_qubit(1, 2)
         check_qubit=g.qubit(1)
 
-        self.assertEqual(check_qubit, '2')
+        self.assertEqual(check_qubit, 2)

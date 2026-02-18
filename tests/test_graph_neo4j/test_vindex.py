@@ -1,7 +1,7 @@
 # tests/test_graph_neo4j/test_vindex.py
 from pyzx.utils import VertexType
 
-from tests.test_graph_neo4j._base_unittest import Neo4jE2ETestCase, Neo4jUnitTestCase
+from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 
 class TestVindexUnit(Neo4jUnitTestCase):
@@ -10,7 +10,7 @@ class TestVindexUnit(Neo4jUnitTestCase):
         self.assertEqual(g.vindex(), 0)
 
 
-class TestVindexE2E(Neo4jE2ETestCase):
+class TestVindexE2E(Neo4jUnitTestCase):
     def test_vindex_after_creation(self):
         g = self.g
 

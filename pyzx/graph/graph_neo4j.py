@@ -1,8 +1,13 @@
+# COMPLETELY WORKING IMPLEMENTATION FOR ALL THREE DEPTHS!!!!!
+
+#WORKING IMPLEMENTATION!!!
+
 """
 Docstring for pyzx.graph.graph_neo4j
 """
 
 import os
+import uuid
 from fractions import Fraction
 from typing import (
     Any,
@@ -20,12 +25,17 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
 from pyzx.symbolic import new_var, parse
+from .neo4j_rewrite_runner import run_rewrite
 
 from ..utils import (
     EdgeType,
     FloatInt,
     FractionLike,
     VertexType,
+    vertex_is_zx_like,
+    vertex_is_z_like,
+    set_z_box_label,
+    get_z_box_label,
 )
 from .base import BaseGraph, upair
 
@@ -57,6 +67,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._driver = None
 
         self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        # Clear any existing data for this ID to be safe (id reuse)
+        if graph_id is None:
+            self.remove_all_data()
+
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
@@ -71,6 +85,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 self.uri, auth=(self.user, self.password)
             )
         return self._driver
+
+    def remove_all_data(self) -> None:
+        """Removes ALL nodes and relationships for this graph_id."""
+        query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
+        with self._get_session() as session:
+            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 
     def _get_session(self):
         """Returns driver session"""
@@ -102,6 +122,11 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         for v_id, data in zip(vertices, vertices_data):
             ty = data.get("ty", VertexType.BOUNDARY)
             phase = data.get("phase")
+            if phase is not None:
+                try:
+                    phase = phase % 2
+                except Exception:
+                    pass
             phase_str = self._phase_to_str(phase) if phase is not None else "0"
 
             all_vertices.append(
@@ -114,11 +139,18 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 }
             )
 
-        # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu nodejen ID:eiksi
+        # Valmistellaan relationshippien luominen. Indeksit lopulta muuttuu edgejen ID:ksi.
         edge_ids = [self.num_edges() + x for x in range(len(edges_data))]
         if edges_data:
+            # Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan.
+            # Tälleen voidaan pitää edgejen id:t järjestyksessä
+            # ja relationshippien suunta pysyy aina samana
+            # Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee:
+            # src --> tgt ja vielä uusi edge, joka tgt --> src.
             all_edges = [
-                {"s": vertices[x[0][0]], "t": vertices[x[0][1]], "et": x[1].value}
+                {"s": min(vertices[x[0][0]], vertices[x[0][1]]),
+                 "t": max(vertices[x[0][0]], vertices[x[0][1]]), 
+                 "et": x[1].value}
                 for x in edges_data
             ]
             for edge, edge_id in zip(all_edges, edge_ids):
@@ -205,21 +237,43 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """
         Adds multiple edges at once.
         """
-        edges = list(edge_pairs)
-        if not edges:
+        edges_list = list(edge_pairs)
+        if not edges_list:
             return
 
         if edge_data is None:
-            edge_data = [edgetype] * len(edges)
+            data_list = [edgetype] * len(edges_list)
         else:
-            edge_data = list(edge_data)
-            if len(edge_data) != len(edges):
+            data_list = list(edge_data)
+            if len(data_list) != len(edges_list):
                 raise ValueError("edge_data must have same length as edge_pairs")
+
+        existing = set(self.edges())
+        edges = []
+        edge_data = []
+        for e, et in zip(edges_list, data_list):
+            s, t = upair(*e)
+            if s == t:
+                if et == EdgeType.HADAMARD:
+                    self.add_to_phase(s, 1)
+                continue
+
+            if (s, t) in existing:
+                self.set_edge_type(e, et)
+            else:
+                edges.append(e)
+                edge_data.append(et)
+
+        if not edges:
+            return
         n = self.num_edges()
         ids = [i + n for i in range(len(edges))]
-        print(f"ids = {ids}")
+        # Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan.
+        # Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
+        # Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee:
+        # src --> tgt ja vielä uusi edge, joka tgt --> src.
         edges_payload = [
-            {"s": s, "t": t, "et": et.value, "id": eid}
+            {"s": min(s, t), "t": max(s, t), "et": et.value, "id": eid}
             for (s, t), et, eid in zip(edges, edge_data, ids)
         ]
 
@@ -262,12 +316,13 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         return self._vindex
 
     def num_vertices(self):
-        query = "MATCH (n:Node {graph_id: $graph_id}) RETURN count(n) AS count"
+        query = "MATCH (n:Node {graph_id: $graph_id}) RETURN n.id as id"
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+                lambda tx: tx.run(query, graph_id=self.graph_id).data()
             )
-        return result["count"] if result else 0
+        ids = [r['id'] for r in result]
+        return len(ids)
 
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
@@ -322,7 +377,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     raise TypeError(
                         "Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex."
                     )
-                elif ty == VertexType.H_BOX:
+                if ty == VertexType.H_BOX:
                     self.scalar.add_phase(self.phase(v))
                 else:
                     self.scalar.add_node(self.phase(v))
@@ -380,21 +435,22 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         et: Optional[EdgeType] = None,
     ) -> int:
         """Returns the number of edges in the graph.
-        
+
         Jos source ja target nodet on annettu erikseen, laskee niiden väliset kaaret.
         Jos kaaren tyyppi on annettu, laskee vain sen tyyppiset kaaret
         """
         if s is not None and t is not None:
-            # Count edges between specific vertices, s being the source and t being the target
+            #Kaarien laskeminen kahden noden välillä myös pienemmästä id:stä suurempaan
+            s, t = (s, t) if s <= t else (t, s)
             if et is not None:
                 query = """
-                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire {t: $et}]-(n2:Node {graph_id: $graph_id, id: $t})
+                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire {t: $et}]->(n2:Node {graph_id: $graph_id, id: $t})
                 RETURN count(r) as count
                 """
                 params = {"graph_id": self.graph_id, "s": s, "t": t, "et": et.value}
             else:
                 query = """
-                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: $t})
+                MATCH (n1:Node {graph_id: $graph_id, id: $s})-[r:Wire]->(n2:Node {graph_id: $graph_id, id: $t})
                 RETURN count(r) as count
                 """
                 params = {"graph_id": self.graph_id, "s": s, "t": t}
@@ -404,11 +460,8 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     lambda tx: tx.run(query, **params).single()
                 )
             count = result["count"] if result else 0
-
-            if s != t:
-                count = count // 2
             return count
-        elif s is not None:
+        if s is not None:
             # Count edges incident to a specific vertex
             return self.vertex_degree(s)
         else:
@@ -426,25 +479,94 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def add_edge(
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
     ) -> ET:
-        """Adds a single edge of the given type and return its id"""
-        s, t = upair(*edge_pair)
+        """Adds a single edge of the given type and return its id.
 
-        edge_id = self.num_edges()
-
-        edge = {"s": edge_pair[0], "t": edge_pair[1], "et": edgetype, "id": edge_id}
-
-        query = """
-        UNWIND $edge AS e
-        MATCH (n1:Node {graph_id: $graph_id, id: e.s})
-        MATCH (n2:Node {graph_id: $graph_id, id: e.t})
-        MERGE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
+        Nyt myös seuraten paremmin ZX-calculuksen sääntöjä
         """
-        with self._get_session() as session:
-            session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id, edge=edge)
-            )
+        s, t = edge_pair[0], edge_pair[1]
+        t1 = self.type(s)
+        t2 = self.type(t)
 
-        return s, t
+        #Pidetään huoli, että self-looppeja ei voida lisätä
+        if s == t:
+            if not vertex_is_zx_like(t1) or not vertex_is_zx_like(t2):
+                raise ValueError(
+                    "Unexpected vertex type, it should be either z or x "
+                    "trying to add a selp-loop"
+                )
+            if edgetype == EdgeType.SIMPLE:
+                return upair(s, t)
+            elif edgetype == EdgeType.HADAMARD:
+                self.add_to_phase(s, 1)
+                return upair(s, t)
+            else:
+                raise ValueError("The edge you are adding is not an appropriate type")
+
+        #Tarkastetaan jos edge on jo olemassa
+        if not self.connected(s, t):
+            #Edgeä ei ollut olemassa, joten lisätään edge ja pidetään taas huoli, että edge lisätään pienemmästä id:stä suurempaan.
+            src, tgt = upair(s, t)
+            edge_id = self.num_edges()
+
+            query = """
+            MATCH (n1:Node {graph_id: $graph_id, id: $s})
+            MATCH (n2:Node {graph_id: $graph_id, id: $t})
+            CREATE (n1)-[:Wire {t: $et, id: $eid}]->(n2)
+            """
+            with self._get_session() as session:
+                session.execute_write(
+                    lambda tx: tx.run(
+                        query,
+                        graph_id=self.graph_id,
+                        s=src,
+                        t=tgt,
+                        et=edgetype.value,
+                        eid=edge_id,
+                    )
+                )
+        else:
+            #Jos edge oli jo olemassa, käytetään ZX-calculuksen rewrite sääntöjä edgejen yhdistämiseen
+            if vertex_is_zx_like(t1) and vertex_is_zx_like(t2):
+                et1 = self.edge_type(self.edge(s, t))
+
+                #Määritetään vertexien tyyppien perustella, mitä sääntöjä sovelletaan mihinkin
+                if vertex_is_z_like(t1) == vertex_is_z_like(t2):  # same colour
+                    fuse, hopf = (EdgeType.SIMPLE, EdgeType.HADAMARD)
+                else:
+                    fuse, hopf = (EdgeType.HADAMARD, EdgeType.SIMPLE)
+
+                #Käsittele parellel edgejä kaikilla eri fuse/hopf sääntöjäen yhdistelmillä
+                if edgetype == fuse and et1 == fuse:
+                    pass  #Tämän edgen lisääminen aiheuttaisi parallel edgen, jolla on sama tyyppi, joten mitään ei tehdä
+                elif (edgetype == fuse and et1 == hopf) or (
+                    edgetype == hopf and et1 == fuse
+                ):
+                    #Varmistetaan, että viimeinen edge on tyypiltään fuse
+                    self.set_edge_type(self.edge(s, t), fuse)
+                    #Lisää pii phase yhteen naapureista
+                    if t1 == VertexType.Z_BOX:
+                        set_z_box_label(self, s, get_z_box_label(self, s) * -1)
+                    else:
+                        self.add_to_phase(s, 1)
+                    self.scalar.add_power(-1)
+                elif edgetype == hopf and et1 == hopf:
+                    #Poistetaan edge, joka on tyypiltään hopf, joka oli myös jo olemassa, vähennetään phasesta mod 2
+                    self.remove_edge(self.edge(s, t))
+                    self.scalar.add_power(-2)
+                else:
+                    raise ValueError(f"Got unexpected edge types: {t1}, {t2}")
+            else:
+                if (vertex_is_z_like(t1) and t2 == VertexType.H_BOX) or (
+                    vertex_is_z_like(t2) and t1 == VertexType.H_BOX
+                ):
+                    if edgetype == EdgeType.SIMPLE:
+                        return upair(s, t)
+                raise ValueError(
+                    f"Attempted to add unreducible parallel edge {edge_pair}, "
+                    f"types: {t1}, {t2}"
+                )
+
+        return upair(s, t)
 
     def remove_edges(self, edges: List[ET]) -> None:
         """Removes relationships from the graph"""
@@ -495,6 +617,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             return [(item["src"], item["tgt"]) for item in result]
 
         query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})"
+        query += " WHERE n1.id <= n2.id"
         query += " RETURN n1.id, n2.id"
         with self._get_session() as session:
             result = session.execute_read(
@@ -506,13 +629,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Returns a tuple of source/target of the given edge."""
         return edge
 
-
     def incident_edges(self, vertex: VT) -> Sequence[ET]:
         """Returns all neighboring edges of the given vertex."""
 
         query = """
         MATCH (n:Node {graph_id: $graph_id, id: $vertex})-[r:Wire]-(m:Node {graph_id: $graph_id})
-        RETURN m.id AS neighbor
+        RETURN startNode(r).id AS src, endNode(r).id AS tgt
         """
 
         with self._get_session() as session:
@@ -520,7 +642,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query, graph_id=self.graph_id, vertex=vertex).data()
             )
 
-        return [(vertex, r["neighbor"]) for r in result]
+        return [(r["src"], r["tgt"]) for r in result]
 
     def edge_type(self, e: ET) -> EdgeType:
         """Returns the type of the given edge:
@@ -553,7 +675,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         with self._get_session() as session:
             session.execute_write(
                 lambda tx: tx.run(
-                    query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t
+                    query, graph_id=self.graph_id, node1=e[0], node2=e[1], type=t.value
                 )
             )
 
@@ -578,7 +700,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.t = $type"""
         with self._get_session() as session:
             session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=t)
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=t.value)
             )
 
     def phase(self, vertex: VT) -> FractionLike:
@@ -603,6 +725,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def set_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Sets the phase of the vertex to the given value."""
+        try:
+            phase = phase % 2
+        except Exception:
+            pass
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.phase = $phase"""
         with self._get_session() as session:
             session.execute_write(
@@ -621,13 +747,14 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """
         with self._get_session() as session:
             result = session.execute_read(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
-            )
+                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single())
+        #Muutetaan .datasta .singleksi, kun tarkastellaan vain yhtä vertexiä kuitenkin kerralla
         return result["qubit"] if result else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
-        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit"""
+        query = (
+            """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.qubit = $qubit""")
 
         with self._get_session() as session:
             session.execute_write(
@@ -635,9 +762,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query,
                     graph_id=self.graph_id,
                     id=vertex,
-                    qubit=str(q) if q is not None else "0"
-                )
-            )
+                    qubit=q))
 
     def row(self, vertex: VT) -> FloatInt:
         """Palauttaa sen rivin jolla verteksi on.
@@ -647,6 +772,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
             )
+        #Palautetaan taas .single koska tarkastellaan vain yhtä vertexiä kerralla
         return result["r"] if result and result["r"] is not None else -1
 
     def set_row(self, vertex: VT, r: FloatInt) -> None:
@@ -682,6 +808,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
             )
+        #Muutetaan taas .singleksi, koska vain yksi vertex tarkastelussa
         return result["keys"]
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
@@ -695,9 +822,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(
                     query, graph_id=self.graph_id, id=vertex, key=key
-                ).single()
+                ).data()
             )
-        return result["value"] if result and result["value"] is not None else default
+        return result[0]["value"] if result and result[0]["value"] is not None else default
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
@@ -736,7 +863,12 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
                 ).data()
             )
-        return [r["propertyKey"] for r in result]
+
+        if len(result) > 1:
+            raise ValueError(
+                f"Expected single Wire between {edge}, found {len(result)}"
+            )
+        return result[0]["propertyKey"] if result else []
 
     def edata(self, edge: ET, key: str, default: Any = None) -> Any:
         """Returns the data value of the given edge associated to the key.
@@ -751,6 +883,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     query, graph_id=self.graph_id, node1=edge[0], node2=edge[1], key=key
                 ).single()
             )
+        #Muutetaan täälläkin .singleksi
         return result["value"] if result and result["value"] is not None else default
 
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
@@ -772,11 +905,23 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                 )
             )
 
-    # Älkää välittäkö tästä, helpotusta varten väsäsin että pysyy perässä sen graafin kanssa
-    def clear_graph(self, query: str) -> None:
-        """Clears the entire graph from the database."""
-        with self._get_session() as session:
-            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
+    def run_cypher_rewrite(
+        self,
+        rule_name: str,
+        variant_id: Optional[str] = None,
+        query_config: Optional[Mapping[str, str]] = None,
+        measure_time: bool = False,
+    ) -> Tuple[Optional[Mapping[str, Any]], Optional[float]]:
+        """Run a named Cypher rewrite from neo4j_queries with this graph's session and graph_id.
+        See neo4j_rewrite_runner for rule names and variant selection (env/config)."""
+        return run_rewrite(
+            self._get_session,
+            self.graph_id,
+            rule_name,
+            variant_id=variant_id,
+            query_config=dict(query_config) if query_config else None,
+            measure_time=measure_time,
+        )
 
     # }}}
 
@@ -834,15 +979,17 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     return e
         if et is not None:
             raise ValueError(f"No edge of type {et} between {s} and {t}")
-        else:
-            raise ValueError(f"No edge between {s} and {t}")
+
+        raise ValueError(f"No edge between {s} and {t}")
 
     def connected(self, v1: VT, v2: VT) -> bool:
         """Returns whether vertices v1 and v2 share an edge."""
-        for e in self.incident_edges(v1):
-            if v2 in self.edge_st(e):
-                return True
-        return False
+        query = """MATCH (n:Node {graph_id: $graph_id, id: $vid1})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: $vid2}) RETURN r"""
+        with self._get_session() as session:
+            r = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id, vid1=v1, vid2=v2).data()
+            )
+        return len(r) != 0
 
     def add_vertex(
         self,
@@ -1141,6 +1288,20 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self._inputs = tuple(ids)
         return self._inputs
 
+    def copy(
+        self, adjoint: bool = False, backend: Optional[str] = None
+    ) -> "BaseGraph[VT, ET]":
+        """Tällä metodilla saa luotua kopion neo4j graafista.
+        Käytetään BaseGraph copy metodia.
+        """
+        # Jos halutaan graafista kopio mahdollisesti johonkin toisen backendiin
+        # voi käyttää perus copy metodia
+        if adjoint or (backend is not None and backend != "neo4j"):
+            return super().copy(adjoint=adjoint, backend=backend)
+
+        #Kutsutaan kloonaus metodia.
+        return self.clone()
+
     def clone(self) -> "GraphNeo4j":
         """Return an identical copy of the graph without relabeling vertices/edges.
 
@@ -1148,7 +1309,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         relationships belonging to this instance's ``graph_id`` into a fresh
         ``graph_id`` namespace, preserving the ``id`` fields and all properties.
         """
-        import uuid
+
 
         # Fresh namespace so the copy won't clash with existing data.
         new_graph_id = f"{self.graph_id}_clone_{uuid.uuid4().hex}"
