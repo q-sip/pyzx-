@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
 from pyzx.symbolic import new_var, parse
-from .neo4j_rewrite_runner import run_rewrite
+from .graph_db_rewrite_runner import run_rewrite
 
 from ..utils import (
     EdgeType,
@@ -913,7 +913,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         measure_time: bool = False,
     ) -> Tuple[Optional[Mapping[str, Any]], Optional[float]]:
         """Run a named Cypher rewrite from neo4j_queries with this graph's session and graph_id.
-        See neo4j_rewrite_runner for rule names and variant selection (env/config)."""
+        See graph_db_rewrite_runner for rule names and usage."""
         return run_rewrite(
             self._get_session,
             self.graph_id,
