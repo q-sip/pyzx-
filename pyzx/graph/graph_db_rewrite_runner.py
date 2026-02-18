@@ -102,7 +102,7 @@ def run_rewrite(
     run_params["graph_id"] = graph_id
     
     # Execute the query
-    start = time.perf_counter() if measure_time else None
+    start = time.perf_counter() if measure_time else 0.0
     
     with session_factory() as session:
         result = session.run(cypher, run_params)
@@ -205,8 +205,8 @@ def run_rewrites(
             })
     
     if not quiet:
-        successful = sum(1 for r in results if r["success"])
-        total_count = sum(r["count"] or 0 for r in results if r["success"])
+        successful = sum(1 for r in results if r.get("success") is True)
+        total_count = sum(r["count"] or 0 for r in results if r.get("success") is True)
         print(f"Completed: {successful}/{len(rule_list)} rules, {total_count} total rewrites")
     
     return results
