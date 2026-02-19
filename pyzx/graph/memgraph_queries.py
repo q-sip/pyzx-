@@ -17,6 +17,7 @@ class ZXQueryStore:
             "gadget_fusion_hadamard": self._gadget_fusion_hadamard(),
             "pivot_gadget": self._pivot_gadget(),
             "pivot_boundary": self._pivot_boundary(),
+            "to_gh": self._to_gh(),
             "bialgebra_red_green": self._bialgebra_red_green(),
             "bialgebra_hadamard": self._bialgebra_hadamard(),
             "bialgebra_simplification": self._bialgebra_simplification(),
@@ -38,6 +39,31 @@ class ZXQueryStore:
     # ==========================================
     # Query Definitions (Private Methods)
     # ==========================================
+
+
+    def _to_gh(self):
+        return """
+        // Match all Red nodes (t: 2)
+        MATCH (n:Node)
+        WHERE n.graph_id = $graph_id AND n.t = 2
+        WITH collect(n) AS red_nodes
+        
+        // Toggle edges connecting red nodes to non-red nodes (neighbors not in red_nodes)
+        MATCH (u)-[r:Wire]-(v)
+        WHERE u IN red_nodes AND NOT v IN red_nodes
+        
+        SET r.t = CASE r.t 
+            WHEN 1 THEN 2 
+            WHEN 2 THEN 1 
+            ELSE r.t 
+        END
+        
+        WITH red_nodes
+        UNWIND red_nodes as n
+        SET n.t = 1
+        
+        RETURN count(n) as nodes_converted
+        """
 
     def _hadamard_edge_cancellation(self):
         return """

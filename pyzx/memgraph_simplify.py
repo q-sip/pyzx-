@@ -45,6 +45,7 @@ Example usage:
 
 __all__ = [
     'spider_simp', 
+    'to_gh',
     'interior_clifford_simp', 
     'clifford_simp_db',
     'pivot_gadget_simp_db',
@@ -57,6 +58,7 @@ __all__ = [
 from typing import Callable, Optional, Dict, Any
 from .graph.memgraph_queries import ZXQueryStore
 from pyzx.utils import VertexType, EdgeType
+from pyzx.graph.base import BaseGraph, VT, ET
 
 
 class Stats:
@@ -81,22 +83,27 @@ class Stats:
         s += "%s TOTAL" % str(nt).rjust(6)
         return s
 
+def toggle_edge(ty: EdgeType) -> EdgeType:
+    """Swap the regular and Hadamard edge types."""
+    return EdgeType.HADAMARD if ty == EdgeType.SIMPLE else EdgeType.SIMPLE
+
 def to_gh(
     session_factory: Callable,
     graph_id: str,
-    quiet: bool = True,
-    stats: Optional[Stats] = None
-    )-> None:
-    """Turns every red node into a green node by applying a Hadamard to the edges incident to red nodes"""
-    query = """MATCH (n:Node {graph_id: $graph_id}) RETURN n.t"""
-    params = {"graph_id": graph_id}
-    ty = _execute_query(session_factory, query, params, quiet)
-    for v in g.vertices():
-        if ty[v] == VertexType.X:
-            g.set_type(v, VertexType.Z)
-            for e in g.incident_edges(v):
-                et = g.edge_type(e)
-                g.set_edge_type(e, toggle_edge(et))
+    quiet: bool = True
+) -> None:
+    """
+    Turns every red node into a green node by applying a Hadamard to the edges incident to red nodes.
+    
+    This function operates directly on the graph database using a single Cypher query.
+    
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: The identifier of the graph to modify
+        quiet: If False, print execution details
+    """
+    query = ZXQueryStore().get("to_gh")
+    _execute_query(session_factory, query, {"graph_id": graph_id}, quiet=quiet)
 
 def _execute_query(
     session_factory: Callable,
