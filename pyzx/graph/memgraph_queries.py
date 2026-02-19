@@ -110,7 +110,10 @@ class ZXQueryStore:
         CREATE (merged:Node {
             t: u.t,
             phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),
-            graph_id: $graph_id
+            graph_id: $graph_id,
+            id: u.id,
+            qubit: u.qubit,
+            row: u.row
         })
         
         // Reconnect u's neighbors (except v) to merged
@@ -492,8 +495,8 @@ class ZXQueryStore:
         WITH z_j, z_alpha, neighbors_j, neighbors_alpha, COLLECT(DISTINCT n_shared) AS shared_neighbors
 
         // 3. Create the two new central nodes for the rewritten structure.
-        CREATE (z_new_phaseless:Node {t: 1, phase: 1.0, graph_id: z_j.graph_id}),
-               (z_new_phased:Node {t: 1, phase: (CASE z_j.phase % 2 WHEN 0 THEN -1 ELSE 1 END) * z_alpha.phase, graph_id: z_j.graph_id})
+        CREATE (z_new_phaseless:Node {t: 1, phase: 1.0, graph_id: z_j.graph_id, id: z_j.id, qubit: z_j.qubit, row: z_j.row}),
+               (z_new_phased:Node {t: 1, phase: (CASE z_j.phase % 2 WHEN 0 THEN -1 ELSE 1 END) * z_alpha.phase, graph_id: z_j.graph_id, id: z_alpha.id, qubit: z_alpha.qubit, row: z_alpha.row})
         CREATE (z_new_phaseless)-[:Wire {t: 2}]->(z_new_phased)
 
         // 4. Connect the new central nodes to all neighbors.
@@ -933,8 +936,10 @@ class ZXQueryStore:
         CREATE (merged:Node {
           phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),
           t: u.t,
-          graph_id: u.graph_id
-
+          graph_id: u.graph_id,
+          id: u.id,
+          qubit: u.qubit,
+          row: u.row
         })
         WITH DISTINCT u, v, merged
 

@@ -93,7 +93,7 @@ def large_graph():
         inputs=[0],
         outputs=[8],
     )
-    print(g.type(8))
+    print(g.types())
 
 
 def graph_full_reduce():
@@ -194,16 +194,18 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
                 time2 = time()
                 print(f"depth={depth}, qubits={qubits} simplegraph took {time2 - time1}s")
                 print('Comparing...')
+                # print(f'DEBUG: num_vertices ==== {g_mem.num_vertices()}')
+                # print(f'DEBUG: vertices ==== {g_mem.vertices()}')
                 t = zx.compare_tensors(g_s, g_mem)
                 if t:
                     print('tensors match')
                 else:
                     print('fail')
             finally:
-                print('error')
-                # g_mem.remove_all_data()
-                # g_mem.close()
+                g_mem.remove_all_data()
+                g_mem.close()
 
 
 # iterable_graph_creation()
 test_depths_qubits(2, 100, 100)
+# large_graph()

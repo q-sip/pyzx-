@@ -598,7 +598,7 @@ def full_reduce(
     if not quiet:
         print("Phase 1: Initial interior clifford simplification")
     interior_clifford_simp(session_factory, graph_id, quiet)
-    
+
     if not quiet:
         print("Phase 2: Initial pivot gadget simplification")
     pivot_gadget_simp(session_factory, graph_id, quiet)
@@ -630,7 +630,7 @@ def full_reduce(
             if not quiet:
                 print("No more gadget rewrites applicable, terminating")
             break
-    
+
     if not quiet:
         print(f"Completed full_reduce_db after {iteration} iterations")
         if stats:

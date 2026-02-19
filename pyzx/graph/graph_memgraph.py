@@ -691,7 +691,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
         VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
 
-        print(f'vertex === {vertex}')
+        # print(f'vertex === {vertex}')
 
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.t"""
         with self._get_session() as session:
