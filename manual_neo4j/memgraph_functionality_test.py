@@ -175,5 +175,22 @@ def iterable_graph_creation():
         num += 1
 
 
-#iterable_graph_creation()
-iterable_graph_creation()
+def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100):
+    """Run memgraph full reduce over qubit/depth grid."""
+    for qubits in range(start_qubits, end_qubits + 1):
+        print(f"\n=== qubits={qubits} ===")
+        for depth in range(0, max_depth + 1):
+            g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph")
+            try:
+                print(f"depth={depth} memgraph full reduce starting...")
+                time1 = time()
+                mem.full_reduce(g_mem)
+                time2 = time()
+                print(f"depth={depth} memgraph took {time2 - time1}s")
+            finally:
+                g_mem.remove_all_data()
+                g_mem.close()
+
+
+# iterable_graph_creation()
+test_depths_qubits(2, 5, 100)
