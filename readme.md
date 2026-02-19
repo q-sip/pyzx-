@@ -104,7 +104,7 @@ docker compose up --watch pyzx-dev
 </pre>
 Runs the tests again if PyZX changes
 
-### PostgresSQL + Age
+### PostgreSQL + Age
 
 WIP!!! The option has not been tested yet.
 docker compose --profile age up
