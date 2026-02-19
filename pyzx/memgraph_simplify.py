@@ -55,6 +55,7 @@ __all__ = [
     'Stats'
 ]
 
+
 from typing import Callable, Optional, Dict, Any
 from .graph.memgraph_queries import ZXQueryStore
 from pyzx.utils import VertexType, EdgeType
