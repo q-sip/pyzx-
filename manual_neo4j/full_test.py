@@ -60,6 +60,6 @@ print("simple:", comparison_1(42))
 print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
-print("Neo4j:", comparison_1(42, "neo4j"))
+print("Memgraph:", comparison_1(42, "memgraph"))
 
 #print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))

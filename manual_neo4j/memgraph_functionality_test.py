@@ -93,13 +93,14 @@ def large_graph():
     print(g.type(8))
 
 
-# def graph_full_reduce():
-#     """Neo4j graafin full reduce"""
-#     graph = zx.generate.cliffordT(3,20, backend="neo4j")
-#     zx.simplify.full_reduce(graph)
-#     #graph.normalise()
+def graph_full_reduce():
+    """Neo4j graafin full reduce"""
+    graph = zx.generate.cliffordT(3,20, backend="memgraph")
+    zx.simplify.full_reduce(graph)
+    print(f'num vertices ===== {graph.num_vertices()}')
+    #graph.normalise()
 
-# #graph_step_by_step()
+#graph_step_by_step()
 # graph_full_reduce()
 
 
@@ -108,6 +109,7 @@ def iterable_graph_creation():
     num = 0
     choices = [VertexType.X, VertexType.Z]
     while True:
+        g.remove_all_data()
         g.add_vertex(VertexType.BOUNDARY, 0, 0)
         g.add_vertex(VertexType.BOUNDARY, 0, 0)
         g.add_vertex(VertexType.Z, 0, 0)
@@ -138,4 +140,4 @@ def iterable_graph_creation():
 
 
 #iterable_graph_creation()
-large_graph()
+iterable_graph_creation()

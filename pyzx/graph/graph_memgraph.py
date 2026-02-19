@@ -99,6 +99,10 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
+        self._vindex = 0
+        self._inputs = tuple()
+        self._outputs = tuple()
+        self._maxr = 1
 
     def _get_session(self):
         """Returns driver session"""

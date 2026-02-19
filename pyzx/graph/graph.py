@@ -30,6 +30,7 @@ backends = {
 	'simple': True, 
 	'multigraph': True, 
 	'quizx-vec': False if quizx is None else True,
+	'memgraph': True,
 }
 
 def Graph(backend:Optional[str]=None, **kwargs) -> BaseGraph:
