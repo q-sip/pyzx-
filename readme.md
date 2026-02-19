@@ -94,6 +94,7 @@ The information in neo4j determines what you should put in to the .env.pyzx valu
 <pre>
 docker compose --profile neo4j up
 <pre>
+<pre>
 docker compose up --watch test-dev
 </pre>
 Runs the tests with hot reload
