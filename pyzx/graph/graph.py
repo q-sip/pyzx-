@@ -64,6 +64,9 @@ def Graph(backend:Optional[str]=None, **kwargs) -> BaseGraph:
 	if backend == 'neo4j':
 		from .graph_neo4j import GraphNeo4j
 		return GraphNeo4j(**kwargs)
+	if backend == 'memgraph':
+		from .graph_memgraph import GraphMemgraph
+		return GraphMemgraph(**kwargs)
 	return GraphS()
 
 Graph.from_json = GraphS.from_json # type: ignore

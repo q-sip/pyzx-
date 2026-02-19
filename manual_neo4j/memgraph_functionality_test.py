@@ -179,18 +179,31 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
     """Run memgraph full reduce over qubit/depth grid."""
     for qubits in range(start_qubits, end_qubits + 1):
         print(f"\n=== qubits={qubits} ===")
-        for depth in range(0, max_depth + 1):
-            g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph")
+        for depth in range(0, max_depth + 1, 10):
+            g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph", seed=10)
+            g_s = zx.generate.cliffordT(qubits, depth, seed=10)
             try:
-                print(f"depth={depth} memgraph full reduce starting...")
+                print(f"depth={depth}, qubits={qubits} memgraph full reduce starting...")
                 time1 = time()
                 mem.full_reduce(g_mem)
                 time2 = time()
-                print(f"depth={depth} memgraph took {time2 - time1}s")
+                print(f"depth={depth}, qubits={qubits} memgraph took {time2 - time1}s")
+                print(f"depth={depth}, qubits={qubits} simplegraph full reduce starting...")
+                time1 = time()
+                zx.full_reduce(g_s)
+                time2 = time()
+                print(f"depth={depth}, qubits={qubits} simplegraph took {time2 - time1}s")
+                print('Comparing...')
+                t = zx.compare_tensors(g_s, g_mem)
+                if t:
+                    print('tensors match')
+                else:
+                    print('fail')
             finally:
-                g_mem.remove_all_data()
-                g_mem.close()
+                print('error')
+                # g_mem.remove_all_data()
+                # g_mem.close()
 
 
 # iterable_graph_creation()
-test_depths_qubits(2, 5, 100)
+test_depths_qubits(2, 100, 100)

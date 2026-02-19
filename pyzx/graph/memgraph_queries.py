@@ -156,8 +156,11 @@ class ZXQueryStore:
           AND a.phase IS NOT NULL 
           AND b.phase IS NOT NULL
           // Check if phases are integer multiples of pi (phase = k for integer k)
-          AND a.phase = round(a.phase) 
-          AND b.phase = round(b.phase)
+          // Use toFloat to handle potential string storage and avoid crashes on non-numeric types
+          AND toFloat(a.phase) IS NOT NULL 
+          AND toFloat(b.phase) IS NOT NULL
+          AND toFloat(a.phase) = round(toFloat(a.phase)) 
+          AND toFloat(b.phase) = round(toFloat(b.phase))
 
         // Find neighbors of a (excluding b and nodes connected to b)
         WITH a, b, pivot_edge
@@ -238,8 +241,10 @@ class ZXQueryStore:
         // Interior Pauli spider removal rule
         MATCH (a:Node {t: 1})-[:Wire {t: 2}]-(b:Node {t: 1})
         WHERE a.graph_id = $graph_id AND b.graph_id = $graph_id
-          AND a.phase = round(a.phase) 
-          AND b.phase = round(b.phase)
+          AND toFloat(a.phase) IS NOT NULL 
+          AND toFloat(b.phase) IS NOT NULL
+          AND toFloat(a.phase) = round(toFloat(a.phase)) 
+          AND toFloat(b.phase) = round(toFloat(b.phase))
 
         MATCH (b)-[:Wire]-(b_neighbor)
         WITH a, b, 

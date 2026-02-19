@@ -595,7 +595,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
-
+        # TODO: types() method can't read the vertex types from this type of return
         query = """MATCH (n:Node {graph_id: $graph_id}) RETURN n.id AS id"""
         with self._get_session() as session:
             result = session.execute_read(
@@ -690,6 +690,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Returns the type of the given vertex:
         VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
         VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
+
+        print(f'vertex === {vertex}')
 
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.t"""
         with self._get_session() as session:

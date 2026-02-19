@@ -1,6 +1,7 @@
 from time import time
 import os
 import pyzx as zx
+import pyzx.memgraph_simplify as mem
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 load_dotenv()
@@ -27,7 +28,7 @@ def comparison_1(seed: int, backend: str | None = None):
 
     g = c.to_graph(backend=backend)
 
-    zx.full_reduce(g)
+    mem.full_reduce(g)
 
     g.normalize()
 
@@ -55,9 +56,9 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     return zx.compare_tensors(c_opt1, c_opt2)
 
 
-print("simple:", comparison_1(42))
+# print("simple:", comparison_1(42))
 # print("igraph:", comparison_1(42, "igraph")) doesn't work, doesn't contain all mandatory methods
-print("Multigraph:", comparison_1(42, "multigraph"))
+# print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
 print("Memgraph:", comparison_1(42, "memgraph"))
