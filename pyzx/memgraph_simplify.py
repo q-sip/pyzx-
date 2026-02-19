@@ -47,11 +47,11 @@ __all__ = [
     'spider_simp', 
     'to_gh',
     'interior_clifford_simp', 
-    'clifford_simp_db',
-    'pivot_gadget_simp_db',
-    'gadget_simp_db',
-    'full_reduce_db',
-    'reduce_scalar_db',
+    'clifford_simp',
+    'pivot_gadget_simp',
+    'gadget_simp',
+    'full_reduce',
+    'reduce_scalar',
     'Stats'
 ]
 
@@ -60,6 +60,7 @@ from typing import Callable, Optional, Dict, Any
 from .graph.memgraph_queries import ZXQueryStore
 from pyzx.utils import VertexType, EdgeType
 from pyzx.graph.base import BaseGraph, VT, ET
+from .graph.graph_memgraph import GraphMemgraph
 
 
 class Stats:
@@ -126,7 +127,7 @@ def _execute_query(
     """
     if params is None:
         params = {}
-    
+
     with session_factory() as session:
         result = session.run(query, params)
         record = result.single()
@@ -560,10 +561,7 @@ def reduce_scalar(
 
 
 def full_reduce(
-    session_factory: Callable,
-    graph_id: str,
-    quiet: bool = True,
-    stats: Optional[Stats] = None
+    graph: GraphMemgraph
 ) -> None:
     """
     The main simplification routine for graph database ZX-diagrams.
@@ -587,17 +585,23 @@ def full_reduce(
         quiet: If False, print progress information
         stats: Optional statistics tracker
     """
+    graph_id = graph.graph_id
+    session_factory = graph.session_get
+    quiet = False
+    stats = None
+
+
     if not quiet:
         print(f"Starting full_reduce_db on graph '{graph_id}'...")
     
     # Initial simplifications
     if not quiet:
         print("Phase 1: Initial interior clifford simplification")
-    interior_clifford_simp(session_factory, graph_id, quiet, stats)
+    interior_clifford_simp(session_factory, graph_id, quiet)
     
     if not quiet:
         print("Phase 2: Initial pivot gadget simplification")
-    pivot_gadget_simp(session_factory, graph_id, quiet, stats)
+    pivot_gadget_simp(session_factory, graph_id, quiet)
     
     # Main reduction loop
     if not quiet:
@@ -610,16 +614,16 @@ def full_reduce(
             print(f"  Main loop iteration {iteration}")
         
         # Full Clifford simplification
-        clifford_simp(session_factory, graph_id, quiet, stats)
+        clifford_simp(session_factory, graph_id, quiet)
         
         # Gadget simplification
-        i = gadget_simp(session_factory, graph_id, quiet, stats)
+        i = gadget_simp(session_factory, graph_id, quiet)
         
         # Interior Clifford again
-        interior_clifford_simp(session_factory, graph_id, quiet, stats)
+        interior_clifford_simp(session_factory, graph_id, quiet)
         
         # Pivot gadget
-        j = pivot_gadget_simp(session_factory, graph_id, quiet, stats)
+        j = pivot_gadget_simp(session_factory, graph_id, quiet)
         
         # Check if any gadget operations were applied
         if not (i or j):

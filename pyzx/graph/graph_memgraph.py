@@ -104,6 +104,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self._outputs = tuple()
         self._maxr = 1
 
+    def session_get(self):
+        return self._get_session()
+
     def _get_session(self):
         """Returns driver session"""
         if self.database:
@@ -140,13 +143,13 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                     phase = phase % 2
                 except Exception:
                     pass
-            phase_str = self._phase_to_str(phase) if phase is not None else "0"
+            phase_val = self._phase_to_str(phase)
 
             all_vertices.append(
                 {
                     "id": v_id,
                     "t": ty.value,
-                    "phase": phase_str,
+                    "phase": phase_val,
                     "qubit": data.get("qubit", -1),
                     "row": data.get("row", -1),
                 }
@@ -307,10 +310,13 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             self._maxr = int(rec["maxr"]) if rec and rec["maxr"] is not None else -1
             return self._maxr
 
-    def _phase_to_str(self, phase) -> str:
+    def _phase_to_str(self, phase):
         if phase is None:
-            return "0"
-        return str(phase)
+            return 0.0
+        try:
+            return float(phase)
+        except Exception:
+            return str(phase)
 
     def vindex(self) -> int:
         """returns private variable _vindex (int)"""
@@ -1080,7 +1086,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
         Default values:
             t = VertexType.BOUNDARY
-            phase = "0"
+            phase = 0.0
             qubit = -1
             row = -1
         """
@@ -1094,7 +1100,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             {
                 "id": v_id,
                 "t": VertexType.BOUNDARY.value,
-                "phase": "0",
+                "phase": 0.0,
                 "qubit": -1,
                 "row": -1,
             }

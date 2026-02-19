@@ -73,12 +73,12 @@ class ZXQueryStore:
           AND end.graph_id = $graph_id
           AND id(start) < id(end)
           // All intermediate nodes must be H-nodes (degree 2 simple gates)
-          AND ALL(node IN nodes(path)[1..-1] WHERE node.graph_id = $graph_id AND size((node)--()) = 2)
+          AND ALL(node IN nodes(path)[1..-1] WHERE node.graph_id = $graph_id AND size([(node)-[]-() | 1]) = 2)
           // All edges in path must be Hadamard edges (t=2)
           AND ALL(edge IN relationships(path) WHERE edge.t = 2)
           // Start and end should not be H-nodes themselves
-          AND NOT (size((start)--()) = 2 AND ALL(e IN [(start)-[r]-() | r] WHERE e.t = 2))
-          AND NOT (size((end)--()) = 2 AND ALL(e IN [(end)-[r]-() | r] WHERE e.t = 2))
+          AND NOT (size([(start)-[]-() | 1]) = 2 AND ALL(e IN [(start)-[r]-() | r] WHERE e.t = 2))
+          AND NOT (size([(end)-[]-() | 1]) = 2 AND ALL(e IN [(end)-[r]-() | r] WHERE e.t = 2))
         
         WITH start, end, nodes(path)[1..-1] as nodes_to_delete
         LIMIT 100  // Process in batches to avoid long transactions
@@ -122,21 +122,29 @@ class ZXQueryStore:
         // Reconnect v's neighbors (except u) to merged
         OPTIONAL MATCH (v)-[r:Wire]-(y:Node)
         WHERE y <> u
-        WITH u, v, merged, u_connections, COLLECT({node: y, edge: r}) AS v_connections
+        WITH u, v, merged, u_connections + COLLECT({node: y, edge: r}) AS all_connections
         
         // Create all new connections
-        FOREACH (conn IN u_connections |
-            CREATE (merged)-[:Wire {t: conn.edge.t, graph_id: $graph_id}]-(conn.node)
-        )
-        FOREACH (conn IN v_connections |
-            CREATE (merged)-[:Wire {t: conn.edge.t, graph_id: $graph_id}]-(conn.node)
-        )
+        WITH u, v, merged, all_connections
         
-        // Delete old nodes
-        WITH u, v
+        // Extract connection info FIRST before deleting anything
+        UNWIND (CASE WHEN size(all_connections) > 0 THEN all_connections ELSE [null] END) as c
+        
+        // We need to keep u and v in scope to delete them, but only once per pair. 
+        // If we unwind, we multiply rows.
+        // Better: first collect properties, then delete.
+        
+        WITH u, v, merged, 
+             collect({id: id(c.node), et: c.edge.t}) as target_infos
+             
         DETACH DELETE u, v
         
-        RETURN COUNT(*) AS patterns_processed
+        WITH merged, target_infos
+        UNWIND target_infos as info
+        MATCH (t) WHERE id(t) = info.id
+        MERGE (merged)-[:Wire {t: info.et, graph_id: $graph_id}]-(t)
+        
+        RETURN count(DISTINCT merged) as patterns_processed
         """
 
     def _pivot_rule_two_interior_pauli(self):
