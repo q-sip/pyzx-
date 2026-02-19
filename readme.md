@@ -106,8 +106,29 @@ Runs the tests again if PyZX changes
 
 ### PostgreSQL + Age
 
-WIP!!! The option has not been tested yet.
+WIP!!! Database starts but the dependencies need to be fixed.
+
+<pre>
 docker compose --profile age up
+</pre>
+
+The .env.PSQL file should be something like the following:
+
+<pre>
+DB_TYPE=age
+
+DB_HOST=age
+DB_PORT=5432
+
+# Database credentials
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=password
+POSTGRES_DB=age_db
+
+# App-level connection string (recommended)
+DATABASE_URL=postgresql://postgres:password@age:5432/age_db
+
+</pre>
 
 ## Precommit hooks
 

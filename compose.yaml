@@ -18,17 +18,16 @@ services:
   age:
     image: apache/age
     profiles: ["age"]
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: age_db
     ports:
       - "5455:5432"
+    env_file:
+    - .env
 
-  pyzx:
+  pyzx-neo4j:
     build:
       context: .
       target: product
+    profiles: ["neo4j"]
     depends_on:
       neo4j:
         condition: service_healthy
@@ -41,11 +40,23 @@ services:
       - path: ./.env.pyzx
     command: python -m manual_neo4j.main_switch
 
+  pyzx-age:
+    build:
+      context: .
+      target: product
+    profiles: ["age"]
+    depends_on:
+      age:
+        condition: service_healthy
+    environment:
+      DB_TYPE: age
+    env_file:
+      - path: ./.env.PSQL
   # You can run this with this:
   # docker compose up --watch pyzx-dev
   # And it will watch all the files.
   pyzx-dev:
-    extends: pyzx
+    extends: pyzx-neo4j
     profiles: [ "pyzx-dev" ]
     entrypoint: [ "/bin/sh", "-c" ]
     environment:
