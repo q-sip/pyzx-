@@ -68,7 +68,9 @@ PyZX can also be run from the commandline. To optimise a circuit you can for ins
 
 ## Docker and devops
 
-Now there is posibility to use docker and docker compose.  
+Now there is posibility to use docker and docker compose. You can choose between Neo4j database and PosgresSQL Age.  
+
+### Neo4j Database
 With ```docker compose up --build``` you get both neo4j and the pyzx running.  
 The PyZX will run the neo4j_functionality_test.py and be done.  
 After that you should be able to see the small demo graph in side neo4j.
@@ -90,6 +92,8 @@ NEO4J_AUTH=neo4j/testkala
 
 The information in neo4j determines what you should put in to the .env.pyzx values.
 <pre>
+docker compose --profile neo4j up
+<pre>
 docker compose up --watch test-dev
 </pre>
 Runs the tests with hot reload
@@ -99,6 +103,10 @@ docker compose up --watch pyzx-dev
 </pre>
 Runs the tests again if PyZX changes
 
+### PostgresSQL + Age
+
+WIP!!! The option has not been tested yet.
+docker compose --profile age up
 
 ## Precommit hooks
 
