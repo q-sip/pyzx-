@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
 from pyzx.symbolic import new_var, parse
-from .neo4j_rewrite_runner import run_rewrite
+from .graph_db_rewrite_runner import run_rewrite
 
 from ..utils import (
     EdgeType,
