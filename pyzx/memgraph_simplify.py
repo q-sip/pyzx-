@@ -270,7 +270,7 @@ def lcomp_simp_db(
     return count > 0
 
 
-def bialgebra_simp_db(
+def bialgebra_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -385,7 +385,7 @@ def pivot_boundary_simp_db(
     return count > 0
 
 
-def clifford_simp_db(
+def clifford_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -426,7 +426,7 @@ def clifford_simp_db(
     return applied_any
 
 
-def pivot_gadget_simp_db(
+def pivot_gadget_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -457,7 +457,7 @@ def pivot_gadget_simp_db(
     return count > 0
 
 
-def gadget_simp_db(
+def gadget_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -589,7 +589,7 @@ def full_reduce(
     
     if not quiet:
         print("Phase 2: Initial pivot gadget simplification")
-    pivot_gadget_simp_db(session_factory, graph_id, quiet, stats)
+    pivot_gadget_simp(session_factory, graph_id, quiet, stats)
     
     # Main reduction loop
     if not quiet:
@@ -602,16 +602,16 @@ def full_reduce(
             print(f"  Main loop iteration {iteration}")
         
         # Full Clifford simplification
-        clifford_simp_db(session_factory, graph_id, quiet, stats)
+        clifford_simp(session_factory, graph_id, quiet, stats)
         
         # Gadget simplification
-        i = gadget_simp_db(session_factory, graph_id, quiet, stats)
+        i = gadget_simp(session_factory, graph_id, quiet, stats)
         
         # Interior Clifford again
         interior_clifford_simp(session_factory, graph_id, quiet, stats)
         
         # Pivot gadget
-        j = pivot_gadget_simp_db(session_factory, graph_id, quiet, stats)
+        j = pivot_gadget_simp(session_factory, graph_id, quiet, stats)
         
         # Check if any gadget operations were applied
         if not (i or j):
@@ -625,7 +625,7 @@ def full_reduce(
             print(stats)
 
 
-def custom_reduce_db(
+def custom_reduce(
     session_factory: Callable,
     graph_id: str,
     rules: list,
@@ -653,7 +653,7 @@ def custom_reduce_db(
             raise ValueError(f"Unknown rule '{rule}'. Available: {available_rules}")
     
     if not quiet:
-        print(f"Starting custom_reduce_db with rules: {rules}")
+        print(f"Starting custom_reduce with rules: {rules}")
     
     for iteration in range(max_iterations):
         if not quiet:
@@ -676,6 +676,6 @@ def custom_reduce_db(
             break
     
     if not quiet:
-        print("Completed custom_reduce_db")
+        print("Completed custom_reduce")
         if stats:
             print(stats)
