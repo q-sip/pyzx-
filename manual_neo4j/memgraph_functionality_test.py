@@ -10,6 +10,7 @@ import pyzx as zx
 from pyzx.graph.graph_memgraph import GraphMemgraph
 from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType, VertexType
+from pyzx import memgraph_simplify as mem
 
 load_dotenv()
 
@@ -166,7 +167,7 @@ def iterable_graph_creation():
         print(f'memgraph took {time2-time1}s')
         print(f'simple graph full reduce starting...')
         time1 = time()
-        zx.full_reduce(sg)
+        mem.full_reduce(sg)
         time2 = time()
         print(f'simple graph took {time2-time1}s')
         # t = zx.compare_tensors(g, sg)
