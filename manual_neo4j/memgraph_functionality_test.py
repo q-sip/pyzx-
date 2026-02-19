@@ -1,12 +1,14 @@
 """Manual Neo4j graph exercises for local testing."""
 
 import os
+from time import time
 import random
 from fractions import Fraction
 
 from dotenv import load_dotenv
 import pyzx as zx
 from pyzx.graph.graph_memgraph import GraphMemgraph
+from pyzx.graph.graph_s import GraphS
 from pyzx.utils import EdgeType, VertexType
 
 load_dotenv()
@@ -121,6 +123,18 @@ def iterable_graph_creation():
         g.add_vertex(VertexType.Z, 0, 0)
         g.add_vertex(VertexType.Z, 0, 0)
         g.add_vertex(VertexType.Z, 0, 0)
+        sg = GraphS()
+        sg.add_vertex(VertexType.BOUNDARY, 0, 0)
+        sg.add_vertex(VertexType.BOUNDARY, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
+        sg.add_vertex(VertexType.X, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
+        sg.add_vertex(VertexType.X, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
+        sg.add_vertex(VertexType.Z, 0, 0)
         for e in [(0, 2), (2, 3), (3, 4), (4, 1)]:
             g.add_edge(e)
         for _ in range(num):
@@ -132,9 +146,30 @@ def iterable_graph_creation():
                     random.randint(2, g.num_vertices() - 1),
                 )
             )
+        for e in [(0, 2), (2, 3), (3, 4), (4, 1)]:
+            sg.add_edge(e)
+        for _ in range(num):
+            sg.add_vertex(random.choice(choices), 0, 0)
+            sg.add_vertex(random.choice(choices), 0, 0)
+            sg.add_edge(
+                (
+                    random.randint(2, sg.num_vertices() - 1),
+                    random.randint(2, sg.num_vertices() - 1),
+                )
+            )
         # tää ei sit toimi varmaa, koska full reduce poistaa joitain nodeja.
         # Ainaki mulla crashas, koska vertex 2 ei ollu tyyppia.
+        print(f'memgraph full reduce starting...')
+        time1 = time()
         zx.full_reduce(g)
+        time2 = time()
+        print(f'memgraph took {time2-time1}s')
+        print(f'simple graph full reduce starting...')
+        time1 = time()
+        zx.full_reduce(sg)
+        time2 = time()
+        print(f'simple graph took {time2-time1}s')
+        # t = zx.compare_tensors(g, sg)
         print(f"{num} succesful")
         num += 1
 
