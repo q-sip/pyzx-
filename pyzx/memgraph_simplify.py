@@ -180,7 +180,7 @@ def spider_simp(
     return count > 0
 
 
-def hadamard_simp_db(
+def hadamard_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -210,7 +210,7 @@ def hadamard_simp_db(
     return count > 0
 
 
-def pivot_simp_db(
+def pivot_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -247,7 +247,7 @@ def pivot_simp_db(
     return total_count > 0
 
 
-def lcomp_simp_db(
+def lcomp_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -347,9 +347,9 @@ def interior_clifford_simp(
             print(f"  Iteration {iteration}")
         
         i1 = spider_simp(session_factory, graph_id, quiet, stats)
-        i2 = hadamard_simp_db(session_factory, graph_id, quiet, stats)
-        i3 = pivot_simp_db(session_factory, graph_id, quiet, stats)
-        i4 = lcomp_simp_db(session_factory, graph_id, quiet, stats)
+        i2 = hadamard_simp(session_factory, graph_id, quiet, stats)
+        i3 = pivot_simp(session_factory, graph_id, quiet, stats)
+        i4 = lcomp_simp(session_factory, graph_id, quiet, stats)
         
         if not (i1 or i2 or i3 or i4):
             break
@@ -362,7 +362,7 @@ def interior_clifford_simp(
     return applied_any
 
 
-def pivot_boundary_simp_db(
+def pivot_boundary_simp(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -419,7 +419,7 @@ def clifford_simp(
     
     while True:
         i1 = interior_clifford_simp(session_factory, graph_id, quiet, stats)
-        i2 = pivot_boundary_simp_db(session_factory, graph_id, quiet, stats)
+        i2 = pivot_boundary_simp(session_factory, graph_id, quiet, stats)
         
         if i1 or i2:
             applied_any = True
@@ -504,7 +504,7 @@ def gadget_simp(
     return total_count > 0
 
 
-def reduce_scalar_db(
+def reduce_scalar(
     session_factory: Callable,
     graph_id: str,
     quiet: bool = True,
@@ -533,17 +533,17 @@ def reduce_scalar_db(
         
         # Basic simplifications
         i1 = spider_simp(session_factory, graph_id, quiet, stats)
-        i2 = hadamard_simp_db(session_factory, graph_id, quiet, stats)
-        i3 = pivot_simp_db(session_factory, graph_id, quiet, stats)
-        i4 = lcomp_simp_db(session_factory, graph_id, quiet, stats)
+        i2 = hadamard_simp(session_factory, graph_id, quiet, stats)
+        i3 = pivot_simp(session_factory, graph_id, quiet, stats)
+        i4 = lcomp_simp(session_factory, graph_id, quiet, stats)
         
         if i1 or i2 or i3 or i4:
             iteration += 1
             continue
         
         # Gadget simplifications
-        i5 = pivot_gadget_simp_db(session_factory, graph_id, quiet, stats)
-        i6 = gadget_simp_db(session_factory, graph_id, quiet, stats)
+        i5 = pivot_gadget_simp(session_factory, graph_id, quiet, stats)
+        i6 = gadget_simp(session_factory, graph_id, quiet, stats)
         
         if i5 or i6:
             iteration += 1
