@@ -51,6 +51,7 @@ services:
       DB_TYPE: age
     env_file:
       - path: ./.env.PSQL
+    command: python -m age_test.age_functionality_test
   # You can run this with this:
   # docker compose up --watch pyzx-dev
   # And it will watch all the files.
