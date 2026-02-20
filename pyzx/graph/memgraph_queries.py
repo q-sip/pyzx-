@@ -40,6 +40,18 @@ class ZXQueryStore:
     # Query Definitions (Private Methods)
     # ==========================================
 
+    def _remove_isolated_vertices(self):
+        return """
+          MATCH (n:Node)
+          WHERE n.graph_id = $graph_id AND degree(n) = 0
+          DELETE n
+          RETURN count(n) as nodes_removed;
+          MATCH (n:Node)-[r:wire]->(m:node)
+          WHERE n.graph_id = $graph_id AND degree(m) = 1 AND degree(n) = 1
+          DELETE n, m
+          RETURN count(n) as nodes_removed;
+          """
+
 
     def _to_gh(self):
         return """
