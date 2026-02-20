@@ -18,3 +18,4 @@ neo4j
 dotenv
 pre-commit
 pylint
+psycopg
