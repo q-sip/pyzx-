@@ -21,7 +21,7 @@ services:
     ports:
       - "5455:5432"
     env_file:
-    - .env
+    - ./.env.PSQL
 
   pyzx-neo4j:
     build:
@@ -46,8 +46,7 @@ services:
       target: product
     profiles: ["age"]
     depends_on:
-      age:
-        condition: service_healthy
+      - age
     environment:
       DB_TYPE: age
     env_file:
