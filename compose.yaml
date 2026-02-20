@@ -16,7 +16,9 @@ services:
       - path: ./.env.neo4j
 
   age:
-    image: apache/age
+    build:
+      context: .
+      dockerfile: Dockerfile.age
     profiles: ["age"]
     ports:
       - "5455:5432"
@@ -51,7 +53,7 @@ services:
       DB_TYPE: age
     env_file:
       - path: ./.env.PSQL
-    command: python -m age_test.age_functionality_test
+    command: python age_test/age_functionality_test.py
   # You can run this with this:
   # docker compose up --watch pyzx-dev
   # And it will watch all the files.
