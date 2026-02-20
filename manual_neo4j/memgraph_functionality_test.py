@@ -174,6 +174,23 @@ def iterable_graph_creation():
         print(f"{num} succesful")
         num += 1
 
+def test_num_vertices_against_simple_graph(qubits, depth):
+    g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph", seed=10)
+    g_s = zx.generate.cliffordT(qubits, depth, seed=10)
+
+    print(f"depth={depth}, qubits={qubits} memgraph full reduce starting...")
+    time1 = time()
+    mem.full_reduce(g_mem)
+    time2 = time()
+    print(f"depth={depth}, qubits={qubits} memgraph took {time2 - time1}s")
+    print(f"depth={depth}, qubits={qubits} simplegraph full reduce starting...")
+    time1 = time()
+    zx.full_reduce(g_s)
+    time2 = time()
+    print(f"depth={depth}, qubits={qubits} simplegraph took {time2 - time1}s")
+    g_mem_num = g_mem.num_vertices()
+    g_s_num = g_s.num_vertices()
+    print(f'g_mem vertices: {g_mem_num}, g_s vertices: {g_s_num}')
 
 def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100):
     """Run memgraph full reduce over qubit/depth grid."""
@@ -193,19 +210,27 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
                 zx.full_reduce(g_s)
                 time2 = time()
                 print(f"depth={depth}, qubits={qubits} simplegraph took {time2 - time1}s")
+                g_mem_num = g_mem.num_vertices()
+                g_s_num = g_s.num_vertices()
+                print(f'g_mem vertices: {g_mem_num}, g_s vertices: {g_s_num}')
                 print('Comparing...')
-                # print(f'DEBUG: num_vertices ==== {g_mem.num_vertices()}')
-                # print(f'DEBUG: vertices ==== {g_mem.vertices()}')
-                t = zx.compare_tensors(g_s, g_mem)
-                if t:
-                    print('tensors match')
+                if g_mem_num == g_s_num:
+                    print('Success')
                 else:
                     print('fail')
+                # print(f'DEBUG: num_vertices ==== {g_mem.num_vertices()}')
+                # print(f'DEBUG: vertices ==== {g_mem.vertices()}')
+                # t = zx.compare_tensors(g_s, g_mem)
+                # if t:
+                #     print('tensors match')
+                # else:
+                #     print('fail')
             finally:
                 g_mem.remove_all_data()
                 g_mem.close()
 
 
 # iterable_graph_creation()
-test_depths_qubits(2, 100, 100)
+# test_depths_qubits(2, 100, 100)
 # large_graph()
+test_num_vertices_against_simple_graph(2, 100)

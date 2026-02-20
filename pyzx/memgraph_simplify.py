@@ -627,6 +627,7 @@ def full_reduce(
         
         # Check if any gadget operations were applied
         if not (i or j):
+            graph.remove_isolated_vertices()
             if not quiet:
                 print("No more gadget rewrites applicable, terminating")
             break
