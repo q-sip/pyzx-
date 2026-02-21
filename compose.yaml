@@ -16,7 +16,9 @@ services:
       - path: ./.env.neo4j
 
   age:
-    image: apache/age
+    build:
+      context: .
+      dockerfile: Dockerfile.age
     profiles: ["age"]
     ports:
       - "5455:5432"

@@ -10,6 +10,9 @@ class ZXQueryStore:
         self._queries = {
             "hadamard_edge_cancellation": self._hadamard_edge_cancellation(),
             "spider_fusion_rewrite": self._spider_fusion_rewrite(),
+          "id_simp": self._id_simp(),
+          "remove_self_loop_simp": self._remove_self_loop_simp(),
+          "remove_isolated_vertices": self._remove_isolated_vertices(),
             "pivot_rule_two_interior_pauli": self._pivot_rule_two_interior_pauli(),
             "pivot_rule_single_interior_pauli": self._pivot_rule_single_interior_pauli(),
             "local_complement_rewrite": self._local_complement_rewrite(),
@@ -24,6 +27,8 @@ class ZXQueryStore:
             "local_complement_full": self._local_complement_full(),
             "gadget_fusion_both": self._gadget_fusion_both(),
             "spider_fusion_rewrite_2": self._spider_fusion_rewrite_2(),
+          "copy_simp": self._copy_simp(),
+          "supplementarity_simp": self._supplementarity_simp(),
         }
 
     def get(self, query_name: str) -> str:
@@ -42,15 +47,20 @@ class ZXQueryStore:
 
     def _remove_isolated_vertices(self):
         return """
-          MATCH (n:Node)
-          WHERE n.graph_id = $graph_id AND degree(n) = 0
-          DELETE n
-          RETURN count(n) as nodes_removed;
-          MATCH (n:Node)-[r:wire]->(m:node)
-          WHERE n.graph_id = $graph_id AND degree(m) = 1 AND degree(n) = 1
-          DELETE n, m
-          RETURN count(n) as nodes_removed;
-          """
+        MATCH (n:Node)
+        WHERE n.graph_id = $graph_id AND degree(n) = 0 AND n.t <> 0
+        WITH n, n.t AS ty, n.phase AS ph
+        DELETE n
+        RETURN ty, ph, "SINGLE" AS kind;
+        MATCH (n:Node)-[r:Wire]-(m:Node)
+        WHERE n.graph_id = $graph_id AND m.graph_id = $graph_id
+          AND degree(n) = 1 AND degree(m) = 1
+          AND id(n) < id(m)
+          AND n.t <> 0 AND m.t <> 0
+        WITH n, m, r, n.t AS t1, m.t AS t2, n.phase AS p1, m.phase AS p2, r.t AS et
+        DELETE n, m
+        RETURN t1, p1, t2, p2, et, "PAIR" AS kind;
+        """
 
 
     def _to_gh(self):
@@ -160,6 +170,38 @@ class ZXQueryStore:
         MERGE (merged)-[:Wire {t: info.et, graph_id: $graph_id}]-(t)
         
         RETURN count(DISTINCT merged) as patterns_processed
+        """
+
+    def _id_simp(self):
+        return """
+        // Remove identity spiders: degree-2 ZX spiders with zero phase.
+        MATCH (v:Node)
+        WHERE v.graph_id = $graph_id
+          AND v.t IN [1, 2]
+          AND coalesce(v.phase, 0) = 0
+          AND degree(v) = 2
+        MATCH (v)-[e1:Wire]-(n1:Node)
+        MATCH (v)-[e2:Wire]-(n2:Node)
+        WHERE id(e1) < id(e2)
+        WITH v, n1, n2, e1, e2
+        LIMIT 1
+
+        CREATE (n1)-[:Wire {t: CASE WHEN e1.t = e2.t THEN 1 ELSE 2 END, graph_id: $graph_id}]->(n2)
+        DETACH DELETE v
+
+        RETURN 1 AS rewrites_applied
+        """
+
+    def _remove_self_loop_simp(self):
+        return """
+        // Remove self-loops on ZX-like nodes; Hadamard self-loops add a pi phase.
+        MATCH (v:Node)-[e:Wire]-(v)
+        WHERE v.graph_id = $graph_id AND v.t IN [1, 2]
+        WITH v, COLLECT(e) AS loops,
+             sum(CASE e.t WHEN 2 THEN 1 ELSE 0 END) AS had_count
+      SET v.phase = coalesce(v.phase, 0) + CASE WHEN had_count % 2 = 1 THEN 1 ELSE 0 END
+      FOREACH (loop IN loops | DELETE loop)
+      RETURN count(DISTINCT v) AS rewrites_applied
         """
 
     def _pivot_rule_two_interior_pauli(self):
@@ -970,4 +1012,105 @@ class ZXQueryStore:
         DETACH DELETE u, v
 
         RETURN COUNT(*) AS merged;
+        """
+
+    def _copy_simp(self):
+        return """
+        // Copy rule for arity-1 ZX spiders through their neighbor (ZX-only variant).
+        MATCH (v:Node)-[vw:Wire]-(w:Node)
+        WHERE v.graph_id = $graph_id AND w.graph_id = $graph_id
+          AND v.t IN [1, 2] AND w.t IN [1, 2]
+          AND v.phase IN [0, 1]
+          AND degree(v) = 1
+          AND (
+            (vw.t = 2 AND w.t = v.t) OR
+            (vw.t = 1 AND w.t <> v.t)
+          )
+        WITH v, w, vw
+        LIMIT 1
+
+        WITH v, w, vw,
+             CASE
+               WHEN vw.t = 2 AND w.t = v.t AND v.t = 1 THEN 2
+               WHEN vw.t = 2 AND w.t = v.t AND v.t = 2 THEN 1
+               WHEN vw.t = 1 AND w.t <> v.t THEN v.t
+               ELSE null
+             END AS copy_type
+        WHERE copy_type IS NOT NULL
+
+        OPTIONAL MATCH (w)-[we:Wire]-(n:Node)
+        WHERE n <> v
+        WITH v, w, copy_type, coalesce(v.phase, 0) AS v_phase,
+             COLLECT(n) AS neighbor_nodes, COLLECT(we.t) AS neighbor_edge_types
+
+        DETACH DELETE v, w
+
+        WITH 1 AS applied, copy_type, v_phase, neighbor_nodes, neighbor_edge_types
+        UNWIND range(0, size(neighbor_nodes) - 1) AS idx
+        WITH applied, copy_type, v_phase, neighbor_nodes[idx] AS n, neighbor_edge_types[idx] AS et
+        CREATE (u:Node {
+          t: copy_type,
+          phase: v_phase,
+          graph_id: $graph_id
+        })
+        CREATE (u)-[:Wire {t: et, graph_id: $graph_id}]->(n)
+
+        RETURN max(applied) AS rewrites_applied
+        """
+
+    def _supplementarity_simp(self):
+        return """
+        // Supplementarity rule for non-Clifford Z-spiders with identical neighborhoods.
+        MATCH (v:Node {t: 1})
+        WHERE v.graph_id = $graph_id
+          AND v.phase IS NOT NULL
+          AND v.phase <> 0
+          AND v.phase * 2 <> round(v.phase * 2)
+
+        MATCH (w:Node {t: 1})
+        WHERE w.graph_id = $graph_id
+          AND id(v) < id(w)
+          AND w.phase IS NOT NULL
+          AND w.phase <> 0
+          AND w.phase * 2 <> round(w.phase * 2)
+
+        OPTIONAL MATCH (v)-[vw:Wire]-(w)
+
+        OPTIONAL MATCH (v)-[:Wire]-(nv:Node)
+        WHERE nv <> w
+        WITH v, w, vw, COLLECT(DISTINCT nv) AS v_neighbors
+
+        OPTIONAL MATCH (w)-[:Wire]-(nw:Node)
+        WHERE nw <> v
+        WITH v, w, vw, v_neighbors, COLLECT(DISTINCT nw) AS w_neighbors
+
+        WHERE size(v_neighbors) = size(w_neighbors)
+          AND ALL(n IN v_neighbors WHERE n IN w_neighbors)
+
+        WITH v, w, v_neighbors AS neighbors,
+             CASE WHEN vw IS NULL THEN 1 ELSE 2 END AS supp_type,
+             coalesce(v.phase, 0) AS alpha,
+             coalesce(w.phase, 0) AS beta
+
+        WITH v, w, neighbors, supp_type,
+             abs((alpha + beta) % 2) AS sum_mod2,
+             abs((alpha - beta) % 2) AS diff_mod2
+
+        WHERE (supp_type = 1 AND (sum_mod2 = 1 OR diff_mod2 = 1))
+           OR (supp_type = 2 AND (sum_mod2 = 0 OR diff_mod2 = 1))
+
+        WITH v, w, neighbors, supp_type, sum_mod2
+        LIMIT 1
+
+        FOREACH (n IN neighbors |
+          FOREACH (_ IN CASE
+            WHEN (supp_type = 1 AND sum_mod2 = 1) OR (supp_type = 2 AND sum_mod2 = 0)
+            THEN [1] ELSE [] END |
+            SET n.phase = coalesce(n.phase, 0) + 1
+          )
+        )
+
+        DETACH DELETE v, w
+
+        RETURN 1 AS rewrites_applied
         """
