@@ -44,24 +44,16 @@ VT = int
 ET = Tuple[int, int]
 
 class GraphAGE:
-    def __init__(
-        self,
-        database = os.getenv("POSTGRES_DB", "age_db"),
-        user = os.getenv("POSTGRES_USER", "postgres"),
-        host = os.getenv("DB_HOST", "age"),
-        password = os.getenv("POSTGRES_PASSWORD", ""),
-        port=5432,
-        graph_id="test_graph"
-        ):
-        #print(database, user, host, password, port)
+    def __init__(self):
         self.conn = psycopg.connect(
-            dbname=database,
-            user=user,
-            password=password,
-            host=host,
-            port=port
-        )
-        self.graph_id = graph_id
+            host = os.getenv("DB_HOST"),
+            port = os.getenv("DB_PORT"),
+            dbname = os.getenv("POSTGRES_DB"),
+            user = os.getenv("POSTGRES_USER"),
+            password = os.getenv("POSTGRES_PASSWORD")
+            )
+        
+        self.graph_id = "test_graph"
         
         with self.conn.cursor() as cur:
             # Ensure AGE extension is loaded
