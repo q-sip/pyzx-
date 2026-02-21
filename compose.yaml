@@ -16,6 +16,7 @@ services:
       - path: ./.env.neo4j
 
   age:
+    image: apache/age
     build:
       context: .
       dockerfile: Dockerfile.age
@@ -49,8 +50,6 @@ services:
     profiles: ["age"]
     depends_on:
       - age
-    environment:
-      DB_TYPE: age
     env_file:
       - path: ./.env.pyzx
     command: python -m age_test.age_functionality_test
