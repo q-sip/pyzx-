@@ -45,12 +45,12 @@ ET = Tuple[int, int]
 
 class GraphAGE:
     def __init__(
-        self, 
+        self,
         database = os.getenv("POSTGRES_DB", "age_db"),
         user = os.getenv("POSTGRES_USER", "postgres"),
         host = os.getenv("DB_HOST", "age"),
-        password = os.getenv("POSTGRES_PASSWORD", ""), 
-        port=5432, 
+        password = os.getenv("POSTGRES_PASSWORD", ""),
+        port=5432,
         graph_id="test_graph"
         ):
         print(database, user, host, password, port)
