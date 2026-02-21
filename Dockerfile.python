@@ -4,6 +4,9 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Install PostgreSQL development libraries required for psycopg2
+RUN apt-get update && apt-get install -y libpq-dev
+
 # Copy the Python code (e.g., age_test) into the container
 COPY . /app
 
