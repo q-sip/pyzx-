@@ -917,17 +917,16 @@ class GraphMemgraph(BaseGraph[VT, ET]):
     def run_cypher_rewrite(
         self,
         rule_name: str,
-        variant_id: Optional[str] = None,
         query_config: Optional[Mapping[str, str]] = None,
         measure_time: bool = False,
     ) -> Tuple[Optional[Mapping[str, Any]], Optional[float]]:
         """Run a named Cypher rewrite from neo4j_queries with this graph's session and graph_id.
         See neo4j_rewrite_runner for rule names and variant selection (env/config)."""
+        print('RUNNING CYPHER REWRITE')
         return run_rewrite(
             self._get_session,
             self.graph_id,
             rule_name,
-            variant_id=variant_id,
             query_config=dict(query_config) if query_config else None,
             measure_time=measure_time,
         )

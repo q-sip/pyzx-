@@ -276,10 +276,15 @@ def remove_isolated_vertices(
         Number of vertices removed
     """
     queries = ZXQueryStore()
-    query = queries.get("remove_isolated_vertices")
+    query_or_list = queries.get("remove_isolated_vertices")
     params = {"graph_id": graph_id}
 
-    count = _execute_query(session_factory, query, params, quiet)
+    if isinstance(query_or_list, list):
+        count = 0
+        for q in query_or_list:
+            count += _execute_query(session_factory, q, params, quiet)
+    else:
+        count = _execute_query(session_factory, query_or_list, params, quiet)
 
     if stats:
         stats.count_rewrites("remove_isolated_vertices", count)

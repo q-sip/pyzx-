@@ -47,21 +47,23 @@ class ZXQueryStore:
     # ==========================================
 
     def _remove_isolated_vertices(self):
-        return """
+        return ["""
         MATCH (n:Node)
         WHERE n.graph_id = $graph_id AND degree(n) = 0 AND n.t <> 0
-        WITH n, n.t AS ty, n.phase AS ph
-        DELETE n
-        RETURN ty, ph, "SINGLE" AS kind;
+        WITH n
+        DETACH DELETE n
+        RETURN count(n) AS count
+        """,
+        """
         MATCH (n:Node)-[r:Wire]-(m:Node)
         WHERE n.graph_id = $graph_id AND m.graph_id = $graph_id
           AND degree(n) = 1 AND degree(m) = 1
           AND id(n) < id(m)
           AND n.t <> 0 AND m.t <> 0
-        WITH n, m, r, n.t AS t1, m.t AS t2, n.phase AS p1, m.phase AS p2, r.t AS et
-        DELETE n, m
-        RETURN t1, p1, t2, p2, et, "PAIR" AS kind;
-        """
+        WITH n, m
+        DETACH DELETE n, m
+        RETURN count(n) AS count
+        """]
 
 
     def _to_gh(self):
