@@ -168,6 +168,8 @@ def interior_clifford_simp(g: BaseGraph[VT,ET]) -> bool:
         i4 = lcomp_simp(g)
         if not (i1 or i2 or i3 or i4): break
         i += 1
+        print(f'{i}th iteration completed')
+    print(f'completed interior_clifford_simp with {i+1} iterations')
     return i != 0
 
 def clifford_simp(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],bool]]=None, quiet:bool=True, stats:Optional[Stats]=None) -> int:
@@ -213,14 +215,22 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
         raise ValueError("Input graph is not a ZX-diagram as it contains an H-box. "
                          "Maybe call pyzx.hsimplify.from_hypergraph_form(g) first?")
     interior_clifford_simp(g)
+    print(f'Nodes after initial interior_clifford_simp: {g.num_vertices()}')
     pivot_gadget_simp(g)
+    print(f'Nodes after initial pivot_gadget_simp: {g.num_vertices()}')
+    iteration = 0
     while True:
+        iteration += 1
         clifford_simp(g)
+        print(f'Nodes after {iteration}th clifford_simp: {g.num_vertices()}')
         i = gadget_simp(g)
+        print(f'Nodes after {iteration}th gadget_simp: {g.num_vertices()}')
         interior_clifford_simp(g)
+        print(f'Nodes after {iteration}th interior_clifford_simp: {g.num_vertices()}')
         k = copy_simp(g)
         l = supplementarity_simp(g)
         j = pivot_gadget_simp(g)
+        print(f'Nodes after {iteration}th pivot_gadget_simp: {g.num_vertices()}')
         if not (i or j or k or l):
             g.remove_isolated_vertices()
             break

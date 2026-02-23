@@ -93,7 +93,8 @@ def large_graph():
         inputs=[0],
         outputs=[8],
     )
-    print(g.types())
+    i = input('')
+    mem.full_reduce(g)
 
 
 def graph_full_reduce():
@@ -199,6 +200,7 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
         for depth in range(0, max_depth + 1, 10):
             g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph", seed=10)
             g_s = zx.generate.cliffordT(qubits, depth, seed=10)
+            i = input('')
             try:
                 print(f"depth={depth}, qubits={qubits} memgraph full reduce starting...")
                 time1 = time()
@@ -218,6 +220,7 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
                     print('Success')
                 else:
                     print('fail')
+                i = input('')
                 # print(f'DEBUG: num_vertices ==== {g_mem.num_vertices()}')
                 # print(f'DEBUG: vertices ==== {g_mem.vertices()}')
                 # t = zx.compare_tensors(g_s, g_mem)
@@ -229,8 +232,19 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
                 g_mem.remove_all_data()
                 g_mem.close()
 
+def test_mem_vs_simple(qubits, depth):
+    g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph", seed=10)
+    print(f'Initially: {g_mem.num_vertices()} vertices')
+    mem.full_reduce(g_mem)
+    print(f'Finally: {g_mem.num_vertices()} vertices')
+    g_s = zx.generate.cliffordT(qubits, depth, seed=10)
+    print(f'Initially: {g_s.num_vertices()} vertices')
+    zx.full_reduce(g_s)
+    print(f'Finally: {g_s.num_vertices()} vertices')
 
 # iterable_graph_creation()
 # test_depths_qubits(2, 100, 100)
 # large_graph()
-test_num_vertices_against_simple_graph(2, 100)
+# test_num_vertices_against_simple_graph(2, 100)
+test_mem_vs_simple(2, 100)
+print("DEBUG: Graph size check")

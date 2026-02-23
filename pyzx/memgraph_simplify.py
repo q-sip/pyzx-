@@ -157,29 +157,39 @@ def spider_simp(
     """
     Perform spider fusion on the graph in the database.
     Fuses adjacent spiders of the same color.
-    
-    Args:
-        session_factory: Function that returns a database session
-        graph_id: Identifier of the graph to simplify
-        quiet: If False, print progress information
-        stats: Optional statistics tracker
-        
-    Returns:
-        True if any rewrites were applied, False otherwise
     """
     queries = ZXQueryStore()
-    query = queries.get("spider_fusion_rewrite")
-    
-    # Add graph_id filter to query
-    # Note: This assumes your queries support graph_id filtering
     params = {"graph_id": graph_id}
     
-    count = _execute_query(session_factory, query, params, quiet)
+    total_count = 0
+    while True:
+        iteration_count = 0
+        
+        # Spider Fusion
+        query_fuse = queries.get("spider_fusion_rewrite")
+        c1 = _execute_query(session_factory, query_fuse, params, quiet)
+        iteration_count += c1
+        
+        # Remove Simple Self-Loops
+        query_simple = queries.get("remove_simple_self_loops")
+        c2 = _execute_query(session_factory, query_simple, params, quiet)
+        iteration_count += c2
+        if not quiet and c2 > 0: print(f"removed {c2} simple self loops")
+
+        # Remove Hadamard Self-Loops
+        query_had = queries.get("remove_hadamard_self_loops")
+        c3 = _execute_query(session_factory, query_had, params, quiet)
+        iteration_count += c3
+        if not quiet and c3 > 0: print(f"removed {c3} hadamard self loops")
+
+        total_count += iteration_count
+        if iteration_count == 0:
+            break
     
     if stats:
-        stats.count_rewrites("spider_fusion", count)
+        stats.count_rewrites("spider_fusion", total_count)
     
-    return count > 0
+    return total_count > 0
 
 
 def hadamard_simp(
@@ -233,16 +243,26 @@ def pivot_simp(
     queries = ZXQueryStore()
     params = {"graph_id": graph_id}
     
-    # Try two-interior pivot first
-    query1 = queries.get("pivot_rule_two_interior_pauli")
-    count1 = _execute_query(session_factory, query1, params, quiet)
-    
-    # Try single-interior pivot
-    query2 = queries.get("pivot_rule_single_interior_pauli")
-    count2 = _execute_query(session_factory, query2, params, quiet)
-    
-    total_count = count1 + count2
-    
+    total_count = 0
+    while True:
+        iteration_count = 0
+        
+        # Try two-interior pivot first
+        query1 = queries.get("pivot_rule_two_interior_pauli")
+        count1 = _execute_query(session_factory, query1, params, quiet)
+        iteration_count += count1
+
+        # NOT running single-interior pivot (boundary pivot) in interior_clifford_simp
+        # query2 = queries.get("pivot_rule_single_interior_pauli")
+        # count2 = _execute_query(session_factory, query2, params, quiet)
+        # iteration_count += count2
+        
+        total_count += iteration_count
+        if not quiet: print(f"pivot rewrites: {iteration_count}")
+        
+        if iteration_count == 0:
+            break
+            
     if stats:
         stats.count_rewrites("pivot", total_count)
     
@@ -271,7 +291,13 @@ def lcomp_simp(
     query = queries.get("local_complement_full")
     params = {"graph_id": graph_id}
     
-    count = _execute_query(session_factory, query, params, quiet)
+    count = 0
+    while True:
+        current_count = _execute_query(session_factory, query, params, quiet)
+        if not quiet: print(f"lcomp rewrites: {current_count}")
+        if current_count == 0:
+            break
+        count += current_count
     
     if stats:
         stats.count_rewrites("local_complement", count)
@@ -340,6 +366,11 @@ def interior_clifford_simp(
     if not quiet:
         print("Starting interior_clifford_simp...")
     
+    spider_simp(session_factory, graph_id, quiet, stats)
+    
+    # Convert to Green-Hadamard form (Graph-like)
+    to_gh(session_factory, graph_id, quiet)
+    
     applied_any = False
     iteration = 0
     
@@ -348,8 +379,8 @@ def interior_clifford_simp(
         if not quiet:
             print(f"  Iteration {iteration}")
         
-        i1 = spider_simp(session_factory, graph_id, quiet, stats)
-        i2 = hadamard_simp(session_factory, graph_id, quiet, stats)
+        i1 = id_simp(session_factory, graph_id, quiet, stats)
+        i2 = spider_simp(session_factory, graph_id, quiet, stats)
         i3 = pivot_simp(session_factory, graph_id, quiet, stats)
         i4 = lcomp_simp(session_factory, graph_id, quiet, stats)
         
@@ -598,32 +629,45 @@ def full_reduce(
     if not quiet:
         print("Phase 1: Initial interior clifford simplification")
     interior_clifford_simp(session_factory, graph_id, quiet)
+    print(f'Nodes after initial interior_clifford_simp: {graph.num_vertices()}')
 
     if not quiet:
         print("Phase 2: Initial pivot gadget simplification")
     pivot_gadget_simp(session_factory, graph_id, quiet)
-    
+    print(f'Nodes after initial pivot_gadget_simp: {graph.num_vertices()}')
     # Main reduction loop
     if not quiet:
         print("Phase 3: Main reduction loop")
     
     iteration = 0
+    prev_nodes = -1
     while True:
         iteration += 1
+        current_nodes = graph.num_vertices()
+        
         if not quiet:
             print(f"  Main loop iteration {iteration}")
         
+        # Stop if we are not reducing nodes and running too long, or cyclic
+        # But handle caution: sometimes rewrites don't reduce nodes but unlock others.
+        # Check if we have been stuck at same node count for a while? 
+        # For now, just rely on function returns.
+        
         # Full Clifford simplification
         clifford_simp(session_factory, graph_id, quiet)
+        print(f'Nodes after {iteration}th clifford_simp: {graph.num_vertices()}')
         
         # Gadget simplification
         i = gadget_simp(session_factory, graph_id, quiet)
-        
+        print(f'Nodes after {iteration}th gadget_simp: {graph.num_vertices()}')
+
         # Interior Clifford again
         interior_clifford_simp(session_factory, graph_id, quiet)
+        print(f'Nodes after {iteration}th interior_clifford_simp: {graph.num_vertices()}')
         
         # Pivot gadget
         j = pivot_gadget_simp(session_factory, graph_id, quiet)
+        print(f'Nodes after {iteration}th pivot_gadget_simp: {graph.num_vertices()}')
         
         # Check if any gadget operations were applied
         if not (i or j):
@@ -631,6 +675,22 @@ def full_reduce(
             if not quiet:
                 print("No more gadget rewrites applicable, terminating")
             break
+            
+        # Safety break for infinite loops where node count doesn't change
+        # If node count matches previous iteration AND only pivot_gadget was applied?
+        # Let's just limit iterations or check node count stagnation if loop count is high.
+        if iteration > 100:
+             if not quiet:
+                print("Max iterations reached, terminating")
+             break
+             
+        if current_nodes == graph.num_vertices() and not i and j:
+             # If only pivot_gadget applied and no node reduction, likely a cycle.
+             # We can't be 100% sure but it's a heuristic for this broken implementation.
+             # However, pivot_gadget often creates opportunities for further simplification
+             # without immediately reducing node count, so we should allow the loop to continue.
+             pass
+
 
     if not quiet:
         print(f"Completed full_reduce_db after {iteration} iterations")
@@ -692,3 +752,39 @@ def custom_reduce(
         print("Completed custom_reduce")
         if stats:
             print(stats)
+
+def id_simp(
+    session_factory: Callable,
+    graph_id: str,
+    quiet: bool = True,
+    stats: Optional[Stats] = None
+) -> bool:
+    """
+    Remove identity nodes (Z-spiders with phase 0 and degree 2).
+    
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: Identifier of the graph to simplify
+        quiet: If False, print progress information
+        stats: Optional statistics tracker
+        
+    Returns:
+        True if any rewrites were applied, False otherwise
+    """
+    queries = ZXQueryStore()
+    query = queries.get("id_simp")
+    params = {"graph_id": graph_id}
+    
+    # Execute query
+    params = {"graph_id": graph_id}
+    count = 0
+    while True:
+        current_count = _execute_query(session_factory, query, params, quiet)
+        if current_count == 0:
+            break
+        count += current_count
+    
+    if stats:
+        stats.count_rewrites("id_simp", count)
+    
+    return count > 0

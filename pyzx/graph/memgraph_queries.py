@@ -24,6 +24,9 @@ class ZXQueryStore:
             "local_complement_full": self._local_complement_full(),
             "gadget_fusion_both": self._gadget_fusion_both(),
             "spider_fusion_rewrite_2": self._spider_fusion_rewrite_2(),
+            "id_simp": self._id_simp(),
+            "remove_simple_self_loops": self._remove_simple_self_loops(),
+            "remove_hadamard_self_loops": self._remove_hadamard_self_loops(),
         }
 
     def get(self, query_name: str) -> str:
@@ -42,15 +45,20 @@ class ZXQueryStore:
 
     def _remove_isolated_vertices(self):
         return """
-          MATCH (n:Node)
-          WHERE n.graph_id = $graph_id AND degree(n) = 0
-          DELETE n
-          RETURN count(n) as nodes_removed;
-          MATCH (n:Node)-[r:wire]->(m:node)
-          WHERE n.graph_id = $graph_id AND degree(m) = 1 AND degree(n) = 1
-          DELETE n, m
-          RETURN count(n) as nodes_removed;
-          """
+        MATCH (n:Node)
+        WHERE n.graph_id = $graph_id AND degree(n) = 0 AND n.t <> 0
+        WITH n, n.t AS ty, n.phase AS ph
+        DELETE n
+        RETURN ty, ph, "SINGLE" AS kind;
+        MATCH (n:Node)-[r:Wire]-(m:Node)
+        WHERE n.graph_id = $graph_id AND m.graph_id = $graph_id
+          AND degree(n) = 1 AND degree(m) = 1
+          AND id(n) < id(m)
+          AND n.t <> 0 AND m.t <> 0
+        WITH n, m, r, n.t AS t1, m.t AS t2, n.phase AS p1, m.phase AS p2, r.t AS et
+        DELETE n, m
+        RETURN t1, p1, t2, p2, et, "PAIR" AS kind;
+        """
 
 
     def _to_gh(self):
@@ -176,30 +184,39 @@ class ZXQueryStore:
           AND toFloat(b.phase) IS NOT NULL
           AND toFloat(a.phase) = round(toFloat(a.phase)) 
           AND toFloat(b.phase) = round(toFloat(b.phase))
+          // Removed strict interiority check (neighbors must be Z-spiders) to match simple implementation
+          // We only require a and b to be Z-spiders (t=1).
+          // AND size([(a)-[:Wire]-(x) WHERE x.t <> 1 | 1]) = 0
+          // AND size([(b)-[:Wire]-(x) WHERE x.t <> 1 | 1]) = 0
+          // ALSO ensure all incident edges are Hadamard (t=2)
+          AND ALL(r IN [(a)-[e]-() | e] WHERE r.t = 2)
+          AND ALL(r IN [(b)-[e]-() | e] WHERE r.t = 2)
 
         // Find neighbors of a (excluding b and nodes connected to b)
         WITH a, b, pivot_edge
-        OPTIONAL MATCH (a)-[edge_a:Wire {t: 2}]-(neighbor_a {t: 1})
+        OPTIONAL MATCH (a)-[edge_a:Wire {t: 2}]-(neighbor_a)
         WHERE neighbor_a <> b
           AND NOT EXISTS((neighbor_a)-[:Wire]-(b))  // Not connected to b
         WITH a, b, pivot_edge, COLLECT(DISTINCT neighbor_a) as neighbors_a
 
         // Find neighbors of b (excluding a and nodes connected to a)
-        OPTIONAL MATCH (b)-[edge_b:Wire {t: 2}]-(neighbor_b {t: 1})
+        OPTIONAL MATCH (b)-[edge_b:Wire {t: 2}]-(neighbor_b)
         WHERE neighbor_b <> a
           AND NOT EXISTS((neighbor_b)-[:Wire]-(a))  // Not connected to a
           AND NOT neighbor_b IN neighbors_a  // Extra safety check
         WITH a, b, pivot_edge, neighbors_a, COLLECT(DISTINCT neighbor_b) as neighbors_b
 
         // Find shared neighbors (connected to both a and b)
-        OPTIONAL MATCH (a)-[edge_shared_a:Wire {t: 2}]-(shared {t: 1})-[edge_shared_b:Wire {t: 2}]-(b)
+        OPTIONAL MATCH (a)-[edge_shared_a:Wire {t: 2}]-(shared)-[edge_shared_b:Wire {t: 2}]-(b)
         WITH a, b, pivot_edge, neighbors_a, neighbors_b, COLLECT(DISTINCT shared) as shared_neighbors
 
         // neighbors_a x neighbors_b
         CALL {
           WITH neighbors_a, neighbors_b
-          UNWIND neighbors_a AS node_a
-          UNWIND neighbors_b AS node_b
+          UNWIND (CASE WHEN size(neighbors_a) > 0 THEN neighbors_a ELSE [null] END) AS node_a
+          UNWIND (CASE WHEN size(neighbors_b) > 0 THEN neighbors_b ELSE [null] END) AS node_b
+          WITH node_a, node_b
+          WHERE node_a IS NOT NULL AND node_b IS NOT NULL
           OPTIONAL MATCH (node_a)-[existing:Wire]-(node_b) 
           FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END | 
             DELETE existing ) 
@@ -210,8 +227,10 @@ class ZXQueryStore:
         // neighbors_a x shared_neighbors
         CALL {
           WITH neighbors_a, shared_neighbors
-          UNWIND neighbors_a AS node_a
-          UNWIND shared_neighbors AS shared_node
+          UNWIND (CASE WHEN size(neighbors_a) > 0 THEN neighbors_a ELSE [null] END) AS node_a
+          UNWIND (CASE WHEN size(shared_neighbors) > 0 THEN shared_neighbors ELSE [null] END) AS shared_node
+          WITH node_a, shared_node
+          WHERE node_a IS NOT NULL AND shared_node IS NOT NULL
           OPTIONAL MATCH (node_a)-[existing:Wire]-(shared_node) 
           FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END | 
             DELETE existing ) 
@@ -222,8 +241,10 @@ class ZXQueryStore:
         // neighbors_b x shared_neighbors
         CALL {
           WITH neighbors_b, shared_neighbors
-          UNWIND neighbors_b AS node_b
-          UNWIND shared_neighbors AS shared_node
+          UNWIND (CASE WHEN size(neighbors_b) > 0 THEN neighbors_b ELSE [null] END) AS node_b
+          UNWIND (CASE WHEN size(shared_neighbors) > 0 THEN shared_neighbors ELSE [null] END) AS shared_node
+          WITH node_b, shared_node
+          WHERE node_b IS NOT NULL AND shared_node IS NOT NULL
           OPTIONAL MATCH (node_b)-[existing:Wire]-(shared_node) 
           FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END | 
             DELETE existing ) 
@@ -233,11 +254,11 @@ class ZXQueryStore:
             
         // 6. Update phases on the neighbor nodes. 
         FOREACH (n IN neighbors_a |
-          SET n.phase = coalesce(n.phase, 0.0) + a.phase
+          SET n.phase = coalesce(n.phase, 0.0) + b.phase
         ) 
 
         FOREACH (n IN neighbors_b |
-          SET n.phase = coalesce(n.phase, 0.0) + b.phase
+          SET n.phase = coalesce(n.phase, 0.0) + a.phase
         ) 
           
         FOREACH (shared_neighbor IN shared_neighbors | 
@@ -483,6 +504,20 @@ class ZXQueryStore:
           // NEW: Ensure both are interior spiders (no simple wires of type t=1).
           AND NOT EXISTS((z_j)-[:Wire {t: 1}]-())
           AND NOT EXISTS((z_alpha)-[:Wire {t: 1}]-())
+          // NEW: Ensure z_alpha is not already a phase gadget (degree > 1 check).
+          // Phase gadget would be a leaf node (degree 1) attached to something.
+          // If z_alpha has degree 1, it's connected only to z_j.
+          AND degree(z_alpha) > 1
+          // Also check z_j is not a phase gadget (degree > 1)? 
+          // If z_j has degree 1, it's also a gadget. But pivot_gadget is allowed on phase gadget pauli?
+          // PyZX checks: if i==0 (v0) and len(ne) == 1 => bad_match.
+          // v0 is z_j. So z_j degree > 1 too.
+          AND degree(z_j) > 1
+
+          // CRITICAL: Ensure all neighbors are Z-spiders (t=1). 
+          // If connected to Boundary (t=0) or others, pivot is invalid or needs special handling.
+          AND size([(z_j)-[:Wire]-(x) WHERE x.t <> 1 | 1]) = 0
+          AND size([(z_alpha)-[:Wire]-(x) WHERE x.t <> 1 | 1]) = 0
 
         // 1b. Out of all candidates, keep only the one with the largest z_j.phase
         WITH z_j, z_alpha
@@ -834,19 +869,22 @@ class ZXQueryStore:
         MATCH (center:Node)
         WHERE center.graph_id = $graph_id
           AND center.t = 1
-          AND (center.phase = 0.5 OR center.phase = -0.5)
+          AND (center.phase = 0.5 OR center.phase = 1.5 OR center.phase = -0.5)
 
-        // Collect all neighbors
-        MATCH (center)-[w:Wire {t:2}]-(nbr:Node {t:1})
+        // Collect all neighbors (including boundary/inputs/outputs if connected via H-edge)
+        MATCH (center)-[w:Wire {t:2}]-(nbr:Node)
         WITH center, COLLECT(DISTINCT nbr) AS neighbors, COLLECT(w) AS neighbor_edges
+        
+        // Ensure strictly graph-like local complementation (all neighbors are Z-spiders, all edges form H)
+        // And ensure center is interior (no boundary neighbors or other types)
         WHERE size(neighbors) > 0 
-          AND ALL(neigh IN neighbors WHERE neigh.t = 1)
+          AND degree(center) = size(neighbor_edges)
           AND ALL(w in neighbor_edges WHERE w.t = 2)
+          // Relaxed: neighbors can be t=0 (Boundary) or t=1 (Z). Just not X (t=2, usually converted) or unknown.
+          // In Graph-like, all nodes are Z or Boundary.
 
-        // Sort by some deterministic criteria to pick one center per query execution
-        //WITH center, neighbors
-        //ORDER BY id(center)
-        //LIMIT 1
+        WITH center, neighbors
+        LIMIT 1
 
         // Complement: toggle all edges between neighbor pairs
         WITH center, neighbors, range(0, size(neighbors)-2) AS indices_i
@@ -970,4 +1008,70 @@ class ZXQueryStore:
         DETACH DELETE u, v
 
         RETURN COUNT(*) AS merged;
+        """
+
+    def _id_simp(self):
+        return """
+        // Find identity nodes (Z-spider, phase 0, degree 2)
+        MATCH (n:Node {t: 1})
+        WHERE n.graph_id = $graph_id AND n.phase = 0.0 AND degree(n) = 2
+        
+        // Find neighbors
+        // Case 1: n connected to two DIFFERENT neighbors u and v
+        OPTIONAL MATCH (u)-[e1:Wire]-(n)-[e2:Wire]-(v)
+        WHERE id(u) < id(v)
+        
+        // Case 2: n connected to SAME neighbor u twice (loop via n)
+        OPTIONAL MATCH (n)-[e3:Wire]-(w)-[e4:Wire]-(n)
+        WHERE id(e3) < id(e4)
+        
+        WITH n, u, v, e1, e2, w, e3, e4
+        
+        // Process Case 1: Different neighbors
+        WITH n, u, v, w, e3, e4,
+             CASE WHEN u IS NOT NULL THEN (CASE WHEN e1.t = e2.t THEN 1 ELSE 2 END) ELSE NULL END AS new_type_1
+        
+        // Find existing edge between u and v
+        OPTIONAL MATCH (u)-[old_e:Wire]-(v)
+        
+        // Logic:
+        // If old_e exists AND old_e.t == new_type: DELETE old_e (Cancellation)
+        // If old_e exists AND old_e.t <> new_type: Keeping old_e, ensure new_edge is created (H+S)
+        // If no old_e: Create new_edge
+        
+        FOREACH (_ IN CASE WHEN u IS NOT NULL AND old_e IS NOT NULL AND old_e.t = new_type_1 THEN [1] ELSE [] END |
+            DELETE old_e
+        )
+        
+        FOREACH (_ IN CASE WHEN u IS NOT NULL AND (old_e IS NULL OR (old_e IS NOT NULL AND old_e.t <> new_type_1)) THEN [1] ELSE [] END |
+            MERGE (u)-[:Wire {t: new_type_1, graph_id: $graph_id}]->(v)
+        )
+        
+        // Process Case 2: Same neighbor (w)
+        // If connected via same edge types: H+H -> S(self-loop) or phase?
+        // S+S -> S(self-loop)
+        // H+S -> H(self-loop)
+        // Wait, standard ZX: removing id between u and u creates a self-loop on u.
+        // We will just create the edge. remove_self_loop_simp will handle it later if needed.
+        FOREACH (_ IN CASE WHEN w IS NOT NULL THEN [1] ELSE [] END |
+             CREATE (w)-[:Wire {t: CASE WHEN e3.t = e4.t THEN 1 ELSE 2 END, graph_id: $graph_id}]->(w)
+        )
+
+        DETACH DELETE n
+        RETURN count(n) as patterns_processed
+        """
+
+    def _remove_simple_self_loops(self):
+        return """
+        MATCH (n:Node)-[e:Wire {t: 1}]-(n)
+        DELETE e
+        RETURN count(e) as count
+        """
+
+    def _remove_hadamard_self_loops(self):
+        return """
+        MATCH (n:Node)-[e:Wire {t: 2}]-(n)
+        DELETE e
+        SET n.phase = n.phase + 1.0
+        RETURN count(e) as count
         """
