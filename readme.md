@@ -130,6 +130,11 @@ DATABASE_URL=postgresql://postgres:password@age:5432/age_db
 
 </pre>
 
+Currently the database leaves orphans. You can remove them with:
+<pre>
+docker compose down --remove-orphans
+</pre>
+
 ## Precommit hooks
 
 Inside your virtual environment, do (one time):

@@ -16,12 +16,14 @@ services:
       - path: ./.env.neo4j
 
   age:
-    image: apache/age
+    image: apache/age:latest
     profiles: ["age"]
     ports:
       - "5455:5432"
+    networks:
+      - silta
     env_file:
-    - ./.env.PSQL
+      - path: ./.env.PSQL
 
   pyzx-neo4j:
     build:
@@ -43,14 +45,14 @@ services:
   pyzx-age:
     build:
       context: .
-      target: product
+      dockerfile: Dockerfile.python
     profiles: ["age"]
     depends_on:
       - age
-    environment:
-      DB_TYPE: age
+    networks:
+      - silta
     env_file:
-      - path: ./.env.PSQL
+      - path: ./.env.pyzx
     command: python -m age_test.age_functionality_test
   # You can run this with this:
   # docker compose up --watch pyzx-dev

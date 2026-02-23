@@ -1,5 +1,5 @@
 """
-Docstring for pyzx.graph.graph_neo4j
+Docstring for pyzx.graph.graph_AGE
 """
 
 import os
@@ -44,30 +44,52 @@ VT = int
 ET = Tuple[int, int]
 
 class GraphAGE:
-    def __init__(
-        self, 
-        database = os.getenv("POSTGRES_DB", "age_db"),
-        user = os.getenv("POSTGRES_USER", "postgres"),
-        host = os.getenv("DB_HOST", "age"),
-        password = os.getenv("POSTGRES_PASSWORD", ""), 
-        port=5432, 
-        graph_id="test_graph"
-        ):
-        print(database, user, host, password, port)
+    def __init__(self):
         self.conn = psycopg.connect(
-            dbname=database,
-            user=user,
-            password=password,
-            host=host,
-            port=port
-        )
-        self.graph_id = graph_id
+            host = os.getenv("DB_HOST"),
+            port = os.getenv("DB_PORT"),
+            dbname = os.getenv("POSTGRES_DB"),
+            user = os.getenv("POSTGRES_USER"),
+            password = os.getenv("POSTGRES_PASSWORD")
+            )
+        
+        self.graph_id = "test_graph"
+        
         with self.conn.cursor() as cur:
-            cur.execute('SET search_path = ag_catalog, "$user", public;')
-            cur.execute(f"SELECT drop_graph('{self.graph_id}', true);")
-            cur.execute(f"SELECT create_graph('{self.graph_id}')")
-            self.conn.commit()
-
+            # Ensure AGE extension is loaded
+            try:
+                cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
+                self.conn.commit()
+            except Exception as e:
+                print(f"Warning: CREATE EXTENSION failed: {e}")
+                self.conn.rollback()
+            
+            # Reset the search path
+            try:
+                cur.execute('SET search_path = ag_catalog, "$user", public;')
+            except Exception as e:
+                print(f"Warning: SET search_path failed: {e}")
+                self.conn.rollback()
+            
+            # Drop existing graph if it exists
+            try:
+                cur.execute(f"SELECT ag_catalog.drop_graph('{self.graph_id}'::name, true);")
+                self.conn.commit()
+            except Exception as e:
+                # Graph doesn't exist, which is fine
+                print(f"Info: drop_graph note: {e}")
+                self.conn.rollback()
+            
+            # Create new graph
+            try:
+                cur.execute(f"SELECT ag_catalog.create_graph('{self.graph_id}'::name)")
+                self.conn.commit()
+                print(f"Successfully created AGE graph: {self.graph_id}")
+            except Exception as e:
+                print(f"Error: create_graph failed: {type(e).__name__}: {e}")
+                print("AGE extension may not be properly installed in the database.")
+                self.conn.rollback()
+    
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"{{ty:'{ty.name}', qubit:{qubit}, row:{row}"

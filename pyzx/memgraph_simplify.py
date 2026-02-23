@@ -46,10 +46,15 @@ Example usage:
 __all__ = [
     'spider_simp', 
     'to_gh',
+    'id_simp',
+    'remove_self_loop_simp',
+    'remove_isolated_vertices',
     'interior_clifford_simp', 
     'clifford_simp',
     'pivot_gadget_simp',
     'gadget_simp',
+    'copy_simp',
+    'supplementarity_simp',
     'full_reduce',
     'reduce_scalar',
     'Stats'
@@ -190,6 +195,96 @@ def spider_simp(
         stats.count_rewrites("spider_fusion", total_count)
     
     return total_count > 0
+
+
+def id_simp(
+    session_factory: Callable,
+    graph_id: str,
+    quiet: bool = True,
+    stats: Optional[Stats] = None
+) -> bool:
+    """
+    Remove identity spiders (degree-2 phase-0 ZX nodes).
+
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: Identifier of the graph to simplify
+        quiet: If False, print progress information
+        stats: Optional statistics tracker
+
+    Returns:
+        True if any rewrites were applied, False otherwise
+    """
+    queries = ZXQueryStore()
+    query = queries.get("id_simp")
+    params = {"graph_id": graph_id}
+
+    count = _execute_query(session_factory, query, params, quiet)
+
+    if stats:
+        stats.count_rewrites("id_simp", count)
+
+    return count > 0
+
+
+def remove_self_loop_simp(
+    session_factory: Callable,
+    graph_id: str,
+    quiet: bool = True,
+    stats: Optional[Stats] = None
+) -> bool:
+    """
+    Remove self-loops on ZX nodes; Hadamard loops add a pi phase.
+
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: Identifier of the graph to simplify
+        quiet: If False, print progress information
+        stats: Optional statistics tracker
+
+    Returns:
+        True if any rewrites were applied, False otherwise
+    """
+    queries = ZXQueryStore()
+    query = queries.get("remove_self_loop_simp")
+    params = {"graph_id": graph_id}
+
+    count = _execute_query(session_factory, query, params, quiet)
+
+    if stats:
+        stats.count_rewrites("remove_self_loop_simp", count)
+
+    return count > 0
+
+
+def remove_isolated_vertices(
+    session_factory: Callable,
+    graph_id: str,
+    quiet: bool = True,
+    stats: Optional[Stats] = None
+) -> int:
+    """
+    Remove isolated vertices from the database graph.
+
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: Identifier of the graph to simplify
+        quiet: If False, print progress information
+        stats: Optional statistics tracker
+
+    Returns:
+        Number of vertices removed
+    """
+    queries = ZXQueryStore()
+    query = queries.get("remove_isolated_vertices")
+    params = {"graph_id": graph_id}
+
+    count = _execute_query(session_factory, query, params, quiet)
+
+    if stats:
+        stats.count_rewrites("remove_isolated_vertices", count)
+
+    return count
 
 
 def hadamard_simp(
@@ -365,6 +460,8 @@ def interior_clifford_simp(
     """
     if not quiet:
         print("Starting interior_clifford_simp...")
+
+    to_gh(session_factory, graph_id, quiet)
     
     spider_simp(session_factory, graph_id, quiet, stats)
     
@@ -537,6 +634,66 @@ def gadget_simp(
     return total_count > 0
 
 
+def copy_simp(
+    session_factory: Callable,
+    graph_id: str,
+    quiet: bool = True,
+    stats: Optional[Stats] = None
+) -> bool:
+    """
+    Apply the copy rule for arity-1 spiders.
+
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: Identifier of the graph to simplify
+        quiet: If False, print progress information
+        stats: Optional statistics tracker
+
+    Returns:
+        True if any rewrites were applied, False otherwise
+    """
+    queries = ZXQueryStore()
+    query = queries.get("copy_simp")
+    params = {"graph_id": graph_id}
+
+    count = _execute_query(session_factory, query, params, quiet)
+
+    if stats:
+        stats.count_rewrites("copy_simp", count)
+
+    return count > 0
+
+
+def supplementarity_simp(
+    session_factory: Callable,
+    graph_id: str,
+    quiet: bool = True,
+    stats: Optional[Stats] = None
+) -> bool:
+    """
+    Apply supplementarity reductions for non-Clifford spiders.
+
+    Args:
+        session_factory: Function that returns a database session
+        graph_id: Identifier of the graph to simplify
+        quiet: If False, print progress information
+        stats: Optional statistics tracker
+
+    Returns:
+        True if any rewrites were applied, False otherwise
+    """
+    queries = ZXQueryStore()
+    query = queries.get("supplementarity_simp")
+    params = {"graph_id": graph_id}
+
+    count = _execute_query(session_factory, query, params, quiet)
+
+    if stats:
+        stats.count_rewrites("supplementarity_simp", count)
+
+    return count > 0
+
+
 def reduce_scalar(
     session_factory: Callable,
     graph_id: str,
@@ -577,11 +734,17 @@ def reduce_scalar(
         # Gadget simplifications
         i5 = pivot_gadget_simp(session_factory, graph_id, quiet, stats)
         i6 = gadget_simp(session_factory, graph_id, quiet, stats)
+        i7 = copy_simp(session_factory, graph_id, quiet, stats)
         
-        if i5 or i6:
+        if i5 or i6 or i7:
             iteration += 1
             continue
         
+        i8 = supplementarity_simp(session_factory, graph_id, quiet, stats)
+        if i8:
+            iteration += 1
+            continue
+
         # No more rewrites possible
         break
     
@@ -671,7 +834,7 @@ def full_reduce(
         
         # Check if any gadget operations were applied
         if not (i or j):
-            graph.remove_isolated_vertices()
+            remove_isolated_vertices(session_factory, graph_id, quiet, stats)
             if not quiet:
                 print("No more gadget rewrites applicable, terminating")
             break

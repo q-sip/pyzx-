@@ -10,6 +10,9 @@ class ZXQueryStore:
         self._queries = {
             "hadamard_edge_cancellation": self._hadamard_edge_cancellation(),
             "spider_fusion_rewrite": self._spider_fusion_rewrite(),
+          "id_simp": self._id_simp(),
+          "remove_self_loop_simp": self._remove_self_loop_simp(),
+          "remove_isolated_vertices": self._remove_isolated_vertices(),
             "pivot_rule_two_interior_pauli": self._pivot_rule_two_interior_pauli(),
             "pivot_rule_single_interior_pauli": self._pivot_rule_single_interior_pauli(),
             "local_complement_rewrite": self._local_complement_rewrite(),
@@ -168,6 +171,38 @@ class ZXQueryStore:
         MERGE (merged)-[:Wire {t: info.et, graph_id: $graph_id}]-(t)
         
         RETURN count(DISTINCT merged) as patterns_processed
+        """
+
+    def _id_simp(self):
+        return """
+        // Remove identity spiders: degree-2 ZX spiders with zero phase.
+        MATCH (v:Node)
+        WHERE v.graph_id = $graph_id
+          AND v.t IN [1, 2]
+          AND coalesce(v.phase, 0) = 0
+          AND degree(v) = 2
+        MATCH (v)-[e1:Wire]-(n1:Node)
+        MATCH (v)-[e2:Wire]-(n2:Node)
+        WHERE id(e1) < id(e2)
+        WITH v, n1, n2, e1, e2
+        LIMIT 1
+
+        CREATE (n1)-[:Wire {t: CASE WHEN e1.t = e2.t THEN 1 ELSE 2 END, graph_id: $graph_id}]->(n2)
+        DETACH DELETE v
+
+        RETURN 1 AS rewrites_applied
+        """
+
+    def _remove_self_loop_simp(self):
+        return """
+        // Remove self-loops on ZX-like nodes; Hadamard self-loops add a pi phase.
+        MATCH (v:Node)-[e:Wire]-(v)
+        WHERE v.graph_id = $graph_id AND v.t IN [1, 2]
+        WITH v, COLLECT(e) AS loops,
+             sum(CASE e.t WHEN 2 THEN 1 ELSE 0 END) AS had_count
+      SET v.phase = coalesce(v.phase, 0) + CASE WHEN had_count % 2 = 1 THEN 1 ELSE 0 END
+      FOREACH (loop IN loops | DELETE loop)
+      RETURN count(DISTINCT v) AS rewrites_applied
         """
 
     def _pivot_rule_two_interior_pauli(self):

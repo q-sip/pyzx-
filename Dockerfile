@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 FROM pyzx-base AS product
 COPY . .
+RUN pip install -e .
 
 
 FROM pyzx-base AS test-base
