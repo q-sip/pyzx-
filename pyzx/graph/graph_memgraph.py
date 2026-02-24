@@ -623,14 +623,15 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 )
             return [(item["src"], item["tgt"]) for item in result]
 
-        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]->(n2:Node {graph_id: $graph_id})"
+        # Use an undirected match to find all edges, then canonicalize by ID to avoid duplicates
+        query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]-(n2:Node {graph_id: $graph_id})"
         query += " WHERE n1.id <= n2.id"
-        query += " RETURN n1.id, n2.id"
+        query += " RETURN n1.id AS s, n2.id AS t"
         with self._get_session() as session:
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id).data()
             )
-        return [(item["n1.id"], item["n2.id"]) for item in result]
+        return [(item["s"], item["t"]) for item in result]
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""

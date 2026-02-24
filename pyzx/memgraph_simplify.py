@@ -266,15 +266,20 @@ def remove_isolated_vertices(
         Number of vertices removed
     """
     queries = ZXQueryStore()
-    query = queries.get("remove_isolated_vertices")
     params = {"graph_id": graph_id}
-
-    count = _execute_query(session_factory, query, params, quiet)
+    
+    query1 = queries.get("remove_isolated_vertices_single")
+    count1 = _execute_query(session_factory, query1, params, quiet)
+    
+    query2 = queries.get("remove_isolated_vertices_pair")
+    count2 = _execute_query(session_factory, query2, params, quiet)
+    
+    total_count = count1 + count2
 
     if stats:
-        stats.count_rewrites("remove_isolated_vertices", count)
+        stats.count_rewrites("remove_isolated_vertices", total_count)
 
-    return count
+    return total_count
 
 
 def hadamard_simp(
@@ -447,10 +452,14 @@ def interior_clifford_simp(
         
         i0 = id_simp(session_factory, graph_id, quiet, stats)
         i1 = spider_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after spider_simp")
         i2 = remove_self_loop_simp(session_factory, graph_id, quiet, stats)
         i3 = hadamard_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after hadamard_simp")
         i4 = pivot_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after pivot_simp")
         i5 = lcomp_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after lcomp_simp")
         
         if not (i0 or i1 or i2 or i3 or i4 or i5):
             break
@@ -520,7 +529,12 @@ def clifford_simp(
     
     while True:
         i1 = interior_clifford_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after interior_clifford_simp inside clifford_simp")
+
         i2 = pivot_boundary_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after pivot_boundary_simp inside clifford_simp")
         
         if i1 or i2:
             applied_any = True
@@ -725,6 +739,24 @@ def reduce_scalar(
     return iteration
 
 
+def verify_connectivity(session_factory: Callable, graph_id: str) -> bool:
+    """Check if any boundary nodes are disconnected."""
+    query = """
+    MATCH (n:Node {graph_id: $graph_id})
+    WHERE n.t = 0
+    OPTIONAL MATCH (n)-[r:Wire]-()
+    WITH n, count(r) as degree
+    WHERE degree = 0
+    RETURN n.id
+    """
+    with session_factory() as session:
+        result = session.run(query, graph_id=graph_id)
+        disconnected = [record['n.id'] for record in result]
+        if disconnected:
+            print(f"WARNING: Boundary nodes disconnected: {disconnected}")
+            return False
+    return True
+
 def full_reduce(
     graph: GraphMemgraph
 ) -> None:
@@ -763,10 +795,12 @@ def full_reduce(
     if not quiet:
         print("Phase 1: Initial interior clifford simplification")
     interior_clifford_simp(session_factory, graph_id, quiet)
+    if not quiet: verify_connectivity(session_factory, graph_id)
 
     if not quiet:
         print("Phase 2: Initial pivot gadget simplification")
     pivot_gadget_simp(session_factory, graph_id, quiet)
+    if not quiet: verify_connectivity(session_factory, graph_id)
     
     # Main reduction loop
     if not quiet:
@@ -780,19 +814,31 @@ def full_reduce(
         
         # Full Clifford simplification
         clifford_simp(session_factory, graph_id, quiet)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after clifford_simp")
         
         # Gadget simplification
         i = gadget_simp(session_factory, graph_id, quiet)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after gadget_simp")
         
         # Interior Clifford again
         interior_clifford_simp(session_factory, graph_id, quiet)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after interior_clifford_simp")
 
         # Copy and supplementarity
         k = copy_simp(session_factory, graph_id, quiet)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after copy_simp")
         l = supplementarity_simp(session_factory, graph_id, quiet)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after supplementarity_simp")
         
         # Pivot gadget
         j = pivot_gadget_simp(session_factory, graph_id, quiet)
+        if not quiet and not verify_connectivity(session_factory, graph_id):
+            print("Connectivity broken after pivot_gadget_simp")
         
         # Check if any gadget operations were applied
         if not (i or j or k or l):

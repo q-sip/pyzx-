@@ -4,6 +4,7 @@ import os
 from time import time
 import random
 from fractions import Fraction
+import numpy as np
 
 from dotenv import load_dotenv
 import pyzx as zx
@@ -176,6 +177,10 @@ def iterable_graph_creation():
 
 def test_num_vertices_against_simple_graph(qubits, depth):
     g_mem = zx.generate.cliffordT(qubits, depth, backend="memgraph", seed=10)
+    
+    # Store initial
+    g_mem_initial = g_mem.copy(backend="simple")
+    
     g_s = zx.generate.cliffordT(qubits, depth, seed=10)
 
     print(f"depth={depth}, qubits={qubits} memgraph full reduce starting...")
@@ -188,9 +193,131 @@ def test_num_vertices_against_simple_graph(qubits, depth):
     zx.full_reduce(g_s)
     time2 = time()
     print(f"depth={depth}, qubits={qubits} simplegraph took {time2 - time1}s")
+
     g_mem_num = g_mem.num_vertices()
     g_s_num = g_s.num_vertices()
     print(f'g_mem vertices: {g_mem_num}, g_s vertices: {g_s_num}')
+
+    print("Comparing tensors...")
+    # Create a local copy of the memgraph graph to avoid database overhead during tensor calculation
+    # Using backend=None might default to Memgraph if not handled carefully, 
+    # so we explicitly request a simple graph backend if possible, or rely on BaseGraph.copy mechanics.
+    # Actually, simpler way: define a new GraphS and copy into it if needed, 
+    # or rely on compare_tensors handling it (slowly).
+    # Fast approach:
+    try:
+        # Assuming copy(backend="simple") works or returns a GraphS
+        g_mem_local = g_mem.copy(backend="simple")
+    except Exception:
+        # Fallback if backend string not recognized, just use copy() and hope it's local
+        # or implement manual copy if needed.
+        # But actually, pyzx.Graph(backend=None) usually returns GraphS.
+        # So providing backend="simple" to copy() usually works.
+        g_mem_local = g_mem
+
+    # Debug inputs/outputs
+    print(f"Inputs: {g_mem_local.inputs()}")
+    print(f"Outputs: {g_mem_local.outputs()}")
+    for o in g_mem_local.outputs():
+        d = len(list(g_mem_local.neighbors(o)))
+        print(f"Output {o} degree: {d} neighbors: {list(g_mem_local.neighbors(o))}")
+        if d != 1:
+            print(f"WARNING: Output {o} has degree {d} != 1")
+    
+    # Also check inputs
+    for i in g_mem_local.inputs():
+        d = len(list(g_mem_local.neighbors(i)))
+        print(f"Input {i} degree: {d}")
+
+    # Create valid local copies for tensor comparison
+    try:
+        g_mem_initial_copy = g_mem_initial.copy(backend="simple")
+    except:
+        g_mem_initial_copy = g_mem_initial
+        
+    try:
+        g_mem_copy = g_mem.copy(backend="simple")
+    except:
+        g_mem_copy = g_mem
+
+    print(f"Comparing Initial vs Memgraph Reduced...")
+    if zx.compare_tensors(g_mem_initial_copy, g_mem_copy, preserve_scalar=False):
+        print("Initial vs Memgraph Reduced: MATCH!")
+    else:
+        print("Initial vs Memgraph Reduced: MISMATCH!")
+
+    print(f"Comparing Initial vs SimpleGraph Reduced...")
+    if zx.compare_tensors(g_mem_initial_copy, g_s, preserve_scalar=False):
+        print("Initial vs SimpleGraph Reduced: MATCH!")
+    else:
+        print("Initial vs SimpleGraph Reduced: MISMATCH!")
+
+    print("Comparing Memgraph Reduced vs SimpleGraph Reduced...")
+    # If comparison fails, we want to know why, but first let's just try
+    try:
+        match = zx.compare_tensors(g_mem_copy, g_s, preserve_scalar=False)
+        if match:
+            print("Tensors match (up to scalar)!")
+        else:
+            print("Tensors do NOT match!")
+            
+            # Debugging the mismatch
+            t_mem = zx.tensorfy(g_mem_local)
+            t_s = zx.tensorfy(g_s)
+            
+            # Check for zero tensors
+            if np.allclose(t_mem, 0):
+                print("DEBUG: Memgraph tensor is effectively ZERO!")
+            if np.allclose(t_s, 0):
+                print("DEBUG: SimpleGraph tensor is effectively ZERO!")
+                
+            # Print shapes and a few values
+            print(f"Memgraph tensor shape: {t_mem.shape}")
+            print(f"SimpleGraph tensor shape: {t_s.shape}")
+            
+            flat_mem = t_mem.flatten()
+            flat_s = t_s.flatten()
+            
+            # Find first non-zero to compare ratio
+            idx = -1
+            for i in range(len(flat_s)):
+                if abs(flat_s[i]) > 1e-10:
+                    idx = i
+                    break
+            
+            if idx != -1:
+                val_s = flat_s[idx]
+                val_mem = flat_mem[idx]
+                if abs(val_mem) > 1e-10:
+                    ref_ratio = val_s / val_mem
+                    print(f"Ref Ratio at {idx}: {ref_ratio} (Mag: {abs(ref_ratio)}, Phase: {np.angle(ref_ratio)/np.pi} pi)")
+                    
+                    # Check other indices
+                    mismatches = 0
+                    for i in range(len(flat_s)):
+                        if abs(flat_s[i]) > 1e-10:
+                            if abs(flat_mem[i]) < 1e-10:
+                                print(f"Index {i}: SG non-zero ({flat_s[i]}), MEM zero!")
+                                mismatches += 1
+                            else:
+                                ratio = flat_s[i] / flat_mem[i]
+                                if not np.isclose(ratio, ref_ratio):
+                                    print(f"Index {i}: Ratio mismatch! {ratio} vs {ref_ratio}")
+                                    mismatches += 1
+                        elif abs(flat_mem[i]) > 1e-10:
+                             print(f"Index {i}: SG zero, MEM non-zero ({flat_mem[i]})!")
+                             mismatches += 1
+                        
+                        if mismatches > 5:
+                            print("Too many mismatches, stopping.")
+                            break
+                else:
+                    print("MEM value is zero at this index (mismatch!)")
+            else:
+                print("SG tensor is all zeros (unexpected)")
+
+    except Exception as e:
+        print(f"Tensor comparison failed with error: {e}")
 
 def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100):
     """Run memgraph full reduce over qubit/depth grid."""
