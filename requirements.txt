@@ -19,3 +19,14 @@ dotenv
 pre-commit
 pylint
 psycopg
+
+
+matplotlib-inline
+neo4j-driver
+neobolt
+networkx
+pyzx
+sympy
+scienceplots
+qiskit
+quimb
