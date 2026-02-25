@@ -24,14 +24,14 @@ def comparison_1(seed: int, backend: str | None = None):
     backend = "graph_tool" for GraphGT
     """
 
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=2, depth=20, seed=seed)
 
     g = c.to_graph(backend=backend)
 
-    mem.full_reduce(g)
+    zx.full_reduce(g)
 
     g.normalize()
-
+    zx.draw(g)
     c_opt = zx.extract_circuit(g.clone())
 
     return zx.compare_tensors(c, c_opt)

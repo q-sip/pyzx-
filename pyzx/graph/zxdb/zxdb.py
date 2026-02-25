@@ -637,7 +637,7 @@ class ZXdb:
                 changed = session.execute_write(apply_local_complementation_rewrite)
                 if changed:
                     break  # No more patterns found
-                
+
 
             #end_time = time.time()
             #logging.info(f"Local complementation applied for graph ID '{graph_id}' with {changed} patterns processed in {end_time - start_time} seconds")

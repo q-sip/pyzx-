@@ -9,8 +9,9 @@ if __name__ == "__main__":
 
     # Here the imports and usages:
     # from . import neo4j_functionality_test
-    from . import memgraph_functionality_test
+    # from . import memgraph_functionality_test
 
     # from . import full_test
+    from . import demo
 
     print("\n All things done :)")

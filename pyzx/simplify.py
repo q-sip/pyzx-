@@ -214,10 +214,13 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
                          "Maybe call pyzx.hsimplify.from_hypergraph_form(g) first?")
     interior_clifford_simp(g)
     pivot_gadget_simp(g)
+    iteration = 0
     while True:
+        iteration += 1
         clifford_simp(g)
         i = gadget_simp(g)
         interior_clifford_simp(g)
+        if iteration == 2: print('Optimizing...')
         k = copy_simp(g)
         l = supplementarity_simp(g)
         j = pivot_gadget_simp(g)
