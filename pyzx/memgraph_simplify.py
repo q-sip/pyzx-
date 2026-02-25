@@ -467,7 +467,7 @@ def interior_clifford_simp(
         print("Starting interior_clifford_simp...")
 
     to_gh(session_factory, graph_id, quiet)
-    
+
     spider_simp(session_factory, graph_id, quiet, stats)
     
     # Convert to Green-Hadamard form (Graph-like)

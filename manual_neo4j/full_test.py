@@ -28,10 +28,12 @@ def comparison_1(seed: int, backend: str | None = None):
 
     g = c.to_graph(backend=backend)
 
+    print(f'initial vertices: {g.num_vertices()}')
     zx.full_reduce(g)
 
+    print(f'vertices after reduce: {g.num_vertices()}')
     g.normalize()
-
+    print(f'vertices after normalize: {g.num_vertices()}')
     c_opt = zx.extract_circuit(g.clone())
 
     return zx.compare_tensors(c, c_opt)
