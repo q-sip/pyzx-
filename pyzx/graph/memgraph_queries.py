@@ -30,6 +30,8 @@ class ZXQueryStore:
             "id_simp": self._id_simp(),
             "remove_simple_self_loops": self._remove_simple_self_loops(),
             "remove_hadamard_self_loops": self._remove_hadamard_self_loops(),
+            "copy_simp": self._copy_simp(),
+            "supplementarity_simp": self._supplementarity_simp(),
         }
 
     def get(self, query_name: str) -> str:
@@ -65,6 +67,109 @@ class ZXQueryStore:
         RETURN count(n) AS count
         """]
 
+    def _copy_simp(self):
+        return """
+        MATCH (v:Node)-[e:Wire]-(w:Node)
+        WHERE v.graph_id = $graph_id AND w.graph_id = $graph_id
+          AND degree(v) = 1
+          AND (coalesce(v.phase, 0.0) = 0.0 OR coalesce(v.phase, 0.0) = 1.0)
+          AND v.t IN [1, 2] AND w.t IN [1, 2]
+          // Replicate PyZX checking logic: Simple edges (1) require opposite colors, Hadamard edges (2) require same colors
+          AND (
+            (e.t = 1 AND v.t <> w.t) OR
+            (e.t = 2 AND v.t = w.t)
+          )
+        WITH v, w, e LIMIT 1
+        
+        // Extract properties BEFORE deleting the nodes to avoid Memgraph property deletion errors
+        WITH v, w, coalesce(v.phase, 0.0) AS cp_phase,
+             CASE WHEN e.t = 1 THEN v.t ELSE (CASE WHEN v.t = 1 THEN 2 ELSE 1 END) END AS copy_type
+        
+        OPTIONAL MATCH (w)-[ew:Wire]-(n:Node)
+        WHERE n <> v
+        WITH v, w, copy_type, cp_phase, n, ew.t AS edge_t
+        
+        WITH v, w, copy_type, cp_phase, COLLECT({n: n, e: edge_t}) AS neighbor_data
+        
+        // Now it is safe to delete
+        DETACH DELETE v, w
+        
+        // Unwind the connections and push the copied spider to all outer connections
+        WITH copy_type, cp_phase, neighbor_data
+        UNWIND (CASE WHEN size(neighbor_data) > 0 THEN neighbor_data ELSE [null] END) AS nd
+        WITH copy_type, cp_phase, nd.n AS neighbor_node, nd.e AS edge_t
+        
+        FOREACH (_ IN CASE WHEN neighbor_node IS NOT NULL THEN [1] ELSE [] END |
+            CREATE (new_copy:Node {
+                t: copy_type,
+                phase: cp_phase,
+                graph_id: $graph_id
+            })
+            CREATE (new_copy)-[:Wire {t: edge_t, graph_id: $graph_id}]->(neighbor_node)
+        )
+        
+        // If the stream was empty, COUNT(*) produces 1 row with 0. 
+        // We conditionally return 1 only if dummy > 0.
+        WITH count(*) AS dummy
+        RETURN CASE WHEN dummy > 0 THEN 1 ELSE 0 END AS rewrites_applied
+        """
+
+    def _supplementarity_simp(self):
+        return """
+        MATCH (v:Node), (w:Node)
+        WHERE v.graph_id = $graph_id AND w.graph_id = $graph_id
+          AND v.t IN [1, 2] AND w.t IN [1, 2]
+          AND id(v) < id(w)
+          // Exclude Clifford vertices (i.e. phases that are multiples of 0.5) 
+          AND abs(round(coalesce(v.phase, 0.0) * 2.0) - (coalesce(v.phase, 0.0) * 2.0)) > 0.01
+          AND abs(round(coalesce(w.phase, 0.0) * 2.0) - (coalesce(w.phase, 0.0) * 2.0)) > 0.01
+        
+        OPTIONAL MATCH (v)-[e:Wire]-(w)
+        WITH v, w, CASE WHEN e IS NOT NULL THEN 2 ELSE 1 END AS t
+        WITH v, w, t, coalesce(v.phase, 0.0) AS alpha, coalesce(w.phase, 0.0) AS beta
+        
+        // Check Supplementarity phase arithmetic bounds (t=1: unlinked | t=2: linked)
+        WHERE 
+          (t = 1 AND (abs(((alpha + beta) % 2.0) - 1.0) < 0.01 OR abs(((alpha - beta + 2.0) % 2.0) - 1.0) < 0.01))
+          OR
+          (t = 2 AND (abs(((alpha + beta) % 2.0) - 0.0) < 0.01 OR abs(((alpha - beta + 2.0) % 2.0) - 1.0) < 0.01))
+          
+        MATCH (v)-[:Wire]-(nv:Node) WHERE nv <> w
+        WITH v, w, t, alpha, beta, nv ORDER BY id(nv)
+        WITH v, w, t, alpha, beta, COLLECT(id(nv)) AS vn
+        
+        MATCH (w)-[:Wire]-(nw:Node) WHERE nw <> v
+        WITH v, w, t, alpha, beta, vn, nw ORDER BY id(nw)
+        WITH v, w, t, alpha, beta, vn, COLLECT(id(nw)) AS wn
+        
+        WHERE size(vn) > 0 AND vn = wn
+        
+        WITH v, w, t, alpha, beta LIMIT 1
+        
+        // Track identical neighbors for Phase updating
+        MATCH (v)-[:Wire]-(n:Node) WHERE n <> w
+        WITH v, w, t, alpha, beta, COLLECT(n) AS neighbors
+        
+        // Resolve PyZX phase-shift addition values conditionally 
+        WITH v, w, neighbors,
+             CASE 
+               WHEN t = 1 AND abs(((alpha + beta) % 2.0) - 1.0) < 0.01 THEN 1.0
+               WHEN t = 2 AND abs(((alpha + beta) % 2.0) - 0.0) < 0.01 THEN 1.0
+               ELSE 0.0
+             END AS phase_to_add
+             
+        DETACH DELETE v, w
+        
+        WITH neighbors, phase_to_add
+        // Unwind with a fallback to [null] to guarantee the query stream survives even if neighbors were empty
+        UNWIND (CASE WHEN size(neighbors) > 0 THEN neighbors ELSE [null] END) AS n
+        FOREACH (_ IN CASE WHEN n IS NOT NULL THEN [1] ELSE [] END |
+            SET n.phase = (coalesce(n.phase, 0.0) + phase_to_add) % 2.0
+        )
+        
+        WITH count(*) AS dummy
+        RETURN CASE WHEN dummy > 0 THEN 1 ELSE 0 END AS rewrites_applied
+        """
 
     def _to_gh(self):
         return """
@@ -104,7 +209,7 @@ class ZXQueryStore:
           // Start and end should not be H-nodes themselves
           AND NOT (size([(start)-[]-() | 1]) = 2 AND ALL(e IN [(start)-[r]-() | r] WHERE e.t = 2))
           AND NOT (size([(end)-[]-() | 1]) = 2 AND ALL(e IN [(end)-[r]-() | r] WHERE e.t = 2))
-        
+
         WITH start, end, nodes(path)[1..-1] as nodes_to_delete
         LIMIT 100  // Process in batches to avoid long transactions
         

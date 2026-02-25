@@ -28,7 +28,7 @@ def comparison_1(seed: int, backend: str | None = None):
 
     g = c.to_graph(backend=backend)
 
-    mem.full_reduce(g)
+    zx.full_reduce(g)
 
     g.normalize()
 

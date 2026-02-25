@@ -660,13 +660,16 @@ def copy_simp(
     queries = ZXQueryStore()
     query = queries.get("copy_simp")
     params = {"graph_id": graph_id}
+    total_count = 0
+    while True:
+        count = _execute_query(session_factory, query, params, quiet)
+        if count == 0:
+            break
+        total_count += count
 
-    count = _execute_query(session_factory, query, params, quiet)
-
-    if stats:
-        stats.count_rewrites("copy_simp", count)
-
-    return count > 0
+    if not quiet and total_count > 0:
+        print(f"Applied copy_simp: {total_count} rewrites")
+    return total_count
 
 
 def supplementarity_simp(
@@ -690,13 +693,16 @@ def supplementarity_simp(
     queries = ZXQueryStore()
     query = queries.get("supplementarity_simp")
     params = {"graph_id": graph_id}
-
-    count = _execute_query(session_factory, query, params, quiet)
-
-    if stats:
-        stats.count_rewrites("supplementarity_simp", count)
-
-    return count > 0
+    total_count = 0
+    while True:
+        count = _execute_query(session_factory, query, params, quiet)
+        if count == 0:
+            break
+        total_count += count
+        
+    if not quiet and total_count > 0:
+        print(f"Applied supplementarity_simp: {total_count} rewrites")
+    return total_count
 
 
 def reduce_scalar(
@@ -760,35 +766,15 @@ def reduce_scalar(
 
 
 def full_reduce(
-    graph: GraphMemgraph
+    graph: Any # Using Any to avoid import cycles, or GraphMemgraph
 ) -> None:
     """
     The main simplification routine for graph database ZX-diagrams.
-    
-    This is the database equivalent of pyzx.simplify.full_reduce.
-    It uses a combination of Clifford simplifications and gadget strategies.
-    
-    The algorithm:
-    1. Initial interior Clifford simplification
-    2. Initial pivot gadget simplification
-    3. Main loop:
-       - Full Clifford simplification (including boundary)
-       - Gadget fusion
-       - Interior Clifford simplification
-       - Pivot gadget simplification
-       - Repeat until no changes
-    
-    Args:
-        session_factory: Function that returns a database session
-        graph_id: Identifier of the graph to simplify
-        quiet: If False, print progress information
-        stats: Optional statistics tracker
     """
     graph_id = graph.graph_id
     session_factory = graph.session_get
     quiet = False
     stats = None
-
 
     if not quiet:
         print(f"Starting full_reduce_db on graph '{graph_id}'...")
@@ -803,23 +789,17 @@ def full_reduce(
         print("Phase 2: Initial pivot gadget simplification")
     pivot_gadget_simp(session_factory, graph_id, quiet)
     print(f'Nodes after initial pivot_gadget_simp: {graph.num_vertices()}')
+    
     # Main reduction loop
     if not quiet:
         print("Phase 3: Main reduction loop")
     
     iteration = 0
-    prev_nodes = -1
     while True:
         iteration += 1
-        current_nodes = graph.num_vertices()
         
         if not quiet:
             print(f"  Main loop iteration {iteration}")
-        
-        # Stop if we are not reducing nodes and running too long, or cyclic
-        # But handle caution: sometimes rewrites don't reduce nodes but unlock others.
-        # Check if we have been stuck at same node count for a while? 
-        # For now, just rely on function returns.
         
         # Full Clifford simplification
         clifford_simp(session_factory, graph_id, quiet)
@@ -833,32 +813,25 @@ def full_reduce(
         interior_clifford_simp(session_factory, graph_id, quiet)
         print(f'Nodes after {iteration}th interior_clifford_simp: {graph.num_vertices()}')
         
+        # Copy and Supplementarity
+        k = copy_simp(session_factory, graph_id, quiet)
+        l = supplementarity_simp(session_factory, graph_id, quiet)
+
         # Pivot gadget
         j = pivot_gadget_simp(session_factory, graph_id, quiet)
         print(f'Nodes after {iteration}th pivot_gadget_simp: {graph.num_vertices()}')
         
         # Check if any gadget operations were applied
-        if not (i or j):
+        if not (i or j or k or l):
             remove_isolated_vertices(session_factory, graph_id, quiet, stats)
             if not quiet:
                 print("No more gadget rewrites applicable, terminating")
             break
             
-        # Safety break for infinite loops where node count doesn't change
-        # If node count matches previous iteration AND only pivot_gadget was applied?
-        # Let's just limit iterations or check node count stagnation if loop count is high.
         if iteration > 100:
              if not quiet:
                 print("Max iterations reached, terminating")
              break
-             
-        if current_nodes == graph.num_vertices() and not i and j:
-             # If only pivot_gadget applied and no node reduction, likely a cycle.
-             # We can't be 100% sure but it's a heuristic for this broken implementation.
-             # However, pivot_gadget often creates opportunities for further simplification
-             # without immediately reducing node count, so we should allow the loop to continue.
-             pass
-
 
     if not quiet:
         print(f"Completed full_reduce_db after {iteration} iterations")
