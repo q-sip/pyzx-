@@ -168,3 +168,39 @@ If you wish to cite PyZX in an academic work, please cite the [accompanying pape
 
 Here's a plane that says PYZX:
 ![PYZX](https://github.com/zxcalc/pyzx/raw/master/images/F-PYZX.jpg)
+
+
+
+```mermaid
+flowchart LR
+  A --> B
+```
+
+```mermaid
+graph LR
+    %% Application Side
+    subgraph PyZX ["PyZX Core"]
+        Logic[Circuit Optimization & <br/> Rewriting Logic]
+        Interface[BaseGraph Interface]
+    end
+
+    %% The Connection
+    Connector(("fa:fa-circle-arrow-right <br/> Cypher Protocol"))
+
+    %% Database Side
+    subgraph Database ["Graph Database"]
+        Storage[(Memgraph / Neo4j <br/> Vertex & Edge Storage)]
+        Schema[Node: Node <br/> Label: :Input / :Output <br/> Edge: :Wire]
+    end
+
+    %% Relationships
+    Logic --> Interface
+    Interface -- "Method Calls <br/> (add_vertex, add_edge)" --> Connector
+    Connector -- "Cypher Queries <br/> (CREATE, MATCH, MERGE)" --> Storage
+    Storage --- Schema
+
+    %% Styling
+    style Connector fill:#f9f,stroke:#333,stroke-width:2px
+    style Logic fill:#e1f5fe,stroke:#01579b
+    style Storage fill:#e8f5e9,stroke:#2e7d32
+```
