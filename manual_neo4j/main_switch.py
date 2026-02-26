@@ -13,6 +13,6 @@ if __name__ == "__main__":
 
     # from . import full_test
     # from . import demo
-    from . import zxdb_functionality_test
+    from ..manual_ohtu import zxdb_functionality_test
 
     print("\n All things done :)")
