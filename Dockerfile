@@ -1,14 +1,18 @@
 FROM python AS pyzx-base
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY requirements.txt ./
+# Copy the Python code (e.g., age_test) into the container
+COPY . .
+
+COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
-
 
 
 # CMD [ "python", "./neo4j_functionality_test.py" ]
 
+CMD ["python", "manual_ohtu/main_switch.py"]
 
 FROM pyzx-base AS product
 COPY . .

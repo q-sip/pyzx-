@@ -16,6 +16,7 @@ galois>=0.4.7
 
 neo4j
 dotenv
+python-dotenv
 pre-commit
 pylint
 psycopg

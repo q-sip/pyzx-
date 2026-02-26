@@ -117,14 +117,8 @@ services:
       age:
         condition: service_healthy
         required: true
-    environment:
-      - DB_URI=bolt://psql:5432
-      - BACKEND_NAME=age
-    develop:
-      watch:
-        - action: sync+restart
-          target: /usr/src/app
-          path: ./
+    env_file:
+      - path: ./.env
 
   pyzx-mem:
     extends:

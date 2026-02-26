@@ -48,27 +48,17 @@ ET = Tuple[int, int]
 
 class GraphAGE:
     def __init__(self):
-        user = os.getenv("POSTGRES_USER") or os.getenv("DB_USER")
-        password = os.getenv("POSTGRES_PASSWORD") or os.getenv("DB_PASSWORD")
+        
         self.conn = psycopg.connect(
 
             host = os.getenv("DB_HOST"),
             port = os.getenv("DB_PORT"),
             dbname = os.getenv("POSTGRES_DB"),
-            user = os.getenv("DB_USER"),
-            password = os.getenv("DB_PASSWORD")
+            user = os.getenv("POSTGRES_USER"),
+            password = os.getenv("POSTGRES_PASSWORD")
             )
-
         graph = BaseGraph()
-
-
-        host=os.getenv("DB_HOST", "age"),
-        port=int(os.getenv("DB_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "age_db"),
-        user=user,
-        password=password,
-        
-
+  
         self.graph_id = "test_graph"
 
         with self.conn.cursor() as cur:
