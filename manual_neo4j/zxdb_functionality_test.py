@@ -10,6 +10,6 @@ AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
 def graph_full_reduce():
-    zxdb.spider_fusion(graph_id='graph_4414307408')
+    zxdb.spider_fusion(graph_id='graph_test_zxdb')
 
 graph_full_reduce()
