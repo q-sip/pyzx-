@@ -46,11 +46,6 @@ AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 # MANUAALINEN GRAAFI TESTAUKSEEN!
 
 g = GraphNeo4j(
-    uri=URI,
-    user=os.getenv("NEO4J_USER"),
-    password=os.getenv("NEO4J_PASSWORD"),
-    database="neo4j",
-    graph_id="test_graph",
 )
 
 

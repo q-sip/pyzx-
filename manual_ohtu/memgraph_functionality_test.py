@@ -50,9 +50,6 @@ AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
 # MANUAALINEN GRAAFI TESTAUKSEEN!
 
 g = GraphMemgraph(
-    uri=URI,
-    user=AUTH[0],
-    password=AUTH[1],
     database="memgraph",
     graph_id="test_graph",
 )

@@ -5,8 +5,8 @@ from pyzx.graph.zxdb.zxdb import ZXdb
 from pyzx.graph.graph_memgraph import GraphMemgraph
 
 load_dotenv()
-URI = os.getenv("MEMGRAPH_URI")
-AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
+URI = os.getenv("DB_URI")
+AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 c = zx.generate.CNOT_HAD_PHASE_circuit(2, 20, seed=50)
 g = c.to_graph(backend='memgraph')
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])

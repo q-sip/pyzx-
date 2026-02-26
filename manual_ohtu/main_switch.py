@@ -18,19 +18,23 @@ if __name__ == "__main__":
 
     if db == "neo4j":
         from . import neo4j_functionality_test
+        print("Neon done")
 
         pass
     if db == "memgraph":
-        from . import memgraph_functionality_test
+        #from . import memgraph_functionality_test
         # from . import full_test
         #from . import full_test2
+        #from . import zxdb_functionality_test
+        from . import demo
+        print("mem done")
 
 
         pass
     if db == "age":
         from . import age_functionality_test
 
-
+        print("Age done")
         pass
 
     print("\n All things done :)")
