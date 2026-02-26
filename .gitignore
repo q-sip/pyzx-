@@ -25,3 +25,8 @@ pyzx/graph/temp_simple_graph_metadata.json
 pyzx/graph/zxdb/run.py
 test_output.txt
 zxdb
+
+mutants
+true
+.coverage
+htmlcov

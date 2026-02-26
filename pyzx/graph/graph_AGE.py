@@ -52,10 +52,14 @@ class GraphAGE:
             host = os.getenv("DB_HOST"),
             port = os.getenv("DB_PORT"),
             dbname = os.getenv("POSTGRES_DB"),
-            user = os.getenv("POSTGRES_USER"),
-            password = os.getenv("POSTGRES_PASSWORD")
+            user = os.getenv("DB_USER"),
+            password = os.getenv("DB_PASSWORD")
             )
+
         graph = BaseGraph()
+
+        self.graph_id = "test_graph"
+
 
         with self.conn.cursor() as cur:
             # 1. Load extension
@@ -76,6 +80,7 @@ class GraphAGE:
                 self.conn.rollback()
 
 
+
 #        self.graph_id = "test_graph"
 #        connection = age.connect(graph=GRAPH_NAME, dsn=CONFIG)
 
@@ -85,8 +90,6 @@ class GraphAGE:
 
 #        self.conn("SELECT create_graph({self.graph.id});")
         
-
-    
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"

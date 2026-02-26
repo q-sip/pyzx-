@@ -1,10 +1,13 @@
 services:
   neo4j:
     image: neo4j:latest
-    profiles: ["neo4j"]
+    profiles: ["neo4j-prof", "all", "db"]
+    container_name: Neon
     ports:
       - "7474:7474"
       - "7687:7687"
+    environment:
+      - NEO4J_AUTH=${NEO5J_ADMIN}/${DB_PASSWORD}
     networks:
       - silta
     healthcheck:
@@ -13,140 +16,158 @@ services:
       timeout: 5s
       retries: 5
     env_file:
-      - path: ./.env.neo4j
+      - path: ./.env
 
   age:
     image: apache/age:latest
-    profiles: ["age"]
+    profiles: ["age-prof", "all", "db"]
+    container_name: PSQL
     ports:
-      - "5455:5432"
+      - "5432:5432"
     networks:
       - silta
     env_file:
-      - path: ./.env.PSQL
+      - path: ./.env
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "</dev/tcp/localhost/5432" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  pyzx-neo4j:
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    container_name: Memo
+    profiles: [ "mem-prof" , "all", "db"]
+    ports:
+      - "7445:7687"
+      - "7444:7444"
+    command: ["--log-level=TRACE"]
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "</dev/tcp/localhost/7444" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    env_file:
+      - path: ./.env
+    networks:
+      - silta
+
+  lab:
+    image: memgraph/lab:latest
+    container_name: memgraph-lab
+    profiles: ["mem-prof"]
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - memgraph
+    environment:
+      - QUICK_CONNECT_MG_HOST=memgraph
+      - QUICK_CONNECT_MG_PORT=7687
+    networks:
+      - silta
+    env_file:
+      - path: ./.env
+
+  pyzx-basee:
     build:
       context: .
       target: product
-    profiles: ["neo4j"]
-    depends_on:
-      neo4j:
-        condition: service_healthy
+    profiles: ["base-pyzx", "all"]
     environment:
       - PYTEST_ADDOPTS=--color=yes
       - FORCE_COLOR=1
     networks:
       - silta
     env_file:
-      - path: ./.env.pyzx
-    command: python -m manual_neo4j.main_switch
+      - path: ./.env
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: [ "eval $$COMMAND" ]
+    # Please, for love of you computer, do NOT "watch" it if you don't have sleep in this...
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./
+          target: /usr/src/app/
+
+  pyzx-neo4j:
+    extends:
+      file: compose.yaml
+      service: pyzx-basee
+    profiles: ["neo4j-prof", "all", "pyzx"]
+    container_name: Pyzx-Neon
+    depends_on:
+      neo4j:
+        condition: service_healthy
+        required: true
+    environment:
+      - DB_URI=bolt://neo4j:7687
+      - BACKEND_NAME=neo4j
 
   pyzx-age:
-    build:
-      context: .
-      dockerfile: Dockerfile.python
-    profiles: ["age"]
+    extends:
+      file: compose.yaml
+      service: pyzx-basee
+    profiles: ["age-prof", "all", "pyzx"]
+    container_name: Pyzx-PSQL
     depends_on:
-      - age
-    networks:
-      - silta
-    env_file:
-      - path: ./.env.pyzx
-    command: python -m age_test.age_functionality_test
-  # You can run this with this:
-  # docker compose up --watch pyzx-dev
-  # And it will watch all the files.
-  pyzx-dev:
-    extends: pyzx-neo4j
-    profiles: [ "pyzx-dev" ]
-    entrypoint: [ "/bin/sh", "-c" ]
-    environment:
-      - PYTEST_ADDOPTS=--color=yes
-      - FORCE_COLOR=1
-    command:
-      - |
-        python ./manual_neo4j/main_switch.py;
-        echo "PyZX finished. Sleeping...";
-        sleep infinity
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./
-          target: /usr/src/app/
-          ignore:
-            - "**/__pycache__/**"
-            - ".pytest_cache/**"
-            - ".mypy_cache"
-
-  test:
-    build:
-      context: .
-      target: tester
-    profiles: [ "test" ]
-    depends_on:
-      neo4j:
+      age:
         condition: service_healthy
-    ports: []
-    tty: true
-    stdin_open: true
+        required: true
     environment:
-      - PYTEST_ADDOPTS=--color=yes
-      - FORCE_COLOR=1
-    env_file:
-      - path: ./.env.pyzx
-    networks:
-      - silta
-
-  # Can be run:
-  # docker compose up --watch test-dev
-  # to get it constantly do all tests on every change.
-  test-dev:
-    extends: test
-    profiles: [ "test-dev" ]
-    entrypoint: [ "/bin/sh", "-c" ]
-    command:
-      - |
-        python -m unittest discover -v -s tests/test_graph_neo4j;
-        echo "Tests finished. Sleeping...";
-        sleep infinity
+      - DB_URI=bolt://psql:5432
+      - BACKEND_NAME=age
     develop:
       watch:
         - action: sync+restart
+          target: /usr/src/app
           path: ./
-          target: /usr/src/app/
-          ignore:
-            - "**/__pycache__/**"
-            - ".pytest_cache/**"
-            - ".mypy_cache"
 
-  # This is if you want to dev inside the container, run this insanite:
+  pyzx-mem:
+    extends:
+      file: compose.yaml
+      service: pyzx-basee
+    profiles: [ "mem-prof" , "all", "pyzx"]
+    container_name: Pyzx-Memo
+    depends_on:
+      memgraph:
+        condition: service_healthy
+        required: true
+    environment:
+      - DB_URI=bolt://memgraph:7687
+      - BACKEND_NAME=memgraph
+    develop:
+      watch:
+        - action: sync+restart
+          target: /usr/src/app
+          path: ./
+
+
+  # This is if you want to dev inside the container, run this insanity:
   # docker compose run --rm test-dev3
   # After you add GIT_USER and GIT_EMAIL to the .env.pyzx
   test-dev3:
     build:
       context: .
       target: test-base
-    profiles: [ "test-dev3" ]
+    profiles: [ "test-dev3" , "all"]
     environment:
       - PYTEST_ADDOPTS=--color=yes
       - FORCE_COLOR=1
     networks:
       - silta
     env_file:
-      - path: ./.env.pyzx
-    depends_on:
-      neo4j:
-        condition: service_healthy
+      - path: ./.env
     tty: true
     stdin_open: true
     volumes:
       - .:/usr/src/app
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
-      "pre-commit install && git config --global user.name \"$$GIT_USER\" && 
-       git config --global user.email \"$$GIT_EMAIL\" && 
+      bash -c "git config --global --add safe.directory /usr/src/app &&
+       pre-commit install && 
        exec /bin/bash"
+
 
 networks:
   silta:

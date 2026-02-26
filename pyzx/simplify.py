@@ -206,7 +206,7 @@ def reduce_scalar(g: BaseGraph[VT,ET], quiet:bool=True, stats:Optional[Stats]=No
     return i
 
 
-def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],bool]]=None, quiet:bool=True, stats:Optional[Stats]=None) -> None:
+def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],bool]]=None, quiet:bool=True, stats:Optional[Stats]=None) -> None: # pragma: no mutate
     """The main simplification routine of PyZX. It uses a combination of :func:`clifford_simp` and
     the gadgetization strategies :func:`pivot_gadget_simp` and :func:`gadget_simp`. It also attempts to run :func:`supplementarity_simp` and :func:`copy_simp`."""
     if any(g.types()[h] == VertexType.H_BOX for h in g.vertices()):
@@ -220,7 +220,6 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
         clifford_simp(g)
         i = gadget_simp(g)
         interior_clifford_simp(g)
-        if iteration == 2: print('Optimizing...')
         k = copy_simp(g)
         l = supplementarity_simp(g)
         j = pivot_gadget_simp(g)

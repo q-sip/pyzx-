@@ -1,16 +1,73 @@
-name: Only our tests and mypy in single python
+name: Mypy + coverage + unittests
 
 on:
   push:
-    branches: ["dev"]
+    branches: [ "dev" , "fix-tests#67"]
   pull_request:
-    branches: ["dev"]
+    branches: [ "dev" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          echo "${{ vars.SUPER_ENV }}" > .env
+          echo "${{ vars.SUPER_ENV }}" > .env
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
+
+      - name: Start database
+        run: docker compose up -d memgraph --wait
+        continue-on-error: false
+
+
+      - name: mypy
+        if: always()
+        run: |
+          mypy pyzx/ tests/
+          
+
+      - name: Run coverage
+        if: always()
+        run: |
+          coverage run --branch -m unittest discover tests/
+          coverage xml
+        continue-on-error: true
+
+      - name: See coverage
+        run: |
+          coverage report -m
+        continue-on-error: true
+
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          slug: q-sip/pyzx-
+          flags: branch-dev
+        continue-on-error: true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down --volumes
+    
+
+  all-testing:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
+      matrix:
+        database: ["neo4j","age","memgraph"]
 
     steps:
       - uses: actions/checkout@v4
@@ -20,21 +77,9 @@ jobs:
         with:
           python-version: 3.11
 
-
-      - name: Force env files
+      - name: Create .env file
         run: |
-          echo "NEO4J_AUTH=${{ secrets.NEO4J_USER }}/${{ secrets.NEO4J_PASSWORD }}" > .env.neo4j
-          echo "NEO4J_URI=${{ vars.NEO4J_URI }}" > .env.pyzx
-          echo "NEO4J_USER=${{ secrets.NEO4J_USER }}" >> .env.pyzx
-          echo "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}" >> .env.pyzx
-
-      - name: Verify file size2
-        run: |
-          ls -l .env.neo4j
-          wc -l .env.neo4j
-          echo "vali moi"
-          ls -l .env.pyzx
-          wc -l .env.pyzx  
+          echo "${{ vars.SUPER_ENV }}" > .env
 
       - name: Install dependencies
         run: |
@@ -43,22 +88,13 @@ jobs:
           if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
 
 
-      - name: Start Neo4j
-        run: docker compose up -d neo4j --wait
-
-      - name: mypy
-        if: always()
-        run: |
-          mypy pyzx/ tests/
+      - name: Start database
+        run: docker compose up -d ${{ matrix.database }} --wait
+        continue-on-error: false
 
       - name: Test with unittest
-        if: always()
-        env:
-            NEO4J_URI: ${{ vars.NEO4J_URI }}
-            NEO4J_USER: ${{ secrets.NEO4J_USER }}
-            NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
-          python -m unittest discover -v -s tests/test_graph_neo4j
+          python -m unittest discover -v -s tests
 
       - name: Cleanup
         if: always()

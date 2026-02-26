@@ -5,10 +5,20 @@ import os
 from typing import Optional
 import logging
 import time
+from typing import (
+    Any,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import numpy as np
 import pyzx as zx
-from pyzx.graph import VertexType
+from pyzx.utils import VertexType
 
 from .pyzx_utils import pi_string_to_fraction
 import networkx as nx
@@ -23,29 +33,28 @@ logging.basicConfig(
 
 class ZXdb:
     
-    def __init__(self, uri = "bolt://localhost:7687", user = "", password=""):
+    def __init__(self, uri = "bolt://localhost:7687", user = "", password="", graph_id: Optional['str'] = None):
         self.uri = uri
         self.user = user
         self.password = password
         self.basic_rewrite_rule_queries = {}
         self._driver = None
+        self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
+        self.current_path = os.path.dirname(os.path.abspath(__file__))
 
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        collection_dir = os.path.join(base_dir, "query_collections")
-
-        with open(os.path.join(collection_dir, "memgraph-collection-zxdb.json"), "r") as f:
+        with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
             query_collection = json.load(f)
-        
+
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
 
-        with open(os.path.join(collection_dir, "collection-Rewrite-queries-ZXdb.json"), "r") as f:
+        with open(f"{self.current_path}/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
             query_collection = json.load(f)
-        
+
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
         
-        with open(os.path.join(collection_dir, "collection-Labeling-queries-ZXdb.json"), "r") as f:
+        with open(f"{self.current_path}/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
             query_collection = json.load(f)
 
         for e in query_collection["items"]:
@@ -54,7 +63,7 @@ class ZXdb:
         # Execute the following query first: STORAGE MODE IN_MEMORY_ANALYTICAL or STORAGE MODE IN_MEMORY_TRANSACTIONAL;
         with self.driver.session() as analyze_session:
             analyze_session.run("STORAGE MODE IN_MEMORY_ANALYTICAL;")
-    
+
     @property
     def driver(self):
         """Create driver only when needed"""
@@ -78,7 +87,7 @@ class ZXdb:
         self.close()
 
 
-    def empty_graphdb(self, graph_id: str) -> None:
+    def empty_graphdb(self) -> None:
         """
         Clear all data from the graph database for a specific graph_id.
         
@@ -92,16 +101,15 @@ class ZXdb:
                 tx.run("""
                     MATCH (v:Node {graph_id: $graph_id})
                     DETACH DELETE v
-                """, graph_id=graph_id)
+                """, graph_id=self.graph_id)
                 
                 return True
-            
-            session.execute_write(clear_graph)
-            logging.info(f"Cleared graph with ID '{graph_id}'")
 
-    
+            session.execute_write(clear_graph)
+            logging.info(f"Cleared graph with ID '{self.graph_id}'")
+
+
     def export_graphdb_to_zx_graph(self,
-        graph_id: str,
         json_file_path: str
         ) -> zx.Graph:
         """
@@ -130,10 +138,10 @@ class ZXdb:
                     RETURN id(v) AS id
                 """
 
-                vertices = tx.run(vertices_query, graph_id=graph_id).data()
-                edges = tx.run(edges_query, graph_id=graph_id).data()
-                inputs = tx.run(input_vertices_query, graph_id=graph_id).data()
-                outputs = tx.run(output_vertices_query, graph_id=graph_id).data()
+                vertices = tx.run(vertices_query, graph_id=self.graph_id).data()
+                edges = tx.run(edges_query, graph_id=self.graph_id).data()
+                inputs = tx.run(input_vertices_query, graph_id=self.graph_id).data()
+                outputs = tx.run(output_vertices_query, graph_id=self.graph_id).data()
                 return vertices, edges, inputs, outputs
 
             vertices, edges, inputs, outputs = session.execute_read(fetch_graph_data)
@@ -217,13 +225,12 @@ class ZXdb:
                 json.dump(json.loads(g.to_json()), f, indent = 4)
 
             logging.info(f"Graph data exported to {json_file_path}")
-        
+
         return g
 
 
     def import_zx_graph_json_to_graphdb(self,
         json_file_path: str,
-        graph_id: Optional[str] = None,
         save_metadata: bool = True,
         initialize_empty: bool = False,
         batch_size: int = 5000,
@@ -252,13 +259,11 @@ class ZXdb:
             graph_data = json.load(f)
         
         # Extract graph ID from file path if not provided
-        if graph_id is None:
-            graph_id = os.path.basename(json_file_path).split('.')[0]
         
         # Save metadata to separate file if requested
         if save_metadata:
             metadata = {
-                "graph_id": graph_id,
+                "graph_id": self.graph_id,
                 "version": graph_data.get("version"),
                 "backend": graph_data.get("backend"),
                 "variable_types": graph_data.get("variable_types", {}),
@@ -294,7 +299,7 @@ class ZXdb:
                 
                 session.execute_write(clear_existing_graph)
                 
-                logging.info(f"Cleared existing graph with ID '{graph_id}'")
+                logging.info(f"Cleared existing graph with ID '{self.graph_id}'")
         
             with self.driver.session() as session:
                 def create_vertices(tx):
@@ -307,7 +312,7 @@ class ZXdb:
                         for vertex in batch:
                             # Create vertex properties dictionary
                             vertex_props = {
-                                "graph_id": graph_id,
+                                "graph_id": self.graph_id,
                                 "id": vertex["id"],
                                 "t": vertex.get("t")
                             }
@@ -345,7 +350,7 @@ class ZXdb:
                                 UNWIND $input_ids AS input_id
                                 MATCH (v:Node {graph_id: $graph_id, id: input_id})
                                 SET v:Input
-                            """, graph_id=graph_id, input_ids=batch)
+                            """, graph_id=self.graph_id, input_ids=batch)
                     
                     # Batch mark output vertices with Output label in batches
                     if "outputs" in graph_data and graph_data["outputs"]:
@@ -356,7 +361,7 @@ class ZXdb:
                                 UNWIND $output_ids AS output_id
                                 MATCH (v:Node {graph_id: $graph_id, id: output_id})
                                 SET v:Output
-                            """, graph_id=graph_id, output_ids=batch)
+                            """, graph_id=self.graph_id, output_ids=batch)
                             
                 session.execute_write(create_vertices)
                 
@@ -376,7 +381,7 @@ class ZXdb:
                                     "source_id": edge[0],
                                     "target_id": edge[1],
                                     "t": edge[2],
-                                    "graph_id": graph_id
+                                    "graph_id": self.graph_id
                                 })
                         
                         # Batch create edges
@@ -389,18 +394,18 @@ class ZXdb:
                                     t: edge.t,
                                     graph_id: edge.graph_id
                                 }]->(target)
-                            """, edges=edges_batch, graph_id=graph_id)
+                            """, edges=edges_batch, graph_id=self.graph_id)
 
                         logging.info(f"Edge batch {i} of {np.ceil(len(edges) / batch_size)} stored.")
                         
                 session.execute_write(create_edges)
         
         if hadamard_edges:
-            self.turn_hadamard_gates_into_edges(graph_id=graph_id)
-            logging.info(f"Hadamard edges turned into gates for graph ID '{graph_id}'")
+            self.turn_hadamard_gates_into_edges(graph_id=self.graph_id)
+            logging.info(f"Hadamard edges turned into gates for graph ID '{self.graph_id}'")
 
 
-    def hadamard_cancel_fn(self, graph_id: str, session) -> int:
+    def hadamard_cancel_fn(self, session) -> int:
         total_patterns = 0
         while True:
             def mark_pattern(tx):
@@ -419,13 +424,13 @@ class ZXdb:
         if total_patterns > 0:
             def cancel_patterns(tx):
                 cancel_query = str(self.basic_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
-                result = tx.run(cancel_query, graph_id=graph_id)
+                result = tx.run(cancel_query, graph_id=self.graph_id)
                 return result.single()["patterns_processed"]
             processed = session.execute_write(cancel_patterns)
         return total_patterns
 
 
-    def hadamard_cancel(self, graph_id: str) -> int:
+    def hadamard_cancel(self) -> int:
         """
         Cancel Hadamard gates using iterative pattern labeling approach.
         """
@@ -446,24 +451,24 @@ class ZXdb:
                 if not pattern_id:
                     break  # No more patterns found
                 total_patterns += 1
-                logging.info(f"Marked pattern {pattern_id} for Hadamard cancellation in graph ID '{graph_id}'")
+                logging.info(f"Marked pattern {pattern_id} for Hadamard cancellation in graph ID '{self.graph_id}'")
             
             # Step 2: Process all marked patterns
             if total_patterns > 0:
                 def cancel_patterns(tx):
                     cancel_query = str(self.basic_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
-                    result = tx.run(cancel_query, graph_id=graph_id)
+                    result = tx.run(cancel_query, graph_id=self.graph_id)
                     return result.single()["patterns_processed"]
                 
                 processed = session.execute_write(cancel_patterns)
                 end_time = time.time()
-                logging.info(f"Hadamard cancellation completed in {end_time - start_time} seconds for graph ID '{graph_id}'")
+                logging.info(f"Hadamard cancellation completed in {end_time - start_time} seconds for graph ID '{self.graph_id}'")
                 logging.info(f"Hadamard cancellation: {total_patterns} patterns found, {processed} processed")
             
             return total_patterns
 
 
-    def remove_identities(self, graph_id: str) -> None:
+    def remove_identities(self) -> None:
         """
         Remove identity gates from the graph.
         
@@ -477,7 +482,7 @@ class ZXdb:
 
             # Remove identities
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
-            result = tx.run(query_remove_identities, graph_id=graph_id)
+            result = tx.run(query_remove_identities, graph_id=self.graph_id)
             record = result.single()
             #print(record)
             #deleted = record["marked"]
@@ -501,7 +506,7 @@ class ZXdb:
             #self.hadamard_cancel_fn(graph_id, session)
     
 
-    def spider_fusion(self, graph_id: str) -> int:
+    def spider_fusion(self) -> int:
         """
         Perform spider fusion on the graph.
         
@@ -530,7 +535,7 @@ class ZXdb:
 
                     # Fuse green spiders
                     cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion rewrite 2"]["query"]["code"]["value"])
-                    result_fuse_green = tx.run(cancel_query, graph_id=graph_id)
+                    result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
                     merged = result_fuse_green.single()["merged"]
 
                     # Label red spiders
@@ -549,7 +554,7 @@ class ZXdb:
 
                     # Hopf rule
                     hopf_query = str(self.basic_rewrite_rule_queries["Hopf"]["query"]["code"]["value"])
-                    result_hopf = tx.run(hopf_query, graph_id=graph_id)
+                    result_hopf = tx.run(hopf_query, graph_id=self.graph_id)
                     processed_hopf = result_hopf.single()
 
                     # You can add both-color spider fusion here if needed
@@ -567,7 +572,7 @@ class ZXdb:
             return total_patterns
         
 
-    def pivot_rule(self, graph_id: str) -> int:
+    def pivot_rule(self) -> int:
         """
         Apply the pivot rule to the graph.
 
@@ -586,14 +591,14 @@ class ZXdb:
                 
             def apply_pivot_rule_single_interior_spider(tx):
                 pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
-                result = tx.run(pivot_query, graph_id=graph_id)
+                result = tx.run(pivot_query, graph_id=self.graph_id)
                 return result.single()["interior_pauli_removed"]
 
             processed = session.execute_write(apply_pivot_rule_single_interior_spider)
 
             def apply_pivot_rule_two_interior_spiders(tx):
                 pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
-                result = tx.run(pivot_query, graph_id=graph_id)
+                result = tx.run(pivot_query, graph_id=self.graph_id)
                 return result.single()["pivot_operations_performed"]
             
             processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
@@ -606,7 +611,7 @@ class ZXdb:
             return processed
         
         
-    def local_complementation_rule(self, graph_id: str) -> int:
+    def local_complementation_rule(self) -> int:
         """
         Apply the local complementation rule to the graph.
 
@@ -633,7 +638,7 @@ class ZXdb:
                 
                 def apply_local_complementation_rewrite(tx):
                     lc_query = str(self.basic_rewrite_rule_queries["Local complement full"]["query"]["code"]["value"])
-                    result = tx.run(lc_query, graph_id=graph_id)
+                    result = tx.run(lc_query, graph_id=self.graph_id)
                     #print(result)
                     return result.single()
                 
@@ -647,7 +652,7 @@ class ZXdb:
             return changed
         
     
-    def phase_gadget_fusion_rule(self, graph_id: str) -> int:
+    def phase_gadget_fusion_rule(self) -> int:
         """
         Apply the phase gadget fusion rule to the graph.
 
@@ -673,7 +678,7 @@ class ZXdb:
             #while True:
             def apply_phase_gadget_fusion_rewrite(tx):
                 pgf_query = str(self.basic_rewrite_rule_queries["Gadget fusion both"]["query"]["code"]["value"])
-                result = tx.run(pgf_query, graph_id=graph_id)
+                result = tx.run(pgf_query, graph_id=self.graph_id)
                 return result.single()["fusions_performed"]
             
             changed = session.execute_write(apply_phase_gadget_fusion_rewrite)
@@ -685,7 +690,7 @@ class ZXdb:
             return changed
         
 
-    def pivot_gadget_rule(self, graph_id: str) -> int:
+    def pivot_gadget_rule(self) -> int:
         """
         Apply the pivot gadget rule to the graph.
 
@@ -702,7 +707,7 @@ class ZXdb:
             #while True:
             def apply_pivot_gadget_labeling(tx):
                 pgf_query = str(self.basic_rewrite_rule_queries["Pivot gadget"]["query"]["code"]["value"])
-                result = tx.run(pgf_query, graph_id=graph_id)
+                result = tx.run(pgf_query, graph_id=self.graph_id)
                 return result.single()["pivot_operations_performed"]
             changed = session.execute_write(apply_pivot_gadget_labeling)
 
@@ -714,7 +719,7 @@ class ZXdb:
             return changed
         
 
-    def pivot_boundary_rule(self, graph_id: str) -> int:
+    def pivot_boundary_rule(self) -> int:
         """
         Apply the pivot boundary rule to the graph.
 
@@ -731,7 +736,7 @@ class ZXdb:
             while True:
                 def apply_pivot_boundary_labeling(tx):
                     pgf_query = str(self.basic_rewrite_rule_queries["Pivot boundary"]["query"]["code"]["value"])
-                    result = tx.run(pgf_query, graph_id=graph_id)
+                    result = tx.run(pgf_query, graph_id=self.graph_id)
                     return result.single()["pivot_operations_performed"]
                 changed = session.execute_write(apply_pivot_boundary_labeling)
 
@@ -743,7 +748,7 @@ class ZXdb:
             return changed
 
 
-    def bialgebra_simp(self, graph_id: str) -> int:
+    def bialgebra_simp(self) -> int:
         """
         Apply the bialgebra rule to the graph.
 
@@ -760,7 +765,7 @@ class ZXdb:
 
                 def apply_bialgebra_labeling(tx):
                     pgf_query = str(self.basic_rewrite_rule_queries["Bialgebra labeling"]["query"]["code"]["value"])
-                    result = tx.run(pgf_query, graph_id=graph_id)
+                    result = tx.run(pgf_query, graph_id=self.graph_id)
                     record = result.single()
                     return record if record is not None else 0
                 
@@ -768,7 +773,7 @@ class ZXdb:
 
                 def apply_bialgebra_rewrite(tx):
                     pgf_query = str(self.basic_rewrite_rule_queries["Bialgebra simplification"]["query"]["code"]["value"])
-                    result = tx.run(pgf_query, graph_id=graph_id)
+                    result = tx.run(pgf_query, graph_id=self.graph_id)
                     record = result.single()
                     return record["pid"] if record is not None else 0
                 
@@ -782,7 +787,7 @@ class ZXdb:
             return changed
         
 
-    def get_degree_distribution(self, graph_id: str) -> dict:
+    def get_degree_distribution(self) -> dict:
         """
         Get the degree distribution of the graph.
 
@@ -798,7 +803,7 @@ class ZXdb:
         with self.driver.session() as session:
             def fetch_degree_distribution(tx):
                 query = str(self.basic_rewrite_rule_queries["Get degree distribution"]["query"]["code"]["value"])
-                result = tx.run(query, graph_id=graph_id)
+                result = tx.run(query, graph_id=self.graph_id)
                 return {record["degree"]: record["frequency"] for record in result}
 
             degree_distribution = session.execute_read(fetch_degree_distribution)
@@ -806,7 +811,7 @@ class ZXdb:
         return degree_distribution
     
 
-    def turn_hadamard_gates_into_edges(self, graph_id: str) -> None:
+    def turn_hadamard_gates_into_edges(self) -> None:
         """
         Turn Hadamard gates into edges in the graph.
 
@@ -816,7 +821,7 @@ class ZXdb:
 
         with self.driver.session() as session:
             def apply_hadamard_to_edge_conversion(tx):
-                query = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into edges"]["query"]["code"]["value"])
-                tx.run(query, graph_id=graph_id)
+                query = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
+                tx.run(query, graph_id=self.graph_id)
 
             session.execute_write(apply_hadamard_to_edge_conversion)

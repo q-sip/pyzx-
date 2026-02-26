@@ -7,7 +7,7 @@ from pyzx.graph.graph_neo4j import GraphNeo4j
 
 
 def _neo4j_env_present() -> bool:
-    return all(os.getenv(k) for k in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD"))
+    return all(os.getenv(k) for k in ("DB_URI","DB_PASSWORD"))
 
 
 def _ensure_phase_to_str_exists() -> None:
@@ -30,16 +30,20 @@ class Neo4jUnitTestCase(unittest.TestCase):
 
         if not _neo4j_env_present():
             raise unittest.SkipTest(
-                "Neo4j env vars missing (NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD)."
+                "Neo4j env vars missing (DB_URI/DB_PASSWORD)."
+            )
+        if os.getenv("BACKEND_NAME") != "neo4j":
+            raise unittest.SkipTest(
+                "Different backend in use."
             )
 
         self.graph_id = f"test_graph_{uuid.uuid4().hex}"
         self.g = GraphNeo4j(
-            uri=os.getenv("NEO4J_URI", ""),
-            user=os.getenv("NEO4J_USER", ""),
-            password=os.getenv("NEO4J_PASSWORD", ""),
+            uri=os.getenv("DB_URI", "bolt://localhost:7687"),
+            user="neo4j",
+            password=os.getenv("DB_PASSWORD", ""),
             graph_id=self.graph_id,
-            database=os.getenv("NEO4J_DATABASE"),
+            database=os.getenv("NEO4J_DATABASE", "neo4j"),
         )
 
         # sanity-check connection

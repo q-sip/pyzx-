@@ -53,9 +53,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def __init__(
         self,
-        uri: str = os.getenv("MEMGRAPH_URI", ""),
-        user: str = os.getenv("MEMGRAPH_USER", ""),
-        password: str = os.getenv("MEMGRAPH_PASSWORD", ""),
+        uri: str = os.getenv("DB_URI", ""),
+        user: str = os.getenv("DB_USER", ""),
+        password: str = os.getenv("DB_PASSWORD", ""),
         graph_id: Optional[str] = None,
         database: Optional[str] = None,
     ):
@@ -66,7 +66,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self.database = database
         self._driver = None
 
-        self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
         # Clear any existing data for this ID to be safe (id reuse)
         if graph_id is None:
             self.remove_all_data()
@@ -118,6 +118,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         if self._driver is not None:
             self._driver.close()
             self._driver = None
+
+    def get_graph_id(self):
+        return self.graph_id
 
     def create_graph(
         self,

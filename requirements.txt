@@ -19,6 +19,9 @@ dotenv
 pre-commit
 pylint
 psycopg
+psycopg2
+psycopg2-binary
+psycopg2-connect
 
 
 matplotlib-inline
