@@ -25,7 +25,10 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - silta
+      silta:
+        aliases:
+          - age
+          - psql
     env_file:
       - path: ./.env
     healthcheck:
