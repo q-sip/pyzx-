@@ -5,10 +5,20 @@ import os
 from typing import Optional
 import logging
 import time
+from typing import (
+    Any,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import numpy as np
 import pyzx as zx
-from pyzx.graph import VertexType
+from pyzx.utils import VertexType
 
 from .pyzx_utils import pi_string_to_fraction
 import networkx as nx
@@ -23,29 +33,28 @@ logging.basicConfig(
 
 class ZXdb:
     
-    def __init__(self, uri = "bolt://localhost:7687", user = "", password=""):
+    def __init__(self, uri = "bolt://localhost:7687", user = "", password="", graph_id: Optional['str'] = None):
         self.uri = uri
         self.user = user
         self.password = password
         self.basic_rewrite_rule_queries = {}
         self._driver = None
+        # self.graph_id = graph_id
+        self.current_path = os.path.dirname(os.path.abspath(__file__))
 
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        collection_dir = os.path.join(base_dir, "query_collections")
-
-        with open(os.path.join(collection_dir, "memgraph-collection-zxdb.json"), "r") as f:
+        with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
             query_collection = json.load(f)
-        
+
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
 
-        with open(os.path.join(collection_dir, "collection-Rewrite-queries-ZXdb.json"), "r") as f:
+        with open(f"{self.current_path}/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
             query_collection = json.load(f)
-        
+
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
         
-        with open(os.path.join(collection_dir, "collection-Labeling-queries-ZXdb.json"), "r") as f:
+        with open(f"{self.current_path}/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
             query_collection = json.load(f)
 
         for e in query_collection["items"]:
@@ -54,7 +63,7 @@ class ZXdb:
         # Execute the following query first: STORAGE MODE IN_MEMORY_ANALYTICAL or STORAGE MODE IN_MEMORY_TRANSACTIONAL;
         with self.driver.session() as analyze_session:
             analyze_session.run("STORAGE MODE IN_MEMORY_ANALYTICAL;")
-    
+
     @property
     def driver(self):
         """Create driver only when needed"""
@@ -95,11 +104,11 @@ class ZXdb:
                 """, graph_id=graph_id)
                 
                 return True
-            
+
             session.execute_write(clear_graph)
             logging.info(f"Cleared graph with ID '{graph_id}'")
 
-    
+
     def export_graphdb_to_zx_graph(self,
         graph_id: str,
         json_file_path: str
@@ -217,7 +226,7 @@ class ZXdb:
                 json.dump(json.loads(g.to_json()), f, indent = 4)
 
             logging.info(f"Graph data exported to {json_file_path}")
-        
+
         return g
 
 
@@ -816,7 +825,7 @@ class ZXdb:
 
         with self.driver.session() as session:
             def apply_hadamard_to_edge_conversion(tx):
-                query = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into edges"]["query"]["code"]["value"])
+                query = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
                 tx.run(query, graph_id=graph_id)
 
             session.execute_write(apply_hadamard_to_edge_conversion)

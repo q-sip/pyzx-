@@ -220,7 +220,6 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
         clifford_simp(g)
         i = gadget_simp(g)
         interior_clifford_simp(g)
-        if iteration == 2: print('Optimizing...')
         k = copy_simp(g)
         l = supplementarity_simp(g)
         j = pivot_gadget_simp(g)

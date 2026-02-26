@@ -119,6 +119,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             self._driver.close()
             self._driver = None
 
+    def get_graph_id(self):
+        return self.graph_id
+
     def create_graph(
         self,
         vertices_data: List[dict],

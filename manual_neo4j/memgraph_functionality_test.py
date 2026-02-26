@@ -356,18 +356,11 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
                 g_mem.remove_all_data()
                 g_mem.close()
 
-def test_pyzx_demo():
-    c = zx.generate.cliffordT(3,20)
-    # Draw the circuit
-    display(zx.draw(g))
-    # Now simplify it
-    zx.simplify.full_reduce(c)
-    c.normalise()
-    # And draw the simplified version
-    display(zx.draw(c))
 
 
 # iterable_graph_creation()
 # test_depths_qubits(2, 100, 100)
 # large_graph()
-test_num_vertices_against_simple_graph(2, 100)
+# test_num_vertices_against_simple_graph(2, 100)
+c = zx.generate.CNOT_HAD_PHASE_circuit(2, 20, seed=50)
+g = c.to_graph(backend='memgraph')
