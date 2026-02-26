@@ -293,7 +293,7 @@ class ZXdb:
                     tx.run("""
                         MATCH (v)
                         DETACH DELETE v
-                    """, graph_id=graph_id)
+                    """, graph_id=self.graph_id)
                     
                     return True
                 
@@ -624,17 +624,18 @@ class ZXdb:
 
         with self.driver.session() as session:
             #start_time = time.time()
-            
+            iteration = 0
             while True:
+                iteration += 1
+                print(f'{iteration}th iteration')
+                def apply_local_complementation_labeling(tx):
+                   lc_query = str(self.basic_rewrite_rule_queries["Local complement labeling"]["query"]["code"]["value"])
+                   result = tx.run(lc_query, graph_id=self.graph_id)
+                   return result.single()["num_processed"]
+                changed = session.execute_write(apply_local_complementation_labeling)
 
-                #def apply_local_complementation_labeling(tx):
-                #    lc_query = str(self.basic_rewrite_rule_queries["Local complement labeling"]["query"]["code"]["value"])
-                #    result = tx.run(lc_query, graph_id=graph_id)
-                #    return result.single()["num_processed"]
-                #changed = session.execute_write(apply_local_complementation_labeling)
-
-                #if changed == 0:
-                #    break  # No more patterns found
+                if changed == 0:
+                   break  # No more patterns found
                 
                 def apply_local_complementation_rewrite(tx):
                     lc_query = str(self.basic_rewrite_rule_queries["Local complement full"]["query"]["code"]["value"])
