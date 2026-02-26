@@ -10,7 +10,7 @@ import numpy as np
 import pyzx as zx
 from pyzx.graph import VertexType
 
-from zxdb.pyzx_utils import pi_string_to_fraction
+from .pyzx_utils import pi_string_to_fraction
 import networkx as nx
 
 # Configure logging
@@ -30,19 +30,22 @@ class ZXdb:
         self.basic_rewrite_rule_queries = {}
         self._driver = None
 
-        with open("zxdb/query_collections/memgraph-collection-zxdb.json", "r") as f:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        collection_dir = os.path.join(base_dir, "query_collections")
+
+        with open(os.path.join(collection_dir, "memgraph-collection-zxdb.json"), "r") as f:
             query_collection = json.load(f)
         
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
 
-        with open("zxdb/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
+        with open(os.path.join(collection_dir, "collection-Rewrite-queries-ZXdb.json"), "r") as f:
             query_collection = json.load(f)
         
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
         
-        with open("zxdb/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
+        with open(os.path.join(collection_dir, "collection-Labeling-queries-ZXdb.json"), "r") as f:
             query_collection = json.load(f)
 
         for e in query_collection["items"]:
