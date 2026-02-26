@@ -4,7 +4,7 @@ import pyzx as zx
 import pyzx.memgraph_simplify as mem
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
-load_dotenv()
+# load_dotenv()
 
 # This deletes all data before running the comparison tests
 query = "MATCH(N) DETACH DELETE N"

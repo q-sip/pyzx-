@@ -91,22 +91,13 @@ MEMGRAPH_AUTH=customer/testkala
 
 # Neo4j part:
 NEO4J_AUTH=neo4j/testkala
-NEO5J_ADMIN=neo4j
 
 
 # Postgres part:
-DB_TYPE=age
-
-DB_HOST=age
-DB_PORT=5432
-
-## Database credentials
 POSTGRES_USER=customer
 POSTGRES_PASSWORD=testkala
 POSTGRES_DB=age_db
 
-## App-level connection string (recommended)
-DATABASE_URL=postgresql://customer:testkala@age:5432/age_db
 </pre>
 
 ## Precommit hooks

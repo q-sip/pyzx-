@@ -9,11 +9,11 @@ import pyzx as zx
 from pyzx.graph.graph_neo4j import GraphNeo4j
 from pyzx.utils import EdgeType, VertexType
 
-load_dotenv()
+# load_dotenv()
 
 
-URI = os.getenv("NEO4J_URI")
-AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
+# URI = os.getenv("DB_URI")
+# AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 
 # with GraphDatabase.driver(URI, auth=AUTH) as driver:
 #     driver.verify_connectivity()
@@ -45,8 +45,7 @@ AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 
 # MANUAALINEN GRAAFI TESTAUKSEEN!
 
-g = GraphNeo4j(
-)
+g = GraphNeo4j()
 
 
 def graph_step_by_step():

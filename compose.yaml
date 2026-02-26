@@ -6,8 +6,6 @@ services:
     ports:
       - "7474:7474"
       - "7687:7687"
-    environment:
-      - NEO4J_AUTH=${NEO5J_ADMIN}/${DB_PASSWORD}
     networks:
       - silta
     healthcheck:
@@ -106,6 +104,7 @@ services:
     environment:
       - DB_URI=bolt://neo4j:7687
       - BACKEND_NAME=neo4j
+      - DB_USER=neo4j
 
   pyzx-age:
     extends:
@@ -119,6 +118,9 @@ services:
         required: true
     env_file:
       - path: ./.env
+    environment:
+      - DB_URI=postgresql://age:5432/age_db
+      - BACKEND_NAME=age
 
   pyzx-mem:
     extends:
@@ -133,11 +135,6 @@ services:
     environment:
       - DB_URI=bolt://memgraph:7687
       - BACKEND_NAME=memgraph
-    develop:
-      watch:
-        - action: sync+restart
-          target: /usr/src/app
-          path: ./
 
 
   # This is if you want to dev inside the container, run this insanity:

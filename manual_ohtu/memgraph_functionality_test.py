@@ -16,8 +16,8 @@ from pyzx import memgraph_simplify as mem
 load_dotenv()
 
 
-URI = os.getenv("MEMGRAPH_URI")
-AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
+# URI = os.getenv("MEMGRAPH_URI")
+# AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
 
 # with GraphDatabase.driver(URI, auth=AUTH) as driver:
 #     driver.verify_connectivity()

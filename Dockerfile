@@ -2,9 +2,6 @@ FROM python AS pyzx-base
 
 WORKDIR /app
 
-# Copy the Python code (e.g., age_test) into the container
-COPY . .
-
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
