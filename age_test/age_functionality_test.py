@@ -12,7 +12,7 @@ print("Successfully connected to AGE database")
 #    v0 = g.add_vertex(VertexType.BOUNDARY, 0, 0)
 #    v1 = g.add_vertex(VertexType.Z, 0, 1)
 #    v2 = g.add_vertex(VertexType.X, 0, 2)
-#    print("Vertices created successfully")
+##    print("Vertices created successfully")
 #except Exception as e:
 #    print(f"Error creating vertices: {type(e).__name__}: {e}")
 #    v0 = v1 = v2 = None
@@ -29,7 +29,7 @@ print("Successfully connected to AGE database")
 #graph = g.graph_id  # e.g., 'test_graph'
 
 # Fetch vertices
-#try:
+##try:
 #    with g.conn.cursor() as cur:
 #        cur.execute(f"SELECT * FROM cypher('{graph}', $$ MATCH (n) RETURN n $$) AS (n agtype);")
 #        vertices = cur.fetchall()
