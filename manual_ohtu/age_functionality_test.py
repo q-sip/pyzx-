@@ -50,4 +50,25 @@ print("Successfully connected to AGE database")
 #except Exception as e:
 #    print(f"Error fetching edges: {type(e).__name__}: {e}")
 
+# Minimal Cypher smoke test to verify AGE functionality
+try:
+    with g.conn.cursor() as cur:
+        cur.execute(
+            f"SELECT * FROM ag_catalog.cypher('{g.graph_id}', $$ "
+            "CREATE (n:Smoke {k: 1}) RETURN n $$) AS (n ag_catalog.agtype);"
+        )
+        created = cur.fetchone()
+        cur.execute(
+            f"SELECT * FROM ag_catalog.cypher('{g.graph_id}', $$ "
+            "MATCH (n:Smoke {k: 1}) RETURN n $$) AS (n ag_catalog.agtype);"
+        )
+        matched = cur.fetchall()
+        g.conn.commit()
+    print("\nCypher smoke test:")
+    print(f"Created: {created[0] if created else None}")
+    print(f"Matched count: {len(matched)}")
+except Exception as e:
+    print(f"Cypher smoke test failed: {type(e).__name__}: {e}")
+    g.conn.rollback()
+
 print("\nTest completed!")
