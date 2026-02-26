@@ -50,9 +50,6 @@ AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
 # MANUAALINEN GRAAFI TESTAUKSEEN!
 
 g = GraphMemgraph(
-    uri=URI,
-    user=AUTH[0],
-    password=AUTH[1],
     database="memgraph",
     graph_id="test_graph",
 )
@@ -362,5 +359,3 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
 # test_depths_qubits(2, 100, 100)
 # large_graph()
 # test_num_vertices_against_simple_graph(2, 100)
-c = zx.generate.CNOT_HAD_PHASE_circuit(2, 20, seed=50)
-g = c.to_graph(backend='memgraph')

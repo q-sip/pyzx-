@@ -63,9 +63,6 @@ class TestGraphNeo4jAddVertexIndexed(unittest.TestCase):
         self,
     ) -> None:
         g = GraphNeo4j(
-            uri="bolt://unit-test-does-not-connect",
-            user="neo4j",
-            password="password",
             graph_id=self.graph_id,
             database=os.getenv("NEO4J_DATABASE"),
         )
