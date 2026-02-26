@@ -60,7 +60,6 @@ class GraphAGE:
 
         self.graph_id = "test_graph"
 
-
         with self.conn.cursor() as cur:
             # 1. Load extension
             cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
@@ -78,8 +77,6 @@ class GraphAGE:
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
-
-
 
 #        self.graph_id = "test_graph"
 #        connection = age.connect(graph=GRAPH_NAME, dsn=CONFIG)
