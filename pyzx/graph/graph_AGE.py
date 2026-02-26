@@ -48,9 +48,9 @@ class GraphAGE:
         user = os.getenv("POSTGRES_USER") or os.getenv("DB_USER")
         password = os.getenv("POSTGRES_PASSWORD") or os.getenv("DB_PASSWORD")
         self.conn = psycopg.connect(
-            host=os.getenv("DB_HOST", "age"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            dbname=os.getenv("POSTGRES_DB", "age_db"),
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            dbname=os.getenv("POSTGRES_DB"),
             user=user,
             password=password,
         )
