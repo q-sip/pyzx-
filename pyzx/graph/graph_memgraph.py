@@ -66,7 +66,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self.database = database
         self._driver = None
 
-        self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
         # Clear any existing data for this ID to be safe (id reuse)
         if graph_id is None:
             self.remove_all_data()

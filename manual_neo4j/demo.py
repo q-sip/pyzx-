@@ -6,7 +6,7 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("MEMGRAPH_USER"), os.getenv("MEMGRAPH_PASSWORD"))
 def large_graph():
     """Suurempi graafi"""
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=2, depth=20, seed=42)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=2, depth=20, seed=50)
     print('Generating graph...')
     g = c.to_graph(backend='memgraph')
     i = input('Graph generated')
