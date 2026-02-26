@@ -49,47 +49,32 @@ class GraphAGE:
             host = os.getenv("DB_HOST"),
             port = os.getenv("DB_PORT"),
             dbname = os.getenv("POSTGRES_DB"),
-            user = os.getenv("POSTGRES_USER"),
-            password = os.getenv("POSTGRES_PASSWORD")
+            user = os.getenv("DB_USER"),
+            password = os.getenv("DB_PASSWORD")
             )
-        
         self.graph_id = "test_graph"
-        
+
         with self.conn.cursor() as cur:
-            # Ensure AGE extension is loaded
+            # 1. Load extension
+            cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path TO ag_catalog;")
+            self.conn.commit() # ENSURE LOAD IS COMMITTED
+
+            # 2. Create graph (search_path is already set in options)
             try:
-                cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
+                #cur.execute(f"SELECT create_graph('{self.graph_id}');")
+                cur.execute(f"select COUNT(*) from age_db.ag_catalog.ag_graph ag ;")
+                count = cur.fetchone()[0]
+                cur.execute(f"SELECT create_graph('koira{count}');")
                 self.conn.commit()
             except Exception as e:
-                print(f"Warning: CREATE EXTENSION failed: {e}")
+                print(f"Error: {e}")
                 self.conn.rollback()
-            
-            # Reset the search path
-            try:
-                cur.execute('SET search_path = ag_catalog, "$user", public;')
-            except Exception as e:
-                print(f"Warning: SET search_path failed: {e}")
-                self.conn.rollback()
-            
-            # Drop existing graph if it exists
-            try:
-                cur.execute(f"SELECT ag_catalog.drop_graph('{self.graph_id}'::name, true);")
-                self.conn.commit()
-            except Exception as e:
-                # Graph doesn't exist, which is fine
-                print(f"Info: drop_graph note: {e}")
-                self.conn.rollback()
-            
-            # Create new graph
-            try:
-                cur.execute(f"SELECT ag_catalog.create_graph('{self.graph_id}'::name)")
-                self.conn.commit()
-                print(f"Successfully created AGE graph: {self.graph_id}")
-            except Exception as e:
-                print(f"Error: create_graph failed: {type(e).__name__}: {e}")
-                print("AGE extension may not be properly installed in the database.")
-                self.conn.rollback()
-    
+
+
+
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"{{ty:'{ty.name}', qubit:{qubit}, row:{row}"

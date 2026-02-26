@@ -53,9 +53,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def __init__(
         self,
-        uri: str = os.getenv("MEMGRAPH_URI", ""),
-        user: str = os.getenv("MEMGRAPH_USER", ""),
-        password: str = os.getenv("MEMGRAPH_PASSWORD", ""),
+        uri: str = os.getenv("DB_URI", ""),
+        user: str = os.getenv("DB_USER", ""),
+        password: str = os.getenv("DB_PASSWORD", ""),
         graph_id: Optional[str] = None,
         database: Optional[str] = None,
     ):

@@ -5,7 +5,7 @@ from pyzx.utils import VertexType
 from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
 
 class TestVindexE2E(Neo4jUnitTestCase):
-    def test_vindex_after_creation(self):
+    def test_vindex_after_creation(self): # pragma: no mutate
         choices = [VertexType.Z, VertexType.X]
         g = self.g
         g.add_vertex(VertexType.BOUNDARY, 0, 0)

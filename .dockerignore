@@ -16,3 +16,5 @@ Dockerfile*
 /scratchpads
 /internal
 /pynguin
+mutants
+htmlcov

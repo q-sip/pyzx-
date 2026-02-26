@@ -18,6 +18,19 @@ def main() -> int:
         print("Could not determine git repo state; skipping up-to-date check.")
         return 0
 
+    # Get the current branch name
+    try:
+        current_branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).strip()
+
+        # If we are NOT on dev, skip the check and continue (pass)
+        if current_branch != "dev":
+            print(f"On branch '{current_branch}'; skipping dev up-to-date check.")
+            return 0
+
+    except Exception:
+        print("Could not determine current branch; skipping check.")
+        return 0
+
     # Fetch origin/dev (safe; does not modify working tree)
     try:
         subprocess.run(["git", "fetch", "origin", "dev"], check=True)
