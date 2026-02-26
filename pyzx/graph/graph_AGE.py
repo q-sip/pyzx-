@@ -50,13 +50,13 @@ class GraphAGE:
     def __init__(self):
         
         self.conn = psycopg.connect(
-
             host = os.getenv("DB_HOST"),
             port = os.getenv("DB_PORT"),
             dbname = os.getenv("POSTGRES_DB"),
             user = os.getenv("POSTGRES_USER"),
             password = os.getenv("POSTGRES_PASSWORD")
             )
+        
         graph = BaseGraph()
   
         self.graph_id = "test_graph"
