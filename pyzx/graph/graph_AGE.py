@@ -50,12 +50,12 @@ class GraphAGE:
     def __init__(self):
         
         self.conn = psycopg.connect(
-            # host = os.getenv("DB_HOST"),
-            # port = os.getenv("DB_PORT"),
+            host = os.getenv("DB_HOST"),
+            port = os.getenv("DB_PORT"),
             conninfo = os.getenv("DB_URI"),
             dbname = os.getenv("POSTGRES_DB"),
-            user = os.getenv("DB_USER"),
-            password = os.getenv("DB_PASSWORD")
+            user = os.getenv("POSTGRES_USER"),
+            password = os.getenv("POSTGRES_PASSWORD")
             )
         
         graph = BaseGraph()
@@ -71,23 +71,26 @@ class GraphAGE:
 
             # 2. Create graph (search_path is already set in options)
             try:
-                #cur.execute(f"SELECT create_graph('{self.graph_id}');")
-                cur.execute(f"select COUNT(*) from age_db.ag_catalog.ag_graph ag ;")
-                count = cur.fetchone()[0]
-                cur.execute(f"SELECT create_graph('koira{count}');")
+                cur.execute(f"SELECT create_graph('{self.graph_id}');")
+                #cur.execute(f"select COUNT(*) from age_db.ag_catalog.ag_graph ag ;")
+                #count = cur.fetchone()[0]
+                #cur.execute(f"SELECT create_graph('koira{count}');")
                 self.conn.commit()
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
 
-#        self.graph_id = "test_graph"
-#        connection = age.connect(graph=GRAPH_NAME, dsn=CONFIG)
+    def delete_graph(self):
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(
+                "SELECT drop_graph(%s, %s);",
+                (self.graph_id, True)
+            )
+        self.conn.commit()
+        print("Graph deleted")
 
-#        self.conn("CREATE EXTENSION age;")
-#        self.conn("LOAD 'age';")
-#        self.conn("CREATE EXTENSION age;")
-
-#        self.conn("SELECT create_graph({self.graph.id});")
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
