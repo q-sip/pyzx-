@@ -1,7 +1,7 @@
 from time import time
 import os
 import pyzx as zx
-import pyzx.memgraph_simplify as mem
+#import pyzx.memgraph_simplify as mem
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 # load_dotenv()
@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 # This deletes all data before running the comparison tests
 query = "MATCH(N) DETACH DELETE N"
 # GraphDatabase.driver(
-#     os.getenv("NEO4J_URI"), 
-#     auth=(os.getenv("NEO4J_USER"), 
+#     os.getenv("NEO4J_URI"),
+#     auth=(os.getenv("NEO4J_USER"),
 #     os.getenv("NEO4J_PASSWORD"))).session().execute_write(lambda tx: tx.run(query))
 # ----
 # print('deleted data')
@@ -24,7 +24,7 @@ def comparison_1(seed: int, backend: str | None = None):
     backend = "graph_tool" for GraphGT
     """
 
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=2, depth=20, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=2, depth=20)
 
     g = c.to_graph(backend=backend)
 
@@ -39,7 +39,7 @@ def comparison_1(seed: int, backend: str | None = None):
 
 def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     """compares one backend to another"""
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40)
 
     g1 = c.to_graph(backend=b1)
     g2 = c.to_graph(backend=b2)
@@ -61,6 +61,5 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
 # print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
-print("Memgraph:", comparison_1(42, "memgraph"))
-
-#print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))
+#print("Memgraph:", comparison_1(42, "memgraph"))
+print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))
