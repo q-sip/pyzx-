@@ -12,7 +12,7 @@ print("Successfully connected to AGE database")
 #    v0 = g.add_vertex(VertexType.BOUNDARY, 0, 0)
 #    v1 = g.add_vertex(VertexType.Z, 0, 1)
 #    v2 = g.add_vertex(VertexType.X, 0, 2)
-##    print("Vertices created successfully")
+#    print("Vertices created successfully")
 #except Exception as e:
 #    print(f"Error creating vertices: {type(e).__name__}: {e}")
 #    v0 = v1 = v2 = None
@@ -73,6 +73,7 @@ def is_there_smoke():
         g.conn.rollback()
 
     print("\nYes there is SMOKE")
+
 def delete_graph():
     with g.conn.cursor() as cur:
         cur.execute("LOAD 'age';")
@@ -85,5 +86,7 @@ def delete_graph():
 
     print("\nGraph deleted")
 
-is_there_smoke()
+#is_there_smoke()
+g.add_vertices(3)
+print("vertices added")
 g.delete_graph()
