@@ -46,27 +46,6 @@ load_dotenv()
 VT = int
 ET = Tuple[int, int]
 
-     
-        
-
-    #def execute(self, query):
-        
-        #with self.conn.cursor() as cur:
-            # 1. Load extension
-            #cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
-            #cur.execute("LOAD 'age';")
-            #cur.execute("SET search_path TO ag_catalog;")
-            #self.conn.commit() # ENSURE LOAD IS COMMITTED
-
-            # 2. Create graph (search_path is already set in options)
-            #try:
-            #    cur.execute(query)
-            #    self.conn.commit()
-            #except Exception as e:
-            #    print(f"Error: {e}")
-            #    self.conn.rollback()
- 
-
 class GraphAGE(BaseGraph[VT,ET]):
 
     backend = "age"
@@ -102,6 +81,13 @@ class GraphAGE(BaseGraph[VT,ET]):
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
+    
+    def db_execute(self, query):
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+        self.conn.commit()
 
     def delete_graph(self):
         with self.conn.cursor() as cur:
@@ -114,12 +100,9 @@ class GraphAGE(BaseGraph[VT,ET]):
         self.conn.commit()
         print("Graph deleted")
 
-
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs
-
         Nodes are stored as (:Node {graph_id, id, t, phase, qubit, row})
-
         Default values:
             t = VertexType.BOUNDARY
             phase = "0"
@@ -172,13 +155,7 @@ class GraphAGE(BaseGraph[VT,ET]):
         RETURN count(n) $$) AS (result agtype);
         """)
 
-        with self.conn.cursor() as cur:
-            #cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-
-        self.conn.commit()
+        self.db_execute(query)
 
         self._vindex += amount
         return vertex_ids
