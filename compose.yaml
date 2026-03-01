@@ -1,7 +1,7 @@
 services:
   neo4j:
     image: neo4j:latest
-    profiles: ["neo4j-prof", "all", "db"]
+    profiles: [ "neo4j-prof", "all", "db" ]
     container_name: Neon
     ports:
       - "7474:7474"
@@ -18,7 +18,7 @@ services:
 
   age:
     image: apache/age:latest
-    profiles: ["age-prof", "all", "db"]
+    profiles: [ "age-prof", "all", "db" ]
     container_name: PSQL
     ports:
       - "5432:5432"
@@ -38,11 +38,11 @@ services:
   memgraph:
     image: memgraph/memgraph-mage:latest
     container_name: Memo
-    profiles: [ "mem-prof" , "all", "db"]
+    profiles: [ "mem-prof" , "all", "db" ]
     ports:
       - "7445:7687"
       - "7444:7444"
-    command: ["--log-level=TRACE"]
+    command: [ "--log-level=TRACE" ]
     healthcheck:
       test: [ "CMD", "bash", "-c", "</dev/tcp/localhost/7444" ]
       interval: 10s
@@ -56,7 +56,7 @@ services:
   lab:
     image: memgraph/lab:latest
     container_name: memgraph-lab
-    profiles: ["mem-prof"]
+    profiles: [ "mem-prof" ]
     pull_policy: always
     ports:
       - "3000:3000"
@@ -74,7 +74,7 @@ services:
     build:
       context: .
       target: product
-    profiles: ["base-pyzx", "all"]
+    profiles: [ "base-pyzx", "all" ]
     environment:
       - PYTEST_ADDOPTS=--color=yes
       - FORCE_COLOR=1
@@ -82,20 +82,20 @@ services:
       - silta
     env_file:
       - path: ./.env
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: [ "eval $$COMMAND" ]
     # Please, for love of you computer, do NOT "watch" it if you don't have sleep in this...
     develop:
       watch:
         - action: sync+restart
           path: ./
           target: /usr/src/app/
+          ignore:
+            - ./mutants/
 
   pyzx-neo4j:
     extends:
       file: compose.yaml
       service: pyzx-basee
-    profiles: ["neo4j-prof", "all", "pyzx"]
+    profiles: [ "neo4j-prof", "all", "pyzx" ]
     container_name: Pyzx-Neon
     depends_on:
       neo4j:
@@ -110,7 +110,7 @@ services:
     extends:
       file: compose.yaml
       service: pyzx-basee
-    profiles: ["age-prof", "all", "pyzx"]
+    profiles: [ "age-prof", "all", "pyzx" ]
     container_name: Pyzx-PSQL
     depends_on:
       age:
@@ -126,7 +126,7 @@ services:
     extends:
       file: compose.yaml
       service: pyzx-basee
-    profiles: [ "mem-prof" , "all", "pyzx"]
+    profiles: [ "mem-prof" , "all", "pyzx" ]
     container_name: Pyzx-Memo
     depends_on:
       memgraph:
@@ -141,27 +141,48 @@ services:
   # docker compose run --rm test-dev3
   # After you add GIT_USER and GIT_EMAIL to the .env.pyzx
   test-dev3:
-    build:
-      context: .
-      target: test-base
-    profiles: [ "test-dev3" , "all"]
-    environment:
-      - PYTEST_ADDOPTS=--color=yes
-      - FORCE_COLOR=1
-    networks:
-      - silta
-    env_file:
-      - path: ./.env
+    extends:
+      file: compose.yaml
+      service: test-dev4
+    profiles: [ "test-dev3" , "all" ]
     tty: true
     stdin_open: true
     volumes:
       - .:/usr/src/app
-    entrypoint: [ "/bin/bash", "-c" ]
     command: >
       bash -c "git config --global --add safe.directory /usr/src/app &&
        pre-commit install && 
        exec /bin/bash"
 
+
+  test-dev4:
+    build:
+      context: .
+      target: tester
+    profiles: [ "test-dev4" , "all" ]
+    networks:
+      - silta
+    env_file:
+      - path: ./.env
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        python -m unittest discover -v -s tests;
+        echo "Tests finished. \nSleeping...";
+        sleep infinity
+    environment:
+      - DB_URI=$DB_URI_TESTS
+      - BACKEND_NAME=$BACKEND_NAME_TESTS
+      - DB_USER=$DB_USER_TESTS
+      - PYTEST_ADDOPTS=--color=yes
+      - FORCE_COLOR=1
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./
+          target: /usr/src/app/
+          ignore:
+            - ./mutants/
 
 networks:
   silta:

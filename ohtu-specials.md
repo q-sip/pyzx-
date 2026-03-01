@@ -79,19 +79,13 @@ DB_USER=runner
 DB_PASSWORD=testkala
 BACKEND_NAME=memgraph
 
-# Comment out the one you dont want to be running
-#COMMAND="python -m unittest discover -v -s tests"
-COMMAND="python -m manual_ohtu.main_switch"
-
-#Here the commands if you want to keep them alive:
-#COMMAND="python -m manual_ohtu.main_switch; echo 'Finished main_switch. Sleeping...'; sleep 600"
-#COMMAND="python -m unittest discover -v -s tests; echo 'Finished tests. Sleeping...'; sleep 600"
-
 
 # Neo4j part:
 MEMGRAPH_AUTH=runner/testkala
 
 # Neo4j part:
+# This one is the stupid one that must be neo4j/[the password specified in DB_PASSWORD]
+# Unless you are running pro version of neo4j.
 NEO4J_AUTH=neo4j/testkala
 
 
