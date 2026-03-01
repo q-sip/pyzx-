@@ -70,10 +70,12 @@ docker compose down --remove-orphans
   
   
 # Super env  
-Here is singular env that should work on all envs at the same time
+Here is singular env that should work on all envs at the same time.
+It should be called .env
+
 <pre>
 # PyZX part:
-DB_USER=customer
+DB_USER=runner
 DB_PASSWORD=testkala
 BACKEND_NAME=memgraph
 
@@ -87,18 +89,22 @@ COMMAND="python -m manual_ohtu.main_switch"
 
 
 # Neo4j part:
-MEMGRAPH_AUTH=customer/testkala
+MEMGRAPH_AUTH=runner/testkala
 
 # Neo4j part:
 NEO4J_AUTH=neo4j/testkala
 
 
 # Postgres part:
-POSTGRES_USER=customer
+POSTGRES_USER=runner
 POSTGRES_PASSWORD=testkala
 POSTGRES_DB=age_db
-
 </pre>
+
+> [!NOTE]  
+> Since we use community neo4j we cannot change the username in it...  
+> Thus even if every other login info is changed, that needs to remain.
+> The code also currently does often assume or overwrite the neo4j login username for this reason.
 
 ## Precommit hooks
 
