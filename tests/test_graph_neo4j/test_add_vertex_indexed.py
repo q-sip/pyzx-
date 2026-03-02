@@ -197,8 +197,6 @@ class TestGraphNeo4jAddVertexIndexed(unittest.TestCase):
                             gid=g.graph_id,
                         )
                     )
-            except Exception:
-                pass
             finally:
                 g.close()
 

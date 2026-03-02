@@ -154,8 +154,6 @@ class TestGraphNeo4jSetOutputs(unittest.TestCase):
                             gid=g.graph_id,
                         )
                     )
-            except Exception:
-                pass
             finally:
                 g.close()
 
