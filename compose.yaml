@@ -73,7 +73,7 @@ services:
   pyzx-basee:
     build:
       context: .
-      target: product
+      target: tester
     profiles: [ "base-pyzx", "all" ]
     environment:
       - PYTEST_ADDOPTS=--color=yes
