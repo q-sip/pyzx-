@@ -8,7 +8,7 @@ from pyzx.graph.graph_neo4j import GraphNeo4j
 
 class ConfigurationTest(Neo4jUnitTestCase):
     def _neo4j_env_present(self):
-        self.assertEqual(all(os.getenv(k) for k in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD")), True)
+        self.assertEqual(all(os.getenv(k) for k in ("DB_URI", "DB_PASSWORD")), True)
 
 class Neo4j_graph_e2e(Neo4jUnitTestCase):
 

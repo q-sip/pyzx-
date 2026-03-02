@@ -155,7 +155,7 @@ class CypherRewrites:
     OPTIONAL MATCH (a)-[edge_shared_a:Wire {t: 2}]-(shared {t: 1})-[edge_shared_b:Wire {t: 2}]-(b)
     WITH a, b, pivot_edge, neighbors_a, neighbors_b, COLLECT(DISTINCT shared) as shared_neighbors
 
-    // neighbors_a × neighbors_b
+    // neighbors_a x neighbors_b
     CALL () {
       WITH neighbors_a, neighbors_b
       UNWIND neighbors_a AS node_a
@@ -167,7 +167,7 @@ class CypherRewrites:
         CREATE (node_a)-[:Wire {t: 2}]->(node_b) )
     }
 
-    // neighbors_a × shared_neighbors
+    // neighbors_a x shared_neighbors
     CALL () {
       WITH neighbors_a, shared_neighbors
       UNWIND neighbors_a AS node_a
@@ -727,52 +727,162 @@ class CypherRewrites:
     """
 
     BIALGEBRA_SIMPLIFICATION = """
-    CALL () {
-    // For each pattern
-    MATCH (a)
-    WHERE a.pattern_id IS NOT NULL
-    WITH DISTINCT a.pattern_id AS pid, a.graph_id AS graph_id
+CALL () {
+  // Pick exactly one marked pattern for this execution.
+  MATCH (a:Node)
+  WHERE a.pattern_id IS NOT NULL
+  WITH DISTINCT a.pattern_id AS pid, a.graph_id AS graph_id
+  ORDER BY pid
+  LIMIT 1
 
-    // Collect nodes in A and B for this pattern
-    MATCH (a1 {pattern_id: pid, t: 1})
-    WITH pid, collect(a1) AS A, graph_id
-    MATCH (b1 {pattern_id: pid, t: 2})
-    WITH pid, A, collect(b1) AS B, graph_id
-    WHERE size(A) + size(B) > 2
+  // Collect the two bipartite sides for this pattern.
+  MATCH (a1:Node {pattern_id: pid, t: 1, graph_id: graph_id})
+  WITH pid, graph_id, collect(a1) AS A
+  MATCH (b1:Node {pattern_id: pid, t: 2, graph_id: graph_id})
+  WITH pid, graph_id, A, collect(b1) AS B
+  WHERE size(A) + size(B) > 2
 
-    // Create new supernodes
-    CREATE (newA:Node {t: 2, pattern_id: pid, graph_id: graph_id})
-    CREATE (newB:Node {t: 1, pattern_id: pid, graph_id: graph_id})
+  // Allocate fresh node ids.
+  MATCH (n:Node {graph_id: graph_id})
+  WITH pid, graph_id, A, B, coalesce(max(n.id), -1) AS max_node_id
 
-    // Reconnect edges to the new nodes
-    WITH A, B, pid, newA, newB
-    UNWIND A AS oldA
-    MATCH (oldA)-[r]-(other)
-    WHERE other.pattern_id IS NULL
-    CREATE (newA)-[r2:Wire]->(other)
-    SET r2 += properties(r)
-    WITH pid, B, newA, newB, collect(oldA) AS oldANodes
+  // Allocate a starting wire id.
+  OPTIONAL MATCH ()-[w:Wire {graph_id: graph_id}]-()
+  WITH pid, graph_id, A, B, max_node_id, coalesce(max(w.id), -1) AS max_wire_id
 
-    UNWIND B AS oldB
-    MATCH (oldB)-[r]-(other)
-    WHERE other.pattern_id IS NULL
-    CREATE (newB)-[r2:Wire]->(other)
-    SET r2 += properties(r)
-    WITH pid, newA, newB, oldANodes, collect(oldB) AS oldBNodes
+  // Collect A-side external connections, preserving direction.
+  UNWIND A AS oldA
+  OPTIONAL MATCH (oldA)-[r:Wire]-(other:Node {graph_id: graph_id})
+  WHERE other.pattern_id IS NULL
+  WITH pid, graph_id, A, B, max_node_id, max_wire_id,
+       [x IN collect(
+          CASE
+            WHEN other IS NULL THEN NULL
+            ELSE {
+              other: other,
+              props: properties(r),
+              dir: CASE WHEN startNode(r) = oldA THEN 'out' ELSE 'in' END
+            }
+          END
+       ) WHERE x IS NOT NULL] AS a_conns
 
-    // Connect the new supernodes
-    CREATE (newA)-[:Wire {t: 1, graph_id: newA.graph_id}]->(newB)
+  // Collect B-side external connections, preserving direction.
+  UNWIND B AS oldB
+  OPTIONAL MATCH (oldB)-[r:Wire]-(other:Node {graph_id: graph_id})
+  WHERE other.pattern_id IS NULL
+  WITH pid, graph_id, A, B, max_node_id, max_wire_id, a_conns,
+       [x IN collect(
+          CASE
+            WHEN other IS NULL THEN NULL
+            ELSE {
+              other: other,
+              props: properties(r),
+              dir: CASE WHEN startNode(r) = oldB THEN 'out' ELSE 'in' END
+            }
+          END
+       ) WHERE x IS NOT NULL] AS b_conns
 
-    // Delete the old nodes
-    FOREACH (n IN oldANodes + oldBNodes | DETACH DELETE n)
-    RETURN pid, newA, newB
-    }
-    CALL () {
-      MATCH (n)
-      REMOVE n.pattern_id
-    }
-    RETURN pid, newA, newB;
-    """
+  // Create new supernodes with fresh ids.
+  CREATE (newA:Node {
+    t: 2,
+    pattern_id: pid,
+    graph_id: graph_id,
+    id: max_node_id + 1
+  })
+  CREATE (newB:Node {
+    t: 1,
+    pattern_id: pid,
+    graph_id: graph_id,
+    id: max_node_id + 2
+  })
+
+  WITH pid, graph_id, A, B, newA, newB, a_conns, b_conns, max_wire_id
+
+  // Reconnect A external edges with original direction.
+  CALL {
+    WITH newA, a_conns, graph_id, max_wire_id
+    UNWIND range(0, size(a_conns) - 1) AS i
+    WITH newA, a_conns[i] AS conn, graph_id, max_wire_id, i
+    WITH newA,
+         conn.other AS other,
+         conn.props AS props,
+         conn.dir AS dir,
+         graph_id,
+         max_wire_id,
+         i
+
+    FOREACH (_ IN CASE WHEN dir = 'out' THEN [1] ELSE [] END |
+      CREATE (newA)-[r2:Wire]->(other)
+      SET r2 = props
+      SET r2.id = max_wire_id + i + 1,
+          r2.graph_id = graph_id
+    )
+
+    FOREACH (_ IN CASE WHEN dir = 'in' THEN [1] ELSE [] END |
+      CREATE (other)-[r2:Wire]->(newA)
+      SET r2 = props
+      SET r2.id = max_wire_id + i + 1,
+          r2.graph_id = graph_id
+    )
+
+    RETURN count(*) AS _
+  }
+
+  WITH pid, graph_id, A, B, newA, newB, a_conns, b_conns, max_wire_id
+
+  // Reconnect B external edges with original direction.
+  CALL {
+    WITH newB, a_conns, b_conns, graph_id, max_wire_id
+    UNWIND range(0, size(b_conns) - 1) AS j
+    WITH newB, b_conns[j] AS conn, size(a_conns) AS a_sz, graph_id, max_wire_id, j
+    WITH newB,
+         conn.other AS other,
+         conn.props AS props,
+         conn.dir AS dir,
+         a_sz,
+         graph_id,
+         max_wire_id,
+         j
+
+    FOREACH (_ IN CASE WHEN dir = 'out' THEN [1] ELSE [] END |
+      CREATE (newB)-[r2:Wire]->(other)
+      SET r2 = props
+      SET r2.id = max_wire_id + a_sz + j + 1,
+          r2.graph_id = graph_id
+    )
+
+    FOREACH (_ IN CASE WHEN dir = 'in' THEN [1] ELSE [] END |
+      CREATE (other)-[r2:Wire]->(newB)
+      SET r2 = props
+      SET r2.id = max_wire_id + a_sz + j + 1,
+          r2.graph_id = graph_id
+    )
+
+    RETURN count(*) AS _
+  }
+
+  WITH pid, graph_id, A, B, newA, newB, a_conns, b_conns, max_wire_id
+
+  // Connect the two new supernodes.
+  CREATE (newA)-[:Wire {
+    t: 1,
+    graph_id: graph_id,
+    id: max_wire_id + size(a_conns) + size(b_conns) + 1
+  }]->(newB)
+
+  // Delete the old pattern nodes.
+  FOREACH (n IN A + B | DETACH DELETE n)
+
+  RETURN pid, newA, newB
+}
+CALL () {
+  MATCH (n:Node)
+  WHERE n.pattern_id IS NOT NULL
+  REMOVE n.pattern_id
+}
+RETURN pid, newA, newB;
+"""
+
 
     LOCAL_COMPLEMENT_FULL = """
     // Find and rewrite local complementation patterns (green spider with ±0.5 phase and all-green Hadamard neighbors)

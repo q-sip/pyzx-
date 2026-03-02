@@ -596,7 +596,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
 
-        query = """MATCH (n:Node {graph_id: $graph_id}) RETURN n.id AS id"""
+        query = """MATCH (n:Node {graph_id: $graph_id}) WHERE n.id IS NOT NULL RETURN n.id AS id"""
         with self._get_session() as session:
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id).data()
@@ -1397,6 +1397,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
                     "props": dict(r.get("props") or {}),
                 }
                 for r in (edges_rows or [])
+                if r.get("s") is not None and r.get("t") is not None
             ]
 
             q_create_nodes = """
