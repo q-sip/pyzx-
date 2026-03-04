@@ -361,3 +361,174 @@ def print_boundary_info(graph, name="graph"):
             f"  v={v}, degree={graph.vertex_degree(v)}, type={graph.type(v)}, "
             f"qubit={graph.qubit(v)}, row={graph.row(v)}"
         )
+
+def make_hadamard_cancel_fixture():
+    g = zx.Graph(backend="simple")
+    i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+    m = g.add_vertex(VertexType.Z, qubit=0, row=1)      # degree-2 identity spider
+    o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=2)
+
+    g.add_edge((i, m), edgetype=EdgeType.HADAMARD)
+    g.add_edge((m, o), edgetype=EdgeType.HADAMARD)
+
+    g.set_inputs((i,))
+    g.set_outputs((o,))
+    return g
+
+def mark_hadamard_cancel_pattern(db_graph, pattern_id="fixture_hh"):
+    with db_graph._get_session() as session:
+        # mark the middle node (row=1 in the fixture)
+        marked_nodes = session.run(
+            """
+            MATCH (n:Node)
+            WHERE n.graph_id = $graph_id AND toInteger(n.row) = 1
+            SET n.pattern_id = $pattern_id
+            RETURN count(n) AS c
+            """,
+            {"graph_id": db_graph.graph_id, "pattern_id": pattern_id},
+        ).single()["c"]
+
+        # mark the two incident wires so the path matcher sees them
+        session.run(
+            """
+            MATCH (m:Node {graph_id:$graph_id, pattern_id:$pattern_id})-[w:Wire]-(b:Node {graph_id:$graph_id})
+            WHERE b.pattern_id IS NULL
+            SET w.pattern_id = $pattern_id
+            """,
+            {"graph_id": db_graph.graph_id, "pattern_id": pattern_id},
+        )
+
+    return marked_nodes
+
+def _noop_rule(graph: Any) -> Any:
+    """No-op rule for cases where PyZX has no equivalent primitive rewrite."""
+    return None
+
+
+def run_db_rule_only(
+    *,
+    original_graph: Any,
+    db_graph: Any,
+    db_query: str,
+    db_name: str = "neo4j_rule",
+    db_params: Optional[Dict[str, Any]] = None,
+    print_results: bool = True,
+) -> RuleRunResult:
+    """
+    Run a DB rewrite without an in-memory PyZX equivalent.
+
+    - Keeps an untouched copy of the original PyZX graph for semantic comparison.
+    - Uses a no-op placeholder for the 'pyzx' side so callers can keep the same
+      'RuleRunResult' shape as other tests.
+    """
+    original_copy = original_graph.copy()
+
+    # "pyzx" placeholder: no mutation, no real timing significance
+    pyzx_graph = original_graph.copy()
+    pyzx_stats_before = _safe_stats(pyzx_graph)
+    start = time.perf_counter()
+    pyzx_ret = _noop_rule(pyzx_graph)
+    pyzx_elapsed = time.perf_counter() - start
+    pyzx_stats_after = _safe_stats(pyzx_graph)
+
+    pyzx_result = BackendRunResult(
+        name="pyzx_noop",
+        elapsed_s=pyzx_elapsed,
+        return_value=pyzx_ret,
+        graph_after=pyzx_graph,
+        stats_before=pyzx_stats_before,
+        stats_after=pyzx_stats_after,
+    )
+
+    db_result = _run_neo4j_query(
+        graph=db_graph,
+        query=db_query,
+        name=db_name,
+        params=db_params,
+        print_results=print_results,
+    )
+
+    return RuleRunResult(
+        original_graph=original_copy,
+        pyzx=pyzx_result,
+        db=db_result,
+    )
+
+
+def validate_db_only_rule(
+    *,
+    original_graph: Any,
+    db_graph_after: Any,
+    db_return_value: Any,
+    qubits: int,
+    preserve_scalar: bool = False,
+    max_tensor_qubits: int = 9,
+    require_fired: bool = True,
+    check_boundary_counts: bool = True,
+    print_results: bool = True,
+) -> dict:
+    """
+    Validation for DB-only rules:
+      - optional: assert the DB rule fired (return_value non-empty / non-zero-ish)
+      - optional: boundary counts preserved
+      - tensor equivalence: DB vs original
+
+    Returns a report dict similar to validate_rule_results, but DB-only.
+    """
+    if qubits > max_tensor_qubits:
+        raise ValueError(
+            f"Tensor comparison is intended only for small tests. "
+            f"Got qubits={qubits}, max_tensor_qubits={max_tensor_qubits}."
+        )
+
+    report: Dict[str, Any] = {}
+
+    # 1) Did the query fire?
+    if require_fired:
+        fired = False
+        rv = db_return_value
+
+        # Common cases:
+        # - list(cursor) => [] when nothing matched
+        # - list(cursor) => [Record(...)] when something returned
+        # - might also be None on cursor-consumption errors
+        if isinstance(rv, list):
+            fired = len(rv) > 0
+        elif rv is None:
+            fired = False
+        else:
+            # if user returns a scalar like patterns_processed, could be int-ish
+            try:
+                fired = bool(rv)
+            except Exception:
+                fired = False
+
+        report["db_fired"] = fired
+        assert fired, "DB rewrite did not fire"
+
+    # 2) Boundary counts preserved?
+    if check_boundary_counts:
+        orig_in = len(original_graph.inputs())
+        orig_out = len(original_graph.outputs())
+        db_boundary_ok = (
+            len(db_graph_after.inputs()) == orig_in
+            and len(db_graph_after.outputs()) == orig_out
+        )
+        report["db_boundary_ok"] = db_boundary_ok
+        assert db_boundary_ok, "Neo4j rewrite changed boundary counts"
+
+    # 3) Semantic equivalence
+    db_vs_original = _tensor_equal(
+        original_graph,
+        db_graph_after,
+        preserve_scalar=preserve_scalar,
+    )
+    report["db_vs_original"] = db_vs_original
+    assert db_vs_original, "Neo4j result is not semantically equal to the original graph"
+
+    if print_results:
+        print("\nDB-only Validation")
+        for k, v in report.items():
+            print(f"  {k}: {v}")
+
+    return report
