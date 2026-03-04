@@ -1,13 +1,13 @@
 import pyzx as zx
-from tests.tests_from_zxdb._base_unittest import Neo4jUnitTestCase
+from tests.tests_from_zxdb._base_unittest_neo4j import Neo4jUnitTestCase
 from pyzx.graph.neo4j_queries import CypherRewrites
 from .helpers import (
     load_simple_graph_into_neo4j,
     run_rule_on_backends,
     validate_rule_results,
 )
-from .helpers import make_bialgebra_fixture, mark_bialgebra_fixture_pattern, assert_boundary_degrees_are_one, print_boundary_info
-from .random_queries import BIALGEBRA_SIMPLIFICATION_MUTANT, BIALGEBRA_SIMPLIFICATION
+from .helpers import make_bialgebra_fixture, mark_bialgebra_fixture_pattern, assert_boundary_degrees_are_one
+from .random_queries_neo4j import BIALGEBRA_SIMPLIFICATION_MUTANT, BIALGEBRA_SIMPLIFICATION
 
 
 
