@@ -328,3 +328,50 @@ DETACH DELETE node
 
 RETURN COUNT(DISTINCT pattern_id) AS patterns_processed
 """
+
+LOCAL_COMPLEMENT_NEO4J = """
+CALL () {
+  MATCH (n:Node {graph_id:$graph_id})
+  WHERE n.pattern_id IS NOT NULL
+  WITH n.pattern_id AS pid, collect(DISTINCT n) AS nodes
+
+  // Pick the center: node connected to all other pattern nodes.
+  UNWIND nodes AS c
+  MATCH (c)-[:Wire]-(cn:Node {graph_id:$graph_id})
+  WHERE cn.pattern_id = pid
+  WITH pid, nodes, c, count(DISTINCT cn) AS pat_deg
+  WHERE pat_deg = size(nodes) - 1
+  WITH pid, c AS center
+  ORDER BY elementId(center)
+  LIMIT 1
+
+  // Neighbors = pattern nodes adjacent to center
+  MATCH (center)-[:Wire]-(nbr:Node {graph_id:$graph_id})
+  WHERE nbr.pattern_id = pid
+  WITH pid, center, collect(DISTINCT nbr) AS neighbors,
+       coalesce(toFloat(center.phase), 0.0) AS cphase
+
+  // Toggle edges among neighbors:
+  UNWIND range(0, size(neighbors)-2) AS i
+  UNWIND range(i+1, size(neighbors)-1) AS j
+  WITH pid, center, neighbors, cphase, neighbors[i] AS n1, neighbors[j] AS n2
+  OPTIONAL MATCH (n1)-[e:Wire]-(n2)
+  WITH pid, center, neighbors, cphase, n1, n2, collect(e) AS es
+  FOREACH (_ IN CASE WHEN size(es)=0 THEN [1] ELSE [] END |
+    CREATE (n1)-[:Wire {t: 2, graph_id:$graph_id}]->(n2)
+  )
+  FOREACH (rel IN es | DELETE rel)
+
+  // Update neighbor phases: subtract center phase (cast-safe)
+  WITH pid, center, neighbors, cphase
+  FOREACH (n IN neighbors |
+    SET n.phase = coalesce(toFloat(n.phase), 0.0) - cphase
+  )
+
+  DETACH DELETE center
+  FOREACH (n IN neighbors | REMOVE n.pattern_id)
+
+  RETURN 1 AS patterns_processed
+}
+RETURN patterns_processed;
+"""

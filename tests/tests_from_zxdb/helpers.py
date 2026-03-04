@@ -82,10 +82,7 @@ def _run_neo4j_query(
     start = time.perf_counter()
     with graph._get_session() as session:
         cursor = session.run(query, run_params)
-        try:
-            return_value = list(cursor)
-        except Exception:
-            return_value = None
+        return_value = list(cursor)
     elapsed_s = time.perf_counter() - start
 
     stats_after = _safe_stats(graph)
@@ -494,14 +491,8 @@ def validate_db_only_rule(
         # - might also be None on cursor-consumption errors
         if isinstance(rv, list):
             fired = len(rv) > 0
-        elif rv is None:
-            fired = False
         else:
-            # if user returns a scalar like patterns_processed, could be int-ish
-            try:
-                fired = bool(rv)
-            except Exception:
-                fired = False
+            fired = (rv is not None)
 
         report["db_fired"] = fired
         assert fired, "DB rewrite did not fire"
@@ -532,3 +523,65 @@ def validate_db_only_rule(
             print(f"  {k}: {v}")
 
     return report
+
+def make_lcomp_fixture():
+    """
+    Minimal local-complementation fixture (1 qubit):
+      input --(S)-- n1 --(S)-- output
+                    \
+                     (H)
+                      \
+                      center(Z, phase=0.5) --(H)-- n2
+                                         \--(H)-- n3
+
+    The lcomp rewrite should:
+      - toggle edges among neighbors {n1,n2,n3} (create H edges since none exist)
+      - add -center.phase to each neighbor phase
+      - delete center
+    """
+    g = zx.Graph(backend="simple")
+
+    # boundaries
+    i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+    o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=5)
+
+    # neighbors
+    n1 = g.add_vertex(VertexType.Z, qubit=0, row=2, phase=0)
+    n2 = g.add_vertex(VertexType.Z, qubit=0, row=3, phase=0)
+    n3 = g.add_vertex(VertexType.Z, qubit=0, row=4, phase=0)
+
+    # center (must be ±0.5 for proper ZX local complementation)
+    c = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=0.5)
+
+    # wire the "spine"
+    g.add_edge((i, n1), edgetype=EdgeType.SIMPLE)
+    g.add_edge((n1, o), edgetype=EdgeType.SIMPLE)
+
+    # hadamard star from center
+    g.add_edge((c, n1), edgetype=EdgeType.HADAMARD)
+    g.add_edge((c, n2), edgetype=EdgeType.HADAMARD)
+    g.add_edge((c, n3), edgetype=EdgeType.HADAMARD)
+
+    g.set_inputs((i,))
+    g.set_outputs((o,))
+    return g
+
+
+def mark_lcomp_fixture_pattern(db_graph, pattern_id="fixture_lcomp"):
+    """
+    Marks the 4 internal nodes (center + 3 neighbors) by row.
+    Assumes the fixture above: rows 1..4 are exactly those nodes.
+    """
+    with db_graph._get_session() as session:
+        result = session.run(
+            """
+            MATCH (n:Node)
+            WHERE n.graph_id = $graph_id
+              AND n.t = 1
+              AND toInteger(n.row) IN [1,2,3,4]
+            SET n.pattern_id = $pattern_id
+            RETURN count(n) AS marked
+            """,
+            {"graph_id": db_graph.graph_id, "pattern_id": pattern_id},
+        ).single()
+    return result["marked"]
