@@ -535,6 +535,13 @@ class ZXdb:
 
                     # Fuse green spiders
                     cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion rewrite 2"]["query"]["code"]["value"])
+                    cancel_query = cancel_query.replace(
+                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x)",
+                        "FOREACH (_ IN CASE WHEN x IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x))"
+                    ).replace(
+                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y)",
+                        "FOREACH (_ IN CASE WHEN y IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y))"
+                    )
                     result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
                     merged = result_fuse_green.single()["merged"]
 
