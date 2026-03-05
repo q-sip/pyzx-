@@ -3,29 +3,15 @@
 
 ### PostgreSQL + Age
 
-> **Work in Progress:** The database starts successfully, but dependencies still need to be fixed.
-
 **1. Start the Database**
 To spin up the database using the `age` profile, run:
 ```bash
 docker compose --profile age up
 ```
 
-**2. Configure `.env.PSQL`**
-Ensure your `.env.PSQL` file contains the following configuration:
-```env
-DB_TYPE=age
-DB_HOST=age
-DB_PORT=5432
+**2. Inspect the database contents by going to http://localhost:8080/?pgsql=age&username=postgres&db=postgres**
+- password is ``postgres``
 
-# Database credentials
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=password
-POSTGRES_DB=age_db
-
-# App-level connection string (recommended)
-DATABASE_URL=postgresql://postgres:password@age:5432/age_db
-```
 
 **3. Stop and Clean Up**
 Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
@@ -35,31 +21,50 @@ docker compose down --remove-orphans
 
 ---
 
-## Environment Variables (.env)
+### Memgraph + Memlab
 
-Below is the standard `.env` configuration for the project's various services:
-
-```env
-# PyZX
-DB_USER=customer
-DB_PASSWORD=testkala
-BACKEND_NAME=memgraph
-
-# Memgraph
-MEMGRAPH_AUTH=customer/testkala
-MEMGRAPH_URI="bolt://localhost:7445"
-
-# Neo4j
-NEO4J_AUTH=neo4j/testkala
-NEO4J_ADMIN=neo4j
-
-# PostgreSQL
-POSTGRES_USER=runner
-POSTGRES_PASSWORD=testkala
-POSTGRES_DB=age_db
+**1. Start the Database**
+To spin up the database using the `mem` profile, run:
+```bash
+docker compose --profile mem up
 ```
 
-> **Note on Neo4j:** Because we use the Community Edition of Neo4j, the default username cannot be changed. Even if other login credentials are updated, the username must remain the same. The codebase frequently assumes or hardcodes this default username for this reason.
+**2. Inspect the database contents by going to http://localhost:3000**
+First time:
+Manual connect --> New connection --> Memgraph instance
+--> Fill field "Host" with ``memgraph``
+--> Connect
+
+After first time:
+Click ``Connect now``
+
+**3. Stop and Clean Up**
+Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
+```bash
+docker compose down --remove-orphans
+```
+
+---
+
+### Memgraph + postgres at the same time
+
+**1. Start the Database**
+To spin up the database using the `all` profile, run:
+```bash
+docker compose --profile all up
+```
+
+**2. Refer to previous section step 2 for UI access**
+Both adminer and memlab are up, so you can use either or both at the same time.
+
+
+**3. Stop and Clean Up**
+Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
+```bash
+docker compose down --remove-orphans
+```
+
+
 
 ## Pre-commit Hooks
 
@@ -76,6 +81,7 @@ Standard `git commit` commands will automatically trigger the hooks. To manually
 git commit --no-verify -m "Your commit message"
 ```
 
+----
 
 ## Mutation Testing with Mutmut
 
@@ -98,5 +104,3 @@ To generate a simple JSON file in the mutants folder for an easy overview of you
 ```bash
 mutmut export-cicd-stats
 ```
-
-
