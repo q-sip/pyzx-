@@ -34,3 +34,13 @@ sympy
 scienceplots
 qiskit
 quimb
+
+
+qiskit~=1.0.0
+qiskit_qasm3_import~=0.4.2
+mypy~=1.5.1
+pre-commit
+
+pytest
+coverage
+mutmut
