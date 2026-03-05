@@ -24,8 +24,3 @@ services:
     ports:
       - "8080:8080"
     environment:
-<<<<<<< Updated upstream
-      ADMINER_DEFAULT_SERVER: age
-=======
-      ADMINER_DEFAULT_SERVER: age
->>>>>>> Stashed changes
