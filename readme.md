@@ -1,89 +1,102 @@
-## PyZX
 
-[![Unitary Fund](https://img.shields.io/badge/Supported%20By-UNITARY%20FUND-brightgreen.svg?style=for-the-badge)](http://unitary.fund)
-[![CQC Support](https://github.com/zxcalc/pyzx/raw/master/images/cqc-banner-small.png)](https://cambridgequantum.com/)
-[![PyPI version](https://badge.fury.io/py/pyzx.svg)](https://badge.fury.io/py/pyzx)
+## Docker and DevOps
 
-PyZX (pronounce as *Pisics*) is a **Py**thon tool implementing the theory of **ZX**-calculus for the creation, visualisation, and automated rewriting of large-scale quantum circuits. Please watch [this 2-minute video](https://www.youtube.com/watch?v=iC-KVdB8pf0) for a short introduction.
+### PostgreSQL + Age
 
-PyZX currently allows you to:
+> **Work in Progress:** The database starts successfully, but dependencies still need to be fixed.
 
-* Read in quantum circuits in the file format of [QASM](https://en.wikipedia.org/wiki/OpenQASM), [Quipper](https://www.mathstat.dal.ca/~selinger/quipper/doc/) or [Quantomatic](https://quantomatic.github.io/).
-* Rewrite circuits into a pseudo-normal form using the ZX-calculus.
-* Extract new simplified circuits from these reduced graphs.
-* Visualise the ZX-graphs and rewrites using either [Matplotlib](https://matplotlib.org/), Quantomatic or as a TikZ file for use in LaTeX documents.
-* Output the optimised circuits in QASM, QC or QUIPPER format.
-
-You can try out the in-browser demo which shows some of these features [here](http://zxcalculus.com/pyzx.html).
-
-> [!NOTE]
-> - This repository is a fork of the original [zxcalc/pyzx](https://github.com/zxcalc/pyzx).
-> - It is not the official PyZX repository. For the canonical version and documentation, please see https://github.com/zxcalc/pyzx.
-
-
-## About the ZX-calculus
-
-ZX-diagrams are a type of tensor network built out of combinations of linear maps known as *spiders*. There are 2 types of spiders: the Z-spiders (represented as green dots in PyZX) and the X-spiders (represented as red dots). Every linear map between some set of qubits can be represented by a ZX-diagram.
-The ZX-calculus is a set of rewrite rules for ZX-diagrams. There are various extensive set of rewrite rules. PyZX however, uses only rewrite rules concerning the Clifford fragment of the ZX-calculus. Importantly, this set of rewrite rules is *complete* for Clifford diagrams, meaning that two representations of a Clifford map can be rewritten into one another if and only if the two linear maps they represent are equal.
-
-[Here](http://zxcalculus.com) is a website with resources and information about the ZX-calculus. For a short introduction to the ZX-calculus see [this paper](https://arxiv.org/abs/1602.04744) while for a complete overview we recommend [this book](https://www.amazon.com/Picturing-Quantum-Processes-Diagrammatic-Reasoning/dp/110710422X). PyZX extensively uses two derived rewrite rules known as *local complementation* and *pivoting*. More information about these operations can be found in [this paper](https://arxiv.org/abs/1307.7048).
-
-
-## Installation
-
-If you wish to use PyZX as a Python module for use in other projects, we recommend installing via pip:
-```
-    pip install pyzx
+**1. Start the Database**
+To spin up the database using the `age` profile, run:
+```bash
+docker compose --profile age up
 ```
 
-If you want to use the demos or the benchmark circuits you should install PyZX from source by cloning the git repository.
+**2. Configure `.env.PSQL`**
+Ensure your `.env.PSQL` file contains the following configuration:
+```env
+DB_TYPE=age
+DB_HOST=age
+DB_PORT=5432
 
-PyZX has no strict dependencies, although some functionality requires numpy. PyZX is built to interact well with Jupyter, so we additionally recommend you have Jupyter and matplotlib installed.
+# Database credentials
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=password
+POSTGRES_DB=age_db
 
-## Usage
-
-See the [Documentation](https://pyzx.readthedocs.io/en/latest/) for a full overview of the features of PyZX.
-
-If you have [Jupyter](https://jupyter.org/) installed you can use one of the demonstration notebooks in the demos folder for an illustration of what PyZX can do.
-
-This is some example Python code for generating a random circuit, optimizing it, and finally displaying it:
-
-```python
-import pyzx as zx
-qubit_amount = 5
-gate_count = 80
-#Generate random circuit of Clifford gates
-circuit = zx.generate.cliffordT(qubit_amount, gate_count)
-#If running in Jupyter, draw the circuit
-zx.draw(circuit)
-#Use one of the built-in rewriting strategies to simplify the circuit
-zx.simplify.full_reduce(circuit)
-#See the result
-zx.draw(circuit)
+# App-level connection string (recommended)
+DATABASE_URL=postgresql://postgres:password@age:5432/age_db
 ```
 
-PyZX can also be run from the commandline. To optimise a circuit you can for instance run
-```python -m pyzx opt input_circuit.qasm```
+**3. Stop and Clean Up**
+Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
+```bash
+docker compose down --remove-orphans
+```
+
+---
+
+## Environment Variables (.env)
+
+Below is the standard `.env` configuration for the project's various services:
+
+```env
+# PyZX
+DB_USER=customer
+DB_PASSWORD=testkala
+BACKEND_NAME=memgraph
+
+# Memgraph
+MEMGRAPH_AUTH=customer/testkala
+MEMGRAPH_URI="bolt://localhost:7445"
+
+# Neo4j
+NEO4J_AUTH=neo4j/testkala
+NEO4J_ADMIN=neo4j
+
+# PostgreSQL
+POSTGRES_USER=runner
+POSTGRES_PASSWORD=testkala
+POSTGRES_DB=age_db
+```
+
+> **Note on Neo4j:** Because we use the Community Edition of Neo4j, the default username cannot be changed. Even if other login credentials are updated, the username must remain the same. The codebase frequently assumes or hardcodes this default username for this reason.
+
+## Pre-commit Hooks
+
+**1. Installation (One-time setup)**
+Ensure your virtual environment is active, then install and configure the pre-commit hooks:
+```bash
+python -m pip install pre-commit
+pre-commit install
+```
+
+**2. Committing Changes**
+Standard `git commit` commands will automatically trigger the hooks. To manually bypass the hooks (e.g., to skip `pylint` or tests temporarily), use the `--no-verify` flag:
+```bash
+git commit --no-verify -m "Your commit message"
+```
 
 
+## Mutation Testing with Mutmut
 
-## Attribution
+> **Note:** `mutmut` requires a passing test suite before you can begin.
 
-If you wish to cite PyZX in an academic work, please cite the [accompanying paper](https://arxiv.org/abs/1904.04735):
-<pre>
-  @inproceedings{kissinger2020Pyzx,
-    author = {Kissinger, Aleks and van de Wetering, John},
-    title = {{PyZX: Large Scale Automated Diagrammatic Reasoning}},
-    year = {2020},
-    booktitle = {{\rm Proceedings 16th International Conference on} Quantum Physics and Logic, {\rm Chapman University, Orange, CA, USA., 10-14 June 2019}},
-    editor = {Coecke, Bob and Leifer, Matthew},
-    series = {Electronic Proceedings in Theoretical Computer Science},
-    volume = {318},
-    pages = {229-241},
-    publisher = {Open Publishing Association},
-    doi = {10.4204/EPTCS.318.14}
-}
-</pre>
+**1. Run Mutation Tests**
+Running `mutmut run` against a large codebase is extremely slow. It is highly recommended to target specific modules instead. For example:
+```bash
+mutmut run paths_to_mutate=pyzx/graph/graph_neo4j.py
+```
 
-Here's a plane that says PYZX:
-![PYZX](https://github.com/zxcalc/pyzx/raw/master/images/F-PYZX.jpg)
+**2. Browse Results**
+Once the tests are complete, you can view the killed and survived mutants, along with additional commands, by running:
+```bash
+mutmut browse
+```
+
+**3. Export Statistics**
+To generate a simple JSON file in the mutants folder for an easy overview of your results, use:
+```bash
+mutmut export-cicd-stats
+```
+
+
