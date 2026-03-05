@@ -2,13 +2,16 @@ name: Pylint
 
 on:
   push:
-    branches: ["dev", "master"]
     paths:
       - "pyzx/graph/graph_neo4j.py"
+      - "pyzx/graph/graph_AGE.py"
+      - "pyzx/graph/graph_memgraph.py"
+
   pull_request:
-    branches: ["master"]
     paths:
       - "pyzx/graph/graph_neo4j.py"
+      - "pyzx/graph/graph_AGE.py"
+      - "pyzx/graph/graph_memgraph.py"
 
 jobs:
   pylint:
