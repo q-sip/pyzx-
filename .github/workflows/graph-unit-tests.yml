@@ -1,4 +1,4 @@
-name: Graph unit tests
+name: Fork unit tests
 
 on: [push, pull_request]
 
