@@ -61,10 +61,8 @@ class GraphAGE(BaseGraph[VT,ET]):
         self.conn = psycopg.connect(
             host = os.getenv("DB_HOST"),
             port = os.getenv("DB_PORT"),
-            conninfo = os.getenv("DB_URI"),
             dbname = os.getenv("POSTGRES_DB"),
             user = os.getenv("POSTGRES_USER"),
-            password = os.getenv("POSTGRES_PASSWORD")
             )
 
         with self.conn.cursor() as cur:
@@ -81,7 +79,7 @@ class GraphAGE(BaseGraph[VT,ET]):
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
-    
+
     def db_execute(self, query):
         with self.conn.cursor() as cur:
             cur.execute("LOAD 'age';")
@@ -139,7 +137,7 @@ class GraphAGE(BaseGraph[VT,ET]):
                     + "}"
                 )
             return "[" + ", ".join(items) + "]"
-        
+
         cypher_list = to_cypher_list(payload)
 
         query = (f"""SELECT *
@@ -159,7 +157,6 @@ class GraphAGE(BaseGraph[VT,ET]):
 
         self._vindex += amount
         return vertex_ids
-        
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
