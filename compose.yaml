@@ -4,6 +4,7 @@ services:
     profiles: ["age", "all"]
     ports:
       - "5432:5432"
+    network_mode: "host"
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
 
