@@ -59,11 +59,12 @@ class GraphAGE(BaseGraph[VT,ET]):
         self._maxr: int = 1
 
         self.conn = psycopg.connect(
-            host = os.getenv("DB_HOST"),
-            port = os.getenv("DB_PORT"),
-            dbname = os.getenv("POSTGRES_DB"),
-            user = os.getenv("POSTGRES_USER"),
-            )
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+            dbname=os.getenv("POSTGRES_DB"),
+            user=os.getenv("POSTGRES_USER"),
+            password=os.getenv("POSTGRES_PASSWORD"),
+        )
 
         with self.conn.cursor() as cur:
             # 1. Load extension

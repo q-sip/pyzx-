@@ -1,10 +1,11 @@
 #Scelaton
 from pyzx.graph.graph_AGE import GraphAGE
+
 from pyzx.utils import VertexType, EdgeType
 
 # connect to AGE database
 g = GraphAGE()
- 
+
 print("Successfully connected to AGE database")
 
 # Add a vertex
