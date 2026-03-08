@@ -25,8 +25,8 @@ services:
     networks:
       silta:
         aliases:
-          - age
-          - psql
+        - age
+        - psql
     env_file:
       - path: ./.env
     healthcheck:
@@ -73,7 +73,7 @@ services:
   pyzx-basee:
     build:
       context: .
-      target: tester
+      target: product
     profiles: [ "base-pyzx", "all" ]
     environment:
       - PYTEST_ADDOPTS=--color=yes
@@ -118,9 +118,6 @@ services:
         required: true
     env_file:
       - path: ./.env
-    environment:
-      - DB_URI=postgresql://age:5432/age_db
-      - BACKEND_NAME=age
 
   pyzx-mem:
     extends:
@@ -170,12 +167,12 @@ services:
         python -m unittest discover -v -s tests;
         echo "Tests finished. \nSleeping...";
         sleep infinity
-    environment:
-      - DB_URI=$DB_URI_TESTS
-      - BACKEND_NAME=$BACKEND_NAME_TESTS
-      - DB_USER=$DB_USER_TESTS
-      - PYTEST_ADDOPTS=--color=yes
-      - FORCE_COLOR=1
+    #environment:
+    #  - DB_URI=$DB_URI_TESTS
+    #  - BACKEND_NAME=$BACKEND_NAME_TESTS
+    #  - DB_USER=$DB_USER_TESTS
+    #  - PYTEST_ADDOPTS=--color=yes
+    #  - FORCE_COLOR=1
     develop:
       watch:
         - action: sync+restart

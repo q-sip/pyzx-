@@ -59,7 +59,6 @@ class GraphAGE(BaseGraph[VT,ET]):
         self._maxr: int = 1
 
         self.conn = psycopg.connect(
-            host = os.getenv("DB_HOST"),
             port = os.getenv("DB_PORT"),
             conninfo = os.getenv("DB_URI"),
             dbname = os.getenv("POSTGRES_DB"),
