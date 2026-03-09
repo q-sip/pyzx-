@@ -102,7 +102,6 @@ class GraphAGE(BaseGraph[VT,ET]):
                 (self.graph_id, True)
             )
         self.conn.commit()
-        print("Graph deleted")
 
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs
