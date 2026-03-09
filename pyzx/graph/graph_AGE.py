@@ -221,5 +221,27 @@ class GraphAGE(BaseGraph[VT,ET]):
         """
         self.db_execute(query)
 
+    def remove_edges(self, edges):
+        """Removes relationships from the graph."""
+        edge_list = list(edges)
+        if not edge_list:
+            return
+
+        # Build Cypher list for edge pairs
+        edges_list = []
+        for s, t in edge_list:
+            edges_list.append(f"{{s: {s}, t: {t}}}")
+        edges_str = "[" + ", ".join(edges_list) + "]"
+
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            UNWIND {edges_str} AS e
+            MATCH (n1:Node {{id: e.s}})-[r:Wire]-(n2:Node {{id: e.t}})
+            DELETE r
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def close(self):
         self.conn.close()
