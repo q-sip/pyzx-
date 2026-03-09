@@ -3,5 +3,5 @@ import os
 import unittest
 import uuid
 
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.graph.graph_AGE import GraphAGE
 from pyzx.utils import VertexType
