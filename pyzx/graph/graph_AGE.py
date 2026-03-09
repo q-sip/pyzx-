@@ -190,6 +190,60 @@ class GraphAGE(BaseGraph[VT,ET]):
         else:
             self._maxr = int(float(maxr))
         return self._maxr
+
+    def vertices(self) -> Iterable[VT]:
+        """Iterator over all the vertices."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node) WHERE n.id IS NOT NULL RETURN n.id
+        $$) AS (id agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            self.conn.commit()
+        
+        return [int(str(row[0]).split("::", 1)[0].strip('"')) for row in rows]
+
+    def edges(self, s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]:
+        """Iterator that returns all the edges in the graph,
+        or all the edges connecting the pair of vertices.
+        Output type depends on implementation in backend."""
+        
+        if s is not None and t is not None:
+            query = f"""
+            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                MATCH (n1:Node {{id: {s}}})-[r:Wire]-(n2:Node {{id: {t}}})
+                RETURN n1.id AS src, n2.id AS tgt
+            $$) AS (src agtype, tgt agtype);
+            """
+            with self.conn.cursor() as cur:
+                cur.execute("LOAD 'age';")
+                cur.execute("SET search_path = ag_catalog, public;")
+                cur.execute(query)
+                rows = cur.fetchall()
+                self.conn.commit()
+            return [(int(str(row[0]).split("::", 1)[0].strip('"')),
+                     int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
+        
+        # Return all edges, canonicalized by ID to avoid duplicates
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node)-[r:Wire]-(n2:Node)
+            WHERE n1.id <= n2.id
+            RETURN n1.id AS s, n2.id AS t
+        $$) AS (s agtype, t agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            self.conn.commit()
+        return [(int(str(row[0]).split("::", 1)[0].strip('"')),
+                 int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
