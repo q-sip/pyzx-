@@ -244,6 +244,10 @@ class GraphAGE(BaseGraph[VT,ET]):
             self.conn.commit()
         return [(int(str(row[0]).split("::", 1)[0].strip('"')),
                  int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
+
+    def edge(self, s: VT, t: VT) -> ET:
+        """Returns the edge between vertices s and t (canonicalized as tuple)."""
+        return (s, t) if s < t else (t, s)
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
