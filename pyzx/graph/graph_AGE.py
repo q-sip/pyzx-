@@ -260,6 +260,28 @@ class GraphAGE(BaseGraph[VT,ET]):
     def edge_t(self, edge: ET) -> VT:
         """Returns the target of the given edge."""
         return self.edge_st(edge)[1]
+
+    def neighbors(self, vertex: VT) -> Sequence[VT]:
+        """Returns all neighboring vertices of the given vertex."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n)-[r:Wire]-(m)
+            WHERE n.id = {vertex}
+            RETURN m.id
+        $$) AS (id agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            self.conn.commit()
+
+        neighbors = {
+            int(str(row[0]).split("::", 1)[0].strip('"'))
+            for row in rows
+        }
+        return list(neighbors)
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
