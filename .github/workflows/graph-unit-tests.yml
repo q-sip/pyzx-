@@ -25,5 +25,6 @@ jobs:
           python -m unittest discover -s tests/tests_from_zxdb -t . -v
 
       - name: Run AGE tests with Docker Compose
+        if: always() # Run this step even if previous steps fail
         run: |
           docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
