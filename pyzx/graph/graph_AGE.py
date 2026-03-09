@@ -248,6 +248,10 @@ class GraphAGE(BaseGraph[VT,ET]):
     def edge(self, s: VT, t: VT) -> ET:
         """Returns the edge between vertices s and t (canonicalized as tuple)."""
         return (s, t) if s < t else (t, s)
+
+    def edge_st(self, edge: ET) -> Tuple[VT, VT]:
+        """Returns a tuple of source/target of the given edge."""
+        return edge
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
