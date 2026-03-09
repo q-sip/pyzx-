@@ -116,6 +116,8 @@ services:
       age:
         condition: service_healthy
         required: true
+    environment:
+      - BACKEND_NAME=age
     env_file:
       - path: ./.env
 

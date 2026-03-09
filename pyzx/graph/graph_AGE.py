@@ -58,13 +58,18 @@ class GraphAGE(BaseGraph[VT,ET]):
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
 
-        self.conn = psycopg.connect(
-            port = os.getenv("DB_PORT"),
-            conninfo = os.getenv("DB_URI"),
-            dbname = os.getenv("POSTGRES_DB"),
-            user = os.getenv("POSTGRES_USER"),
-            password = os.getenv("POSTGRES_PASSWORD")
-            )
+        db_uri = os.getenv("DB_URI")
+        connect_kwargs = {
+            "host": os.getenv("DB_HOST"),
+            "port": os.getenv("DB_PORT"),
+            "dbname": os.getenv("POSTGRES_DB"),
+            "user": os.getenv("POSTGRES_USER"),
+            "password": os.getenv("POSTGRES_PASSWORD"),
+        }
+        if db_uri:
+            connect_kwargs["conninfo"] = db_uri
+
+        self.conn = psycopg.connect(**connect_kwargs)
 
         with self.conn.cursor() as cur:
             # 1. Load extension
@@ -196,6 +201,25 @@ class GraphAGE(BaseGraph[VT,ET]):
             raise ValueError(f"No edge created; check vertex ids {src}, {dst}")
         edge_id = str(row[0]).split("::", 1)[0].strip('"')
         return int(edge_id)
+
+    def remove_vertices(self, vertices):
+        """Removes the specified vertices from the graph."""
+        vertex_list = list(vertices)
+        if not vertex_list:
+            return
+
+        # Build a list of vertex IDs to match in Cypher
+        # Using a WHERE clause with INs to match multiple vertices
+        vertex_ids_str = ", ".join(str(v) for v in vertex_list)
+        
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node) WHERE n.id IN [{vertex_ids_str}]
+            DETACH DELETE n
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
 
     def close(self):
         self.conn.close()
