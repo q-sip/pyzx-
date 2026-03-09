@@ -26,5 +26,14 @@ jobs:
 
       - name: Run AGE tests with Docker Compose
         if: always() # Run this step even if previous steps fail
+        # This might not be the best way to test but idk whats better :/
         run: |
+          cat > .env << EOF
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_DB=age_db
+          DB_HOST=age
+          DB_PORT=5432
+          DATABASE_URL=postgresql://postgres:postgres@age:5432/age_db
+          EOF
           docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
