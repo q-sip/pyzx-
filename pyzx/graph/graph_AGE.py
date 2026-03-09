@@ -282,6 +282,26 @@ class GraphAGE(BaseGraph[VT,ET]):
             for row in rows
         }
         return list(neighbors)
+
+    def vertex_degree(self, vertex: VT) -> int:
+        """Returns the degree of the given vertex."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n)-[r:Wire]-()
+            WHERE n.id = {vertex}
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if row:
+            return int(str(row[0]).split("::", 1)[0].strip('"'))
+        return 0
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
