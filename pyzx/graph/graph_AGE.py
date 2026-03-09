@@ -163,6 +163,33 @@ class GraphAGE(BaseGraph[VT,ET]):
 
         self._vindex += amount
         return vertex_ids
+
+    def depth(self) -> int:
+        """Returns the maximum non-negative row index, or -1 if unavailable."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node)
+            WHERE n.row IS NOT NULL AND n.row >= 0
+            RETURN max(n.row)
+        $$) AS (maxr agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row or row[0] is None:
+            self._maxr = -1
+            return self._maxr
+
+        maxr = str(row[0]).split("::", 1)[0].strip('"')
+        if maxr in ("", "null"):
+            self._maxr = -1
+        else:
+            self._maxr = int(float(maxr))
+        return self._maxr
         
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
