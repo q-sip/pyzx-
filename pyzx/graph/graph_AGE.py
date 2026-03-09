@@ -243,5 +243,70 @@ class GraphAGE(BaseGraph[VT,ET]):
         """
         self.db_execute(query)
 
+    def num_vertices(self) -> int:
+        """Returns the number of vertices in the graph."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node)
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+        if row:
+            return int(str(row[0]).split("::", 1)[0].strip('"'))
+        return 0
+
+    def num_edges(
+        self,
+        s: Optional[VT] = None,
+        t: Optional[VT] = None,
+        et: Optional[EdgeType] = None,
+    ) -> int:
+        """Returns the number of edges in the graph.
+        
+        If source and target vertices are given, counts edges between them.
+        If edge type is given, counts only edges of that type.
+        """
+        if s is not None and t is not None:
+            # Count edges between two specific vertices
+            s, t = (s, t) if s <= t else (t, s)
+            if et is not None:
+                query = f"""
+                SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                    MATCH (n1:Node {{id: {s}}})-[r:Wire {{t: {et.value}}}]->(n2:Node {{id: {t}}})
+                    RETURN count(r)
+                $$) AS (count agtype);
+                """
+            else:
+                query = f"""
+                SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                    MATCH (n1:Node {{id: {s}}})-[r:Wire]->(n2:Node {{id: {t}}})
+                    RETURN count(r)
+                $$) AS (count agtype);
+                """
+        else:
+            # Count all edges
+            query = f"""
+            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                MATCH ()-[r:Wire]->()
+                RETURN count(r)
+            $$) AS (count agtype);
+            """
+        
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+        if row:
+            return int(str(row[0]).split("::", 1)[0].strip('"'))
+        return 0
+
     def close(self):
         self.conn.close()
