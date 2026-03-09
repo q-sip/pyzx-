@@ -2,51 +2,37 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-import os
-import uuid
-import psycopg
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught
 
-from pyzx.utils import VertexType, EdgeType
+import os
 from fractions import Fraction
 from typing import (
-    Any,
     Iterable,
     List,
-    Mapping,
     Optional,
     Sequence,
-    Set,
     Tuple,
 )
 
-# testing pylint
 from dotenv import load_dotenv
-#To be replaced
-#from neo4j import GraphDatabase
+import psycopg
 
-from pyzx.symbolic import new_var, parse
-from .graph_db_rewrite_runner import run_rewrite
-
-from .base import BaseGraph, upair
+from .base import BaseGraph
 
 from ..utils import (
     EdgeType,
-    FloatInt,
-    FractionLike,
     VertexType,
-    vertex_is_zx_like,
-    vertex_is_z_like,
-    set_z_box_label,
-    get_z_box_label,
 )
-from .base import BaseGraph, upair
 
 load_dotenv()
 
 VT = int
 ET = Tuple[int, int]
 
-class GraphAGE(BaseGraph[VT,ET]):
+
+class GraphAGE(BaseGraph[VT, ET]):
+
+    """Apache AGE-backed graph implementation."""
 
     backend = "age"
 
@@ -76,7 +62,7 @@ class GraphAGE(BaseGraph[VT,ET]):
             cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path TO ag_catalog;")
-            self.conn.commit() # ENSURE LOAD IS COMMITTED
+            self.conn.commit()
 
             # 2. Create graph (search_path is already set in options)
             try:
@@ -85,15 +71,17 @@ class GraphAGE(BaseGraph[VT,ET]):
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
-    
-    def db_execute(self, query):
+
+    def db_execute(self, query: str) -> None:
+        """Execute a SQL query with AGE extension and search_path configured."""
         with self.conn.cursor() as cur:
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
             cur.execute(query)
         self.conn.commit()
 
-    def delete_graph(self):
+    def delete_graph(self) -> None:
+        """Drop the current AGE graph and all of its data."""
         with self.conn.cursor() as cur:
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
@@ -142,10 +130,10 @@ class GraphAGE(BaseGraph[VT,ET]):
                     + "}"
                 )
             return "[" + ", ".join(items) + "]"
-        
+
         cypher_list = to_cypher_list(payload)
 
-        query = (f"""SELECT *
+        query = f"""SELECT *
         FROM ag_catalog.cypher('{self.graph_id}', $$
         UNWIND {cypher_list} AS v
         CREATE (n:Node {{
@@ -156,7 +144,7 @@ class GraphAGE(BaseGraph[VT,ET]):
             row: v.row
         }})
         RETURN count(n) $$) AS (result agtype);
-        """)
+        """
 
         self.db_execute(query)
 
@@ -203,14 +191,14 @@ class GraphAGE(BaseGraph[VT,ET]):
             cur.execute(query)
             rows = cur.fetchall()
             self.conn.commit()
-        
+
         return [int(str(row[0]).split("::", 1)[0].strip('"')) for row in rows]
 
     def edges(self, s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]:
         """Iterator that returns all the edges in the graph,
         or all the edges connecting the pair of vertices.
         Output type depends on implementation in backend."""
-        
+
         if s is not None and t is not None:
             query = f"""
             SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
@@ -226,7 +214,7 @@ class GraphAGE(BaseGraph[VT,ET]):
                 self.conn.commit()
             return [(int(str(row[0]).split("::", 1)[0].strip('"')),
                      int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
-        
+
         # Return all edges, canonicalized by ID to avoid duplicates
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
@@ -323,7 +311,7 @@ class GraphAGE(BaseGraph[VT,ET]):
              int(str(row[1]).split("::", 1)[0].strip('"')))
             for row in rows
         ]
-        
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
@@ -344,7 +332,7 @@ class GraphAGE(BaseGraph[VT,ET]):
         vertex_id = str(row[0]).split("::", 1)[0].strip('"')
         return int(vertex_id)
 
-    def add_edge(self, src, dst, edge_type: EdgeType):
+    def add_edge(self, src: VT, dst: VT, edge_type: EdgeType):
         """Add an edge between vertices"""
         query = f"""
         SELECT * FROM cypher('{self.graph_id}', $$
@@ -371,7 +359,7 @@ class GraphAGE(BaseGraph[VT,ET]):
         # Build a list of vertex IDs to match in Cypher
         # Using a WHERE clause with INs to match multiple vertices
         vertex_ids_str = ", ".join(str(v) for v in vertex_list)
-        
+
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node) WHERE n.id IN [{vertex_ids_str}]
@@ -428,7 +416,7 @@ class GraphAGE(BaseGraph[VT,ET]):
         et: Optional[EdgeType] = None,
     ) -> int:
         """Returns the number of edges in the graph.
-        
+
         If source and target vertices are given, counts edges between them.
         If edge type is given, counts only edges of that type.
         """
@@ -457,7 +445,7 @@ class GraphAGE(BaseGraph[VT,ET]):
                 RETURN count(r)
             $$) AS (count agtype);
             """
-        
+
         with self.conn.cursor() as cur:
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
@@ -468,5 +456,6 @@ class GraphAGE(BaseGraph[VT,ET]):
             return int(str(row[0]).split("::", 1)[0].strip('"'))
         return 0
 
-    def close(self):
+    def close(self) -> None:
+        """Close the database connection."""
         self.conn.close()

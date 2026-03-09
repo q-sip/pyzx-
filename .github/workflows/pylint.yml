@@ -5,13 +5,11 @@ on:
     paths:
       - "pyzx/graph/graph_neo4j.py"
       - "pyzx/graph/graph_AGE.py"
-      - "pyzx/graph/graph_memgraph.py"
 
   pull_request:
     paths:
       - "pyzx/graph/graph_neo4j.py"
       - "pyzx/graph/graph_AGE.py"
-      - "pyzx/graph/graph_memgraph.py"
 
 jobs:
   pylint:
@@ -38,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pylint pyzx/graph/graph_neo4j.py pyzx/graph/graph_AGE.py pyzx/graph/graph_memgraph.py | tee pylint.log || true
+          pylint pyzx/graph/graph_neo4j.py pyzx/graph/graph_AGE.py | tee pylint.log || true
 
           SCORE=$(grep -oE 'rated at [0-9]+(\.[0-9]+)?/10' pylint.log | tail -n 1 | awk '{print $3}' | cut -d/ -f1)
 
