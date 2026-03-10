@@ -606,6 +606,33 @@ class GraphAGE(BaseGraph[VT, ET]):
         val = float(row_raw)
         return int(val) if val == int(val) else val
 
+    def rows(self) -> Mapping[VT, FloatInt]:
+        """Returns a mapping of vertices to their row indices."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node)
+            RETURN n.id, n.row
+        $$) AS (id agtype, row agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            self.conn.commit()
+
+        result: dict[VT, FloatInt] = {}
+        for row in rows:
+            vertex = int(str(row[0]).split("::", 1)[0].strip('"'))
+            row_raw = str(row[1]).split("::", 1)[0].strip('"')
+            if row_raw in ("", "null", "None"):
+                result[vertex] = -1
+                continue
+            val = float(row_raw)
+            result[vertex] = int(val) if val == int(val) else val
+
+        return result
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
