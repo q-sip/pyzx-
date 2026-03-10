@@ -9,6 +9,7 @@ from fractions import Fraction
 from typing import (
     Iterable,
     List,
+    Mapping,
     Optional,
     Sequence,
     Tuple,
@@ -365,6 +366,78 @@ class GraphAGE(BaseGraph[VT, ET]):
             MATCH (n1:Node {{id: {e[0]}}})-[r:Wire]-(n2:Node {{id: {e[1]}}})
             SET r.t = {t.value}
             RETURN count(r)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
+    def type(self, vertex: VT) -> VertexType:
+        """Returns the type of the given vertex."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            RETURN n.t, n.ty
+        $$) AS (t agtype, ty agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            raise KeyError(f"{vertex} has no type")
+
+        t_raw = str(row[0]).split("::", 1)[0].strip('"')
+        if t_raw not in ("", "null", "None"):
+            return VertexType(int(float(t_raw)))
+
+        ty_raw = str(row[1]).split("::", 1)[0].strip('"')
+        if ty_raw not in ("", "null", "None"):
+            return VertexType[ty_raw]
+
+        raise KeyError(f"{vertex} has no type")
+
+    def types(self) -> Mapping[VT, VertexType]:
+        """Returns a mapping of vertices to their types."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node)
+            RETURN n.id, n.t, n.ty
+        $$) AS (id agtype, t agtype, ty agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            self.conn.commit()
+
+        result: dict[VT, VertexType] = {}
+        for row in rows:
+            vertex = int(str(row[0]).split("::", 1)[0].strip('"'))
+            t_raw = str(row[1]).split("::", 1)[0].strip('"')
+            if t_raw not in ("", "null", "None"):
+                result[vertex] = VertexType(int(float(t_raw)))
+                continue
+
+            ty_raw = str(row[2]).split("::", 1)[0].strip('"')
+            if ty_raw not in ("", "null", "None"):
+                result[vertex] = VertexType[ty_raw]
+                continue
+
+            raise KeyError(f"{vertex} has no type")
+
+        return result
+
+    def set_type(self, vertex: VT, t: VertexType) -> None:
+        """Sets the type of the given vertex to t."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            SET n.t = {t.value}
+            REMOVE n.ty
+            RETURN count(n)
         $$) AS (count agtype);
         """
         self.db_execute(query)
