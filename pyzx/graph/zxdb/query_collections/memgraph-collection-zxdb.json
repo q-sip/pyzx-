@@ -264,7 +264,7 @@
       "description": "",
       "query": {
         "code": {
-          "value": "MATCH (b:Node)\r\nWHERE b.phase % 2 = 0 AND degree(b) = 2 AND b.t = 1\r\nCALL refactor.collapse_node(b, \"Wire\")\r\nYIELD True;"
+          "value": "// 1. Find the identity spider and its two neighbors\r\nMATCH (n1:Node)-[r1:Wire]-(b:Node)-[r2:Wire]-(n2:Node) WHERE b.phase % 2 = 0 AND degree(b) = 2 AND b.t = 1 AND id(n1) < id(n2)\r// Ensures we only process this triplet once\r\n// 2. Calculate the new edge type (Hadamard XOR logic)\r\n// In PyZX: 1 = Simple, 2 = Hadamard.\r\n// Result is Hadamard if exactly one of the edges is Hadamard.\r\nWITH b, n1, n2, CASE WHEN r1.t <> r2.t THEN 2 ELSE 1 END AS new_type\r\n// 3. Create the bypass edge\r\nMERGE (n1)-[new_r:Wire]-(n2) ON CREATE SET new_r.t = new_type\r\n// 4. Remove the identity spider\r\nDETACH DELETE b RETURN count(b) AS removed_identities;"
         },
         "params": {}
       },
