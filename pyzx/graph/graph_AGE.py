@@ -782,6 +782,36 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def edata_keys(self, edge: ET) -> Sequence[str]:
+        """Returns an iterable of the edge data key names."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {edge[0]}}})-[r:Wire]-(n2:Node {{id: {edge[1]}}})
+            RETURN keys(r)
+        $$) AS (keys agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            return []
+
+        keys_raw = str(row[0]).split("::", 1)[0]
+        if keys_raw in ("", "null", "None"):
+            return []
+
+        try:
+            parsed = json.loads(keys_raw)
+            if isinstance(parsed, list):
+                return [str(k) for k in parsed]
+        except json.JSONDecodeError:
+            pass
+        return []
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
