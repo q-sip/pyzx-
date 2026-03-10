@@ -632,6 +632,8 @@ class ZXdb:
         with self.driver.session() as session:
             #start_time = time.time()
             iteration = 0
+            total_changed = 0
+
             while True:
                 iteration += 1
                 print(f'{iteration}th iteration')
@@ -645,19 +647,21 @@ class ZXdb:
                    break  # No more patterns found
                 
                 def apply_local_complementation_rewrite(tx):
-                    lc_query = str(self.basic_rewrite_rule_queries["Local complement full"]["query"]["code"]["value"])
+                    lc_query = str(self.basic_rewrite_rule_queries["Local complement rewrite"]["query"]["code"]["value"])
                     result = tx.run(lc_query, graph_id=self.graph_id)
                     #print(result)
-                    return result.single()
+                    return result.single()["num_processed"]
                 
                 changed = session.execute_write(apply_local_complementation_rewrite)
-                if changed:
+                if changed == 0:
                     break  # No more patterns found
+
+                total_changed += changed
 
 
             #end_time = time.time()
             #logging.info(f"Local complementation applied for graph ID '{graph_id}' with {changed} patterns processed in {end_time - start_time} seconds")
-            return changed
+            return total_changed
         
     
     def phase_gadget_fusion_rule(self) -> int:

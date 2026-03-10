@@ -35,48 +35,48 @@ def graph_full_reduce():
     zxdb.turn_hadamard_gates_into_edges()
 
 
-def heal_graph_ids(g):
-    """Finds nodes created by ZXdb that are missing IDs/properties and assigns them."""
-    with g.driver.session() as session:
-        # 1. Heal missing IDs
-        res = session.run(
-            "MATCH (n:Node {graph_id: $graph_id}) RETURN max(n.id) as max_id", 
-            graph_id=g.graph_id
-        ).single()
-        max_id = res["max_id"] if res and res["max_id"] is not None else -1
+# def heal_graph_ids(g):
+#     """Finds nodes created by ZXdb that are missing IDs/properties and assigns them."""
+#     with g.driver.session() as session:
+#         # 1. Heal missing IDs
+#         res = session.run(
+#             "MATCH (n:Node {graph_id: $graph_id}) RETURN max(n.id) as max_id", 
+#             graph_id=g.graph_id
+#         ).single()
+#         max_id = res["max_id"] if res and res["max_id"] is not None else -1
         
-        query = """
-        MATCH (n:Node {graph_id: $graph_id})
-        WHERE n.id IS NULL
-        RETURN id(n) AS internal_id
-        """
-        missing_records = session.run(query, graph_id=g.graph_id)
-        missing_ids = [record["internal_id"] for record in missing_records]
+#         query = """
+#         MATCH (n:Node {graph_id: $graph_id})
+#         WHERE n.id IS NULL
+#         RETURN id(n) AS internal_id
+#         """
+#         missing_records = session.run(query, graph_id=g.graph_id)
+#         missing_ids = [record["internal_id"] for record in missing_records]
         
-        for internal_id in missing_ids:
-            max_id += 1
-            session.run(
-                "MATCH (n) WHERE id(n) = $int_id SET n.id = $new_id", 
-                int_id=internal_id, 
-                new_id=max_id
-            )
+#         for internal_id in missing_ids:
+#             max_id += 1
+#             session.run(
+#                 "MATCH (n) WHERE id(n) = $int_id SET n.id = $new_id", 
+#                 int_id=internal_id, 
+#                 new_id=max_id
+#             )
             
-        if missing_ids:
-            print(f"HEALED: Assigned valid IDs to {len(missing_ids)} ghost nodes.")
+#         if missing_ids:
+#             print(f"HEALED: Assigned valid IDs to {len(missing_ids)} ghost nodes.")
 
-        # 2. Heal missing layout coordinates (qubit / row)
-        session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.qubit IS NULL SET n.qubit = 0", graph_id=g.graph_id)
-        session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.row IS NULL SET n.row = 0", graph_id=g.graph_id)
+#         # 2. Heal missing layout coordinates (qubit / row)
+#         session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.qubit IS NULL SET n.qubit = 0", graph_id=g.graph_id)
+#         session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.row IS NULL SET n.row = 0", graph_id=g.graph_id)
         
-        # PyZX sometimes uses 'q' and 'r' as shorthand in graph databases
-        session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.q IS NULL SET n.q = 0", graph_id=g.graph_id)
-        session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.r IS NULL SET n.r = 0", graph_id=g.graph_id)
-        print("HEALED: Filled in missing layout coordinates.")
+#         # PyZX sometimes uses 'q' and 'r' as shorthand in graph databases
+#         session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.q IS NULL SET n.q = 0", graph_id=g.graph_id)
+#         session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.r IS NULL SET n.r = 0", graph_id=g.graph_id)
+#         print("HEALED: Filled in missing layout coordinates.")
 
 for x in range(100):
     graph_full_reduce()
 
-heal_graph_ids(g)
+#heal_graph_ids(g)
 
 # 2. Now PyZX can safely read it
 g.normalize()
