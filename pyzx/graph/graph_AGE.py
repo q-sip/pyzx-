@@ -156,6 +156,146 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._vindex += amount
         return vertex_ids
 
+    def add_vertex(
+        self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None
+    ):
+        """Add a vertex to the AGE graph"""
+        phase_val = float(phase) if phase is not None else 0
+        props = f"{{id: {self._vindex}, t: {int(ty)}, phase: '{phase_val}', "
+        props += f"qubit: {qubit}, row: {row}"
+        props += "}"
+        query = (
+            f"SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$ "
+            f"CREATE (n:Node {props}) "
+            "RETURN id(n) $$) AS (id agtype)"
+        )
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            _ = cur.fetchone()
+            self.conn.commit()
+        vertex_id = self._vindex
+        self._vindex += 1
+        return vertex_id
+
+    def add_edge(self, src: VT, dst: VT, edge_type: EdgeType):
+        """Add an edge between vertices"""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (a:Node {{id: {src}}}), (b:Node {{id: {dst}}})
+            CREATE (a)-[e:Wire {{t: {int(edge_type)}}}]->(b)
+            RETURN count(e)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
+    def remove_vertices(self, vertices):
+        """Removes the specified vertices from the graph."""
+        vertex_list = list(vertices)
+        if not vertex_list:
+            return
+
+        # Build a list of vertex IDs to match in Cypher
+        # Using a WHERE clause with INs to match multiple vertices
+        vertex_ids_str = ", ".join(str(v) for v in vertex_list)
+
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node) WHERE n.id IN [{vertex_ids_str}]
+            DETACH DELETE n
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
+    def remove_edges(self, edges):
+        """Removes relationships from the graph."""
+        edge_list = list(edges)
+        if not edge_list:
+            return
+
+        # Build Cypher list for edge pairs
+        edges_list = []
+        for s, t in edge_list:
+            edges_list.append(f"{{s: {s}, t: {t}}}")
+        edges_str = "[" + ", ".join(edges_list) + "]"
+
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            UNWIND {edges_str} AS e
+            MATCH (n1:Node {{id: e.s}})-[r:Wire]-(n2:Node {{id: e.t}})
+            DELETE r
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
+    def num_vertices(self) -> int:
+        """Returns the number of vertices in the graph."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node)
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+        if row:
+            return int(str(row[0]).split("::", 1)[0].strip('"'))
+        return 0
+
+    def num_edges(
+        self,
+        s: Optional[VT] = None,
+        t: Optional[VT] = None,
+        et: Optional[EdgeType] = None,
+    ) -> int:
+        """Returns the number of edges in the graph.
+
+        If source and target vertices are given, counts edges between them.
+        If edge type is given, counts only edges of that type.
+        """
+        if s is not None and t is not None:
+            # Count edges between two specific vertices
+            s, t = (s, t) if s <= t else (t, s)
+            if et is not None:
+                query = f"""
+                SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                    MATCH (n1:Node {{id: {s}}})-[r:Wire {{t: {et.value}}}]->(n2:Node {{id: {t}}})
+                    RETURN count(r)
+                $$) AS (count agtype);
+                """
+            else:
+                query = f"""
+                SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                    MATCH (n1:Node {{id: {s}}})-[r:Wire]->(n2:Node {{id: {t}}})
+                    RETURN count(r)
+                $$) AS (count agtype);
+                """
+        else:
+            # Count all edges
+            query = f"""
+            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                MATCH ()-[r:Wire]->()
+                RETURN count(r)
+            $$) AS (count agtype);
+            """
+
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+        if row:
+            return int(str(row[0]).split("::", 1)[0].strip('"'))
+        return 0
+
     def depth(self) -> int:
         """Returns the maximum non-negative row index, or -1 if unavailable."""
         query = f"""
@@ -729,6 +869,17 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def clear_vdata(self, vertex: VT) -> None:
+        """Removes all vdata associated to a vertex."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            SET n = {{id: n.id, t: n.t}}
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def edata(self, edge: ET, key: str, default: Any = None) -> Any:
         """Returns the data value of the given edge associated to the key.
         If this key has no value associated with it, returns the default value."""
@@ -822,150 +973,6 @@ class GraphAGE(BaseGraph[VT, ET]):
         except json.JSONDecodeError:
             pass
         return []
-
-    def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
-        """Add a vertex to the AGE graph"""
-        props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
-        if phase is not None:
-            props += f", phase:{float(phase)}"
-        props += "}"
-        query = (
-            f"SELECT * FROM cypher('{self.graph_id}', $$ "
-            f"CREATE (n:{ty.name} {props}) "
-            "RETURN id(n) $$) AS (id agtype)"
-        )
-        with self.conn.cursor() as cur:
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
-        if row is None:
-            raise RuntimeError("Failed to create vertex; no id returned")
-        vertex_id = str(row[0]).split("::", 1)[0].strip('"')
-        return int(vertex_id)
-
-    def add_edge(self, src: VT, dst: VT, edge_type: EdgeType):
-        """Add an edge between vertices"""
-        query = f"""
-        SELECT * FROM cypher('{self.graph_id}', $$
-            MATCH (a),(b) WHERE id(a)={src} AND id(b)={dst}
-            CREATE (a)-[e:{edge_type.name}]->(b)
-            RETURN id(e)
-        $$) AS (id agtype)
-        """
-        with self.conn.cursor() as cur:
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
-        if row is None:
-            raise ValueError(f"No edge created; check vertex ids {src}, {dst}")
-        edge_id = str(row[0]).split("::", 1)[0].strip('"')
-        return int(edge_id)
-
-    def remove_vertices(self, vertices):
-        """Removes the specified vertices from the graph."""
-        vertex_list = list(vertices)
-        if not vertex_list:
-            return
-
-        # Build a list of vertex IDs to match in Cypher
-        # Using a WHERE clause with INs to match multiple vertices
-        vertex_ids_str = ", ".join(str(v) for v in vertex_list)
-
-        query = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            MATCH (n:Node) WHERE n.id IN [{vertex_ids_str}]
-            DETACH DELETE n
-            RETURN count(n)
-        $$) AS (count agtype);
-        """
-        self.db_execute(query)
-
-    def remove_edges(self, edges):
-        """Removes relationships from the graph."""
-        edge_list = list(edges)
-        if not edge_list:
-            return
-
-        # Build Cypher list for edge pairs
-        edges_list = []
-        for s, t in edge_list:
-            edges_list.append(f"{{s: {s}, t: {t}}}")
-        edges_str = "[" + ", ".join(edges_list) + "]"
-
-        query = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            UNWIND {edges_str} AS e
-            MATCH (n1:Node {{id: e.s}})-[r:Wire]-(n2:Node {{id: e.t}})
-            DELETE r
-            RETURN count(r)
-        $$) AS (count agtype);
-        """
-        self.db_execute(query)
-
-    def num_vertices(self) -> int:
-        """Returns the number of vertices in the graph."""
-        query = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            MATCH (n:Node)
-            RETURN count(n)
-        $$) AS (count agtype);
-        """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
-        if row:
-            return int(str(row[0]).split("::", 1)[0].strip('"'))
-        return 0
-
-    def num_edges(
-        self,
-        s: Optional[VT] = None,
-        t: Optional[VT] = None,
-        et: Optional[EdgeType] = None,
-    ) -> int:
-        """Returns the number of edges in the graph.
-
-        If source and target vertices are given, counts edges between them.
-        If edge type is given, counts only edges of that type.
-        """
-        if s is not None and t is not None:
-            # Count edges between two specific vertices
-            s, t = (s, t) if s <= t else (t, s)
-            if et is not None:
-                query = f"""
-                SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-                    MATCH (n1:Node {{id: {s}}})-[r:Wire {{t: {et.value}}}]->(n2:Node {{id: {t}}})
-                    RETURN count(r)
-                $$) AS (count agtype);
-                """
-            else:
-                query = f"""
-                SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-                    MATCH (n1:Node {{id: {s}}})-[r:Wire]->(n2:Node {{id: {t}}})
-                    RETURN count(r)
-                $$) AS (count agtype);
-                """
-        else:
-            # Count all edges
-            query = f"""
-            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-                MATCH ()-[r:Wire]->()
-                RETURN count(r)
-            $$) AS (count agtype);
-            """
-
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
-        if row:
-            return int(str(row[0]).split("::", 1)[0].strip('"'))
-        return 0
 
     def close(self) -> None:
         """Close the database connection."""
