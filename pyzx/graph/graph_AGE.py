@@ -358,6 +358,17 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         return EdgeType(int(float(edge_type_raw)))
 
+    def set_edge_type(self, e: ET, t: EdgeType) -> None:
+        """Sets the type of the given edge."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {e[0]}}})-[r:Wire]-(n2:Node {{id: {e[1]}}})
+            SET r.t = {t.value}
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
