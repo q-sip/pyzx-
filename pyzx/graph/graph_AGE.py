@@ -180,6 +180,44 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._vindex += 1
         return vertex_id
 
+    def add_vertex_indexed(self, v: VT) -> None:
+        """Adds a vertex with a guaranteed index.
+
+        Raises ValueError if the index is already in use.
+        """
+        q_exists = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {v}}})
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(q_exists)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if row and int(str(row[0]).split("::", 1)[0].strip('"')) > 0:
+            raise ValueError("Vertex with this index already exists")
+
+        q_create = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            CREATE (n:Node {{
+                id: {v},
+                t: {VertexType.BOUNDARY.value},
+                phase: '0',
+                qubit: -1,
+                row: -1
+            }})
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(q_create)
+
+        if v >= self._vindex:
+            self._vindex = v + 1
+
     def add_edge(
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
     ) -> ET:
