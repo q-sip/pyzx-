@@ -646,6 +646,36 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def vdata_keys(self, vertex: VT) -> Sequence[str]:
+        """Returns an iterable of the vertex data key names."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            RETURN keys(n)
+        $$) AS (keys agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            return []
+
+        keys_raw = str(row[0]).split("::", 1)[0]
+        if keys_raw in ("", "null", "None"):
+            return []
+
+        try:
+            parsed = json.loads(keys_raw)
+            if isinstance(parsed, list):
+                return [str(k) for k in parsed]
+        except json.JSONDecodeError:
+            pass
+        return []
+
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
         If this key has no value associated with it, returns the default value."""
