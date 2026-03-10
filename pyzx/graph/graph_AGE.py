@@ -2,10 +2,11 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access
 
 import os
 import json
+import uuid
 from fractions import Fraction
 from typing import (
     Any,
@@ -41,10 +42,10 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     backend = "age"
 
-    def __init__(self):
+    def __init__(self, graph_id: Optional[str] = None):
         BaseGraph.__init__(self)
 
-        self.graph_id = "test_graph"
+        self.graph_id = graph_id if graph_id is not None else "test_graph"
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
@@ -91,11 +92,31 @@ class GraphAGE(BaseGraph[VT, ET]):
         with self.conn.cursor() as cur:
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(
-                "SELECT drop_graph(%s, %s);",
-                (self.graph_id, True)
-            )
+            try:
+                cur.execute(
+                    "SELECT drop_graph(%s, %s);",
+                    (self.graph_id, True)
+                )
+            except Exception:
+                self.conn.rollback()
+                return
         self.conn.commit()
+
+    def inputs(self) -> Tuple[VT, ...]:
+        """Gets the inputs of the graph."""
+        return self._inputs
+
+    def set_inputs(self, inputs: Tuple[VT, ...]):
+        """Sets the inputs of the graph."""
+        self._inputs = tuple(inputs)
+
+    def outputs(self) -> Tuple[VT, ...]:
+        """Gets the outputs of the graph."""
+        return self._outputs
+
+    def set_outputs(self, outputs: Tuple[VT, ...]):
+        """Sets the outputs of the graph."""
+        self._outputs = tuple(outputs)
 
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs
@@ -1081,3 +1102,44 @@ class GraphAGE(BaseGraph[VT, ET]):
     def close(self) -> None:
         """Close the database connection."""
         self.conn.close()
+
+    def clone(self) -> "GraphAGE":
+        """Return an identical copy of the graph without relabeling vertices/edges."""
+        new_graph_id = f"{self.graph_id}_clone_{uuid.uuid4().hex}"
+        cpy = GraphAGE(graph_id=new_graph_id)
+
+        cpy.scalar = self.scalar.copy()
+        cpy.track_phases = self.track_phases
+        cpy.phase_index = self.phase_index.copy()
+        cpy.phase_master = self.phase_master
+        cpy.phase_mult = self.phase_mult.copy()
+        cpy.max_phase_index = self.max_phase_index
+        cpy.merge_vdata = self.merge_vdata
+
+        cpy._vindex = self._vindex
+        cpy._maxr = self._maxr
+
+        base_vprops = {"id", "t", "ty", "phase", "qubit", "row"}
+        base_eprops = {"id", "t"}
+
+        for v in self.vertices():
+            cpy.add_vertex_indexed(v)
+            cpy.set_type(v, self.type(v))
+            cpy.set_qubit(v, self.qubit(v))
+            cpy.set_row(v, self.row(v))
+            cpy.set_phase(v, self.phase(v))
+            for key in self.vdata_keys(v):
+                if key in base_vprops:
+                    continue
+                cpy.set_vdata(v, key, self.vdata(v, key))
+
+        for e in self.edges():
+            new_e = cpy.add_edge(e, self.edge_type(e))
+            for key in self.edata_keys(e):
+                if key in base_eprops:
+                    continue
+                cpy.set_edata(new_e, key, self.edata(e, key))
+
+        cpy.set_inputs(self.inputs())
+        cpy.set_outputs(self.outputs())
+        return cpy
