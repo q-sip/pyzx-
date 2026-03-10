@@ -2,7 +2,7 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods
 
 import os
 from fractions import Fraction
@@ -330,6 +330,33 @@ class GraphAGE(BaseGraph[VT, ET]):
              int(str(row[1]).split("::", 1)[0].strip('"')))
             for row in rows
         ]
+
+    def edge_type(self, e: ET) -> EdgeType:
+        """Returns the type of the given edge.
+
+        Raises KeyError if the edge is not in the graph.
+        """
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {e[0]}}})-[r:Wire]-(n2:Node {{id: {e[1]}}})
+            RETURN r.t
+        $$) AS (t agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            raise KeyError(f"{e} has no edge type")
+
+        edge_type_raw = str(row[0]).split("::", 1)[0].strip('"')
+        if edge_type_raw in ("", "null", "None"):
+            return EdgeType.SIMPLE
+
+        return EdgeType(int(float(edge_type_raw)))
 
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
