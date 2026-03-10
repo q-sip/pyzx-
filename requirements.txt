@@ -44,3 +44,5 @@ pre-commit
 pytest
 coverage
 mutmut
+
+mypy
