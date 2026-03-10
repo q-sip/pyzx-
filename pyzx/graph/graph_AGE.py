@@ -248,6 +248,25 @@ class GraphAGE(BaseGraph[VT, ET]):
         """Returns the target of the given edge."""
         return self.edge_st(edge)[1]
 
+    def connected(self, v1: VT, v2: VT) -> bool:
+        """Returns whether vertices v1 and v2 share an edge."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {v1}}})-[r:Wire]-(n2:Node {{id: {v2}}})
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            return False
+        return int(str(row[0]).split("::", 1)[0].strip('"')) > 0
+
     def neighbors(self, vertex: VT) -> Sequence[VT]:
         """Returns all neighboring vertices of the given vertex."""
         query = f"""
