@@ -470,6 +470,35 @@ class GraphAGE(BaseGraph[VT, ET]):
         except ValueError:
             return Fraction(0)
 
+    def phases(self) -> Mapping[VT, FractionLike]:
+        """Returns a mapping of vertices to their phase values."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node)
+            RETURN n.id, n.phase
+        $$) AS (id agtype, phase agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            self.conn.commit()
+
+        result: dict[VT, FractionLike] = {}
+        for row in rows:
+            vertex = int(str(row[0]).split("::", 1)[0].strip('"'))
+            phase_raw = str(row[1]).split("::", 1)[0].strip('"')
+            if phase_raw in ("", "null", "None"):
+                result[vertex] = Fraction(0)
+                continue
+            try:
+                result[vertex] = Fraction(phase_raw).limit_denominator(10**9)
+            except ValueError:
+                result[vertex] = Fraction(0)
+
+        return result
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
