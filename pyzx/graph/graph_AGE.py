@@ -782,6 +782,17 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def clear_edata(self, edge: ET) -> None:
+        """Removes all edata associated to an edge."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {edge[0]}}})-[r:Wire]-(n2:Node {{id: {edge[1]}}})
+            SET r = {{t: r.t}}
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def edata_keys(self, edge: ET) -> Sequence[str]:
         """Returns an iterable of the edge data key names."""
         query = f"""
