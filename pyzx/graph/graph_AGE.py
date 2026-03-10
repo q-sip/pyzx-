@@ -2,7 +2,7 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches
 
 import os
 import json
@@ -42,6 +42,7 @@ class GraphAGE(BaseGraph[VT, ET]):
     backend = "age"
 
     def __init__(self):
+        BaseGraph.__init__(self)
 
         self.graph_id = "test_graph"
         self._vindex: int = 0
@@ -253,6 +254,10 @@ class GraphAGE(BaseGraph[VT, ET]):
             return int(str(row[0]).split("::", 1)[0].strip('"'))
         return 0
 
+    def vindex(self) -> int:
+        """Returns the next fresh vertex index."""
+        return self._vindex
+
     def num_edges(
         self,
         s: Optional[VT] = None,
@@ -326,6 +331,63 @@ class GraphAGE(BaseGraph[VT, ET]):
         else:
             self._maxr = int(float(maxr))
         return self._maxr
+
+    def remove_isolated_vertices(self) -> None:
+        """Deletes isolated vertices and isolated pairs, updating scalar accordingly."""
+        rem: List[VT] = []
+
+        for v in list(self.vertices()):
+            d = self.vertex_degree(v)
+            if d == 0:
+                rem.append(v)
+                ty = self.type(v)
+                if ty == VertexType.BOUNDARY:
+                    raise TypeError(
+                        "Diagram is not a well-typed ZX-diagram: contains isolated boundary vertex."
+                    )
+                if ty == VertexType.H_BOX:
+                    self.scalar.add_phase(self.phase(v))
+                else:
+                    self.scalar.add_node(self.phase(v))
+
+            if d == 1:
+                if v in rem:
+                    continue
+                if self.type(v) == VertexType.BOUNDARY:
+                    continue
+
+                neigh = list(self.neighbors(v))
+                if not neigh:
+                    continue
+                w = neigh[0]
+
+                if len(list(self.neighbors(w))) > 1:
+                    continue
+                if self.type(w) == VertexType.BOUNDARY:
+                    continue
+
+                rem.append(v)
+                rem.append(w)
+                et = self.edge_type(self.edge(v, w))
+                t1 = self.type(v)
+                t2 = self.type(w)
+                if t1 == VertexType.H_BOX:
+                    t1 = VertexType.Z
+                if t2 == VertexType.H_BOX:
+                    t2 = VertexType.Z
+
+                if t1 == t2:
+                    if et == EdgeType.SIMPLE:
+                        self.scalar.add_node(self.phase(v) + self.phase(w))
+                    else:
+                        self.scalar.add_spider_pair(self.phase(v), self.phase(w))
+                else:
+                    if et == EdgeType.SIMPLE:
+                        self.scalar.add_spider_pair(self.phase(v), self.phase(w))
+                    else:
+                        self.scalar.add_node(self.phase(v) + self.phase(w))
+
+        self.remove_vertices(rem)
 
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
