@@ -887,6 +887,91 @@ class ZXdb:
 
                 session.execute_write(_remove_operations)
 
+    def supplementarity_simp(self) -> int:
+        """
+        Apply the supplementarity rule to the graph.
+        Removes pairs of non-Clifford spiders that have the same set of neighbors.
+        """
+        count = 0
+        with self.driver.session() as session:
+            while True:
+                def _supp_type_1(tx):
+                    # Type 1: Disconnected, same neighbors
+                    # Check conditions: 
+                    # 1. Z-spiders (t:1)
+                    # 2. Non-Clifford phases (approx check if phase * 2 is integer)
+                    # 3. Disconnected
+                    # 4. Same degree
+                    # 5. Same neighbors (inclusion + same degree)
+                    query = """
+                    MATCH (v:Node {graph_id: $graph_id, t: 1}), (w:Node {graph_id: $graph_id, t: 1})
+                    WHERE id(v) < id(w)
+                      AND NOT (v)-[:Wire]-(w)
+                      AND abs((v.phase * 2) - round(v.phase * 2)) > 1e-5
+                      AND abs((w.phase * 2) - round(w.phase * 2)) > 1e-5
+                      AND size((v)-[:Wire]-()) = size((w)-[:Wire]-())
+                      AND size([(v)-[:Wire]-(n) WHERE NOT (n)-[:Wire]-(w) | 1]) = 0
+                    WITH v, w
+                    WITH v, w, v.phase + w.phase AS s, v.phase - w.phase AS d
+                    WITH v, w,
+                         (abs(s - round(s)) < 1e-5 AND toInteger(round(s)) % 2 <> 0) AS sum_odd,
+                         (abs(d - round(d)) < 1e-5 AND toInteger(round(d)) % 2 <> 0) AS diff_odd
+                    WHERE sum_odd OR diff_odd
+                    OPTIONAL MATCH (v)-[:Wire]-(n)
+                    FOREACH (_ IN CASE WHEN sum_odd THEN [1] ELSE [] END | 
+                        SET n.phase = coalesce(n.phase, 0.0) + 1.0
+                    )
+                    DETACH DELETE v, w
+                    RETURN count(*) as c
+                    """
+                    result = tx.run(query, graph_id=self.graph_id)
+                    record = result.single()
+                    return record["c"] if record else 0
+
+                c1 = session.execute_write(_supp_type_1)
+                
+                def _supp_type_2(tx):
+                    # Type 2: Connected, same neighbors (excluding each other)
+                    # Check conditions:
+                    # 1. Z-spiders (t:1)
+                    # 2. Non-Clifford phases
+                    # 3. Connected
+                    # 4. Same degree
+                    # 5. Same other neighbors
+                    query = """
+                    MATCH (v:Node {graph_id: $graph_id, t: 1}), (w:Node {graph_id: $graph_id, t: 1})
+                    WHERE id(v) < id(w)
+                      AND (v)-[:Wire]-(w)
+                      AND abs((v.phase * 2) - round(v.phase * 2)) > 1e-5
+                      AND abs((w.phase * 2) - round(w.phase * 2)) > 1e-5
+                      AND size((v)-[:Wire]-()) = size((w)-[:Wire]-())
+                      AND size([(v)-[:Wire]-(n) WHERE n <> w AND NOT (n)-[:Wire]-(w) | 1]) = 0
+                    WITH v, w
+                    WITH v, w, v.phase + w.phase AS s, v.phase - w.phase AS d
+                    WITH v, w,
+                         (abs(s - round(s)) < 1e-5 AND toInteger(round(s)) % 2 = 0) AS sum_even,
+                         (abs(d - round(d)) < 1e-5 AND toInteger(round(d)) % 2 <> 0) AS diff_odd
+                    WHERE sum_even OR diff_odd
+                    OPTIONAL MATCH (v)-[:Wire]-(n)
+                    WHERE n <> w
+                    FOREACH (_ IN CASE WHEN sum_even THEN [1] ELSE [] END | 
+                        SET n.phase = coalesce(n.phase, 0.0) + 1.0
+                    )
+                    DETACH DELETE v, w
+                    RETURN count(*) as c
+                    """
+                    result = tx.run(query, graph_id=self.graph_id)
+                    record = result.single()
+                    return record["c"] if record else 0
+
+                c2 = session.execute_write(_supp_type_2)
+                
+                if c1 == 0 and c2 == 0:
+                    break
+                count += c1 + c2
+        
+        return count
+
     def interior_clifford_simp(self):
         self.spider_fusion()
         self.to_gh()
@@ -915,8 +1000,8 @@ class ZXdb:
             i = self.phase_gadget_fusion_rule()
             self.interior_clifford_simp()
             k = self.copy_simp()
-            # l = supplementary_simp() TODO
+            l = self.supplementarity_simp()
             j = self.pivot_gadget_rule()
-            if not (i or k or j):
+            if not (i or k or j or l):
                 self.remove_isolated_vertices()
                 break
