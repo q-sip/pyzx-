@@ -633,6 +633,17 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         return result
 
+    def set_row(self, vertex: VT, r: FloatInt) -> None:
+        """Sets the row index associated to the vertex."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            SET n.row = {r}
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
