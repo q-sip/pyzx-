@@ -22,6 +22,7 @@ from .base import BaseGraph
 
 from ..utils import (
     EdgeType,
+    FractionLike,
     VertexType,
 )
 
@@ -441,6 +442,33 @@ class GraphAGE(BaseGraph[VT, ET]):
         $$) AS (count agtype);
         """
         self.db_execute(query)
+
+    def phase(self, vertex: VT) -> FractionLike:
+        """Returns the phase value of the given vertex."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            RETURN n.phase
+        $$) AS (phase agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            return Fraction(0)
+
+        phase_raw = str(row[0]).split("::", 1)[0].strip('"')
+        if phase_raw in ("", "null", "None"):
+            return Fraction(0)
+
+        try:
+            return Fraction(phase_raw).limit_denominator(10**9)
+        except ValueError:
+            return Fraction(0)
 
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
