@@ -729,6 +729,36 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def edata(self, edge: ET, key: str, default: Any = None) -> Any:
+        """Returns the data value of the given edge associated to the key.
+        If this key has no value associated with it, returns the default value."""
+        key_escaped = key.replace("'", "\\'")
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {edge[0]}}})-[r:Wire]-(n2:Node {{id: {edge[1]}}})
+            RETURN r['{key_escaped}']
+        $$) AS (value agtype);
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+
+        if not row:
+            return default
+
+        value_raw = str(row[0]).split("::", 1)[0]
+        if value_raw in ("", "null", "None"):
+            return default
+
+        try:
+            parsed = json.loads(value_raw)
+            return default if parsed is None else parsed
+        except json.JSONDecodeError:
+            return value_raw.strip('"')
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
