@@ -121,6 +121,18 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def get_graph_id(self):
         return self.graph_id
+    
+    def clear_clones(self):
+        query = """
+        MATCH (n:Node)
+        WHERE n.graph_id CONTAINS "clone"
+        DETACH DELETE n
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query)
+            )
 
     def create_graph(
         self,

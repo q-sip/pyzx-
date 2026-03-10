@@ -837,3 +837,86 @@ class ZXdb:
                 tx.run(query, graph_id=self.graph_id)
 
             session.execute_write(apply_hadamard_to_edge_conversion)
+
+    def copy_simp(self) -> None:
+        """
+        Perform the copy simp operation
+        """
+        with self.driver.session() as session:
+            def apply_copy_simp(tx):
+                query = str(self.basic_rewrite_rule_queries["State copy"]["query"]["code"]["value"])
+                tx.run(query)
+
+            session.execute_write(apply_copy_simp)
+
+    def to_gh(self) -> None:
+        """
+        Change color of all red vertices to green
+        """
+        with self.driver.session() as session:
+            def apply_change_color(tx):
+                query = str(self.basic_rewrite_rule_queries["Change color"]["query"]["code"]["value"])
+                tx.run(query, graph_id=self.graph_id)
+
+            session.execute_write(apply_change_color)
+    
+    def remove_isolated_vertices(self) -> None:
+            """
+            Remove isolated vertices from the graph.
+            Also remove dangling pairs of vertices that aren't connected to the graph but only to each other.
+            """
+            with self.driver.session() as session:
+                def _remove_operations(tx):
+                    # Remove completely isolated vertices (degree 0)
+                    tx.run("""
+                        MATCH (n:Node {graph_id: $graph_id})
+                        WHERE size((n)--()) = 0
+                        DELETE n
+                    """, graph_id=self.graph_id)
+
+                # Remove isolated pairs (two nodes connected only to each other)
+                # Find nodes with degree 1, check if their neighbor also has degree 1
+                    tx.run("""
+                        MATCH (n:Node {graph_id: $graph_id})
+                        WHERE size((n)--()) = 1
+                        WITH n
+                        MATCH (n)-[r:Wire]-(m:Node {graph_id: $graph_id})
+                        WHERE id(n) < id(m) AND size((m)--()) = 1
+                        DELETE n, m, r
+                    """, graph_id=self.graph_id)
+
+                session.execute_write(_remove_operations)
+
+    def interior_clifford_simp(self):
+        self.spider_fusion()
+        self.to_gh()
+        while True:
+            i1 = self.remove_identities()
+            i2 = self.spider_fusion()
+            i3 = self.pivot_rule()
+            i4 = self.local_complementation_rule()
+            if not (i1 or i2 or i3 or i4): break
+            i += 1
+        return i != 0
+    
+    def clifford_simp(self):
+        i = False
+        while True:
+            i = self.interior_clifford_simp()
+            i2 = self.pivot_boundary_rule()
+            if not i2: break
+        return i
+
+    def full_reduce(self):
+        self.interior_clifford_simp()
+        self.pivot_gadget_rule()
+        while True:
+            self.clifford_simp()
+            i = self.phase_gadget_fusion_rule()
+            self.interior_clifford_simp()
+            k = self.copy_simp()
+            # l = supplementary_simp() TODO
+            j = self.pivot_gadget_rule()
+            if not (i or k or j):
+                self.remove_isolated_vertices()
+                break
