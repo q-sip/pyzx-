@@ -179,16 +179,20 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._vindex += 1
         return vertex_id
 
-    def add_edge(self, src: VT, dst: VT, edge_type: EdgeType):
-        """Add an edge between vertices"""
+    def add_edge(
+        self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
+    ) -> ET:
+        """Add a single edge of the given type and return its id."""
+        src, dst = self.edge_st(edge_pair)
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (a:Node {{id: {src}}}), (b:Node {{id: {dst}}})
-            CREATE (a)-[e:Wire {{t: {int(edge_type)}}}]->(b)
+            CREATE (a)-[e:Wire {{t: {int(edgetype)}}}]->(b)
             RETURN count(e)
         $$) AS (count agtype);
         """
         self.db_execute(query)
+        return self.edge(src, dst)
 
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
