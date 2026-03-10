@@ -30,6 +30,7 @@ backends = {
 	'simple': True, 
 	'multigraph': True, 
 	'quizx-vec': False if quizx is None else True,
+	'age': True,
 	'memgraph': True,
 }
 
@@ -37,7 +38,7 @@ def Graph(backend:Optional[str]=None, **kwargs) -> BaseGraph:
 	"""Returns an instance of an implementation of :class:`~pyzx.graph.base.BaseGraph`. 
 	By default :class:`~pyzx.graph.graph_s.GraphS` is used. 
 	Currently ``backend`` is allowed to be `simple` (for the default),
-	'multigraph', 'graph_tool', 'igraph', 'quizx-vec', or 'neo4j'.
+	'multigraph', 'graph_tool', 'igraph', 'quizx-vec', 'neo4j', or 'age'.
 	This method is the preferred way to instantiate a ZX-diagram in PyZX.
 
 	Example:
@@ -48,6 +49,10 @@ def Graph(backend:Optional[str]=None, **kwargs) -> BaseGraph:
 		For a Neo4j-backed graph::
 		
 			g = zx.Graph(backend='neo4j', uri='bolt://localhost:7687')
+
+		For an AGE-backed graph::
+
+			g = zx.Graph(backend='age')
 		
 	"""
 	if backend is None: backend = 'simple'
@@ -64,6 +69,9 @@ def Graph(backend:Optional[str]=None, **kwargs) -> BaseGraph:
 	if backend == 'neo4j':
 		from .graph_neo4j import GraphNeo4j
 		return GraphNeo4j(**kwargs)
+	if backend == 'age':
+		from .graph_AGE import GraphAGE
+		return GraphAGE(**kwargs)
 	if backend == 'memgraph':
 		from .graph_memgraph import GraphMemgraph
 		return GraphMemgraph(**kwargs)
@@ -88,5 +96,10 @@ except ImportError:
 try:
 	import neo4j as _neo4j_module
 	backends['neo4j'] = _neo4j_module
+except ImportError:
+	pass
+try:
+	import psycopg as _psycopg_module
+	backends['age'] = _psycopg_module
 except ImportError:
 	pass

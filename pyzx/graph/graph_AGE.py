@@ -2,7 +2,7 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments
 
 import os
 import json
@@ -179,27 +179,37 @@ class GraphAGE(BaseGraph[VT, ET]):
         return vertex_ids
 
     def add_vertex(
-        self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None
-    ):
-        """Add a vertex to the AGE graph"""
-        phase_val = float(phase) if phase is not None else 0
-        props = f"{{id: {self._vindex}, t: {int(ty)}, phase: '{phase_val}', "
-        props += f"qubit: {qubit}, row: {row}"
-        props += "}"
-        query = (
-            f"SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$ "
-            f"CREATE (n:Node {props}) "
-            "RETURN id(n) $$) AS (id agtype)"
-        )
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            _ = cur.fetchone()
-            self.conn.commit()
-        vertex_id = self._vindex
-        self._vindex += 1
-        return vertex_id
+        self,
+        ty: VertexType = VertexType.BOUNDARY,
+        qubit: FloatInt = -1,
+        row: FloatInt = -1,
+        phase: Optional[FractionLike] = None,
+        ground: bool = False,
+        index: Optional[VT] = None,
+    ) -> VT:
+        """Add a single vertex to the graph and return its index."""
+        if index is not None:
+            self.add_vertex_indexed(index)
+            v = index
+        else:
+            v = self.add_vertices(1)[0]
+        self.set_type(v, ty)
+        if phase is None:
+            if ty == VertexType.H_BOX:
+                phase = 1
+            else:
+                phase = 0
+        self.set_qubit(v, qubit)
+        self.set_row(v, row)
+        if phase:
+            self.set_phase(v, phase)
+        if ground:
+            self.set_ground(v, True)
+        if self.track_phases:
+            self.max_phase_index += 1
+            self.phase_index[v] = self.max_phase_index
+            self.phase_mult[self.max_phase_index] = 1
+        return v
 
     def add_vertex_indexed(self, v: VT) -> None:
         """Adds a vertex with a guaranteed index.
@@ -502,8 +512,9 @@ class GraphAGE(BaseGraph[VT, ET]):
         return [(int(str(row[0]).split("::", 1)[0].strip('"')),
                  int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
 
-    def edge(self, s: VT, t: VT) -> ET:
+    def edge(self, s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET:
         """Returns the edge between vertices s and t (canonicalized as tuple)."""
+        del et
         return (s, t) if s < t else (t, s)
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
