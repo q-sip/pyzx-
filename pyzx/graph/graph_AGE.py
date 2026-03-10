@@ -499,6 +499,22 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         return result
 
+    def set_phase(self, vertex: VT, phase: FractionLike) -> None:
+        """Sets the phase of the given vertex."""
+        try:
+            phase = phase % 2
+        except Exception:
+            pass
+        phase_str = str(phase)
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            SET n.phase = '{phase_str}'
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
