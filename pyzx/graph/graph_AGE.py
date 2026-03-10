@@ -759,6 +759,29 @@ class GraphAGE(BaseGraph[VT, ET]):
         except json.JSONDecodeError:
             return value_raw.strip('"')
 
+    def set_edata(self, edge: ET, key: str, val: Any) -> None:
+        """Sets the edge data associated to key to val."""
+        key_escaped = key.replace("`", "``")
+
+        if val is None:
+            value_expr = "null"
+        elif isinstance(val, bool):
+            value_expr = "true" if val else "false"
+        elif isinstance(val, (int, float)):
+            value_expr = str(val)
+        else:
+            value_escaped = str(val).replace("\\", "\\\\").replace("'", "\\'")
+            value_expr = f"'{value_escaped}'"
+
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n1:Node {{id: {edge[0]}}})-[r:Wire]-(n2:Node {{id: {edge[1]}}})
+            SET r.`{key_escaped}` = {value_expr}
+            RETURN count(r)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
         """Add a vertex to the AGE graph"""
         props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
