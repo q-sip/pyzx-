@@ -69,14 +69,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self.conn = psycopg.connect(**connect_kwargs)
         self._session_prepared = False
         self._batch_depth = 0
-        self._stats_reads = 0
-        self._stats_writes = 0
-        self._stats_commits = 0
-        self._stats_batches_started = 0
-        self._stats_batches_committed = 0
-        self._stats_batches_rolled_back = 0
-        self._stats_cache_hits = 0
-        self._stats_cache_misses = 0
+        self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
         self._read_cache: dict[str, Any] = {}
         self._prepare_session()
 
@@ -84,7 +77,6 @@ class GraphAGE(BaseGraph[VT, ET]):
             try:
                 cur.execute(f"SELECT create_graph('{self.graph_id}');")
                 self.conn.commit()
-                self._stats_commits += 1
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
@@ -98,55 +90,48 @@ class GraphAGE(BaseGraph[VT, ET]):
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
         self.conn.commit()
-        self._stats_commits += 1
         self._session_prepared = True
 
     def _fetchone(self, query: str):
         """Execute read query and return one row."""
         cache_key = f"one:{query}"
-        cached = self._read_cache.get(cache_key, None)
-        if cached is not None:
-            self._stats_cache_hits += 1
-            return cached
+        if self._read_cache_enabled:
+            cached = self._read_cache.get(cache_key, None)
+            if cached is not None:
+                return cached
 
-        self._stats_cache_misses += 1
-        self._stats_reads += 1
         with self.conn.cursor() as cur:
             cur.execute(query)
             row = cur.fetchone()
-        self._read_cache[cache_key] = row
+        if self._read_cache_enabled:
+            self._read_cache[cache_key] = row
         return row
 
     def _fetchall(self, query: str):
         """Execute read query and return all rows."""
         cache_key = f"all:{query}"
-        cached = self._read_cache.get(cache_key, None)
-        if cached is not None:
-            self._stats_cache_hits += 1
-            return cached
+        if self._read_cache_enabled:
+            cached = self._read_cache.get(cache_key, None)
+            if cached is not None:
+                return cached
 
-        self._stats_cache_misses += 1
-        self._stats_reads += 1
         with self.conn.cursor() as cur:
             cur.execute(query)
             rows = cur.fetchall()
-        self._read_cache[cache_key] = rows
+        if self._read_cache_enabled:
+            self._read_cache[cache_key] = rows
         return rows
 
     def db_execute(self, query: str) -> None:
         """Execute a SQL query with AGE extension and search_path configured."""
-        self._stats_writes += 1
         self._read_cache.clear()
         with self.conn.cursor() as cur:
             cur.execute(query)
         if self._batch_depth == 0:
             self.conn.commit()
-            self._stats_commits += 1
 
     def begin_batch(self) -> None:
         """Begin a batched write section (defers commits until end_batch)."""
-        if self._batch_depth == 0:
-            self._stats_batches_started += 1
         self._batch_depth += 1
 
     def end_batch(self) -> None:
@@ -156,40 +141,12 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._batch_depth -= 1
         if self._batch_depth == 0:
             self.conn.commit()
-            self._stats_commits += 1
-            self._stats_batches_committed += 1
 
     def rollback_batch(self) -> None:
         """Rollback active batched writes and reset batching state."""
         self.conn.rollback()
         self._read_cache.clear()
-        self._stats_batches_rolled_back += 1
         self._batch_depth = 0
-
-    def reset_stats(self) -> None:
-        """Reset internal instrumentation counters."""
-        self._stats_reads = 0
-        self._stats_writes = 0
-        self._stats_commits = 0
-        self._stats_batches_started = 0
-        self._stats_batches_committed = 0
-        self._stats_batches_rolled_back = 0
-        self._stats_cache_hits = 0
-        self._stats_cache_misses = 0
-        self._read_cache.clear()
-
-    def stats(self) -> Mapping[str, int]:
-        """Return internal instrumentation counters."""
-        return {
-            "reads": self._stats_reads,
-            "writes": self._stats_writes,
-            "commits": self._stats_commits,
-            "batches_started": self._stats_batches_started,
-            "batches_committed": self._stats_batches_committed,
-            "batches_rolled_back": self._stats_batches_rolled_back,
-            "cache_hits": self._stats_cache_hits,
-            "cache_misses": self._stats_cache_misses,
-        }
 
     def delete_graph(self) -> None:
         """Drop the current AGE graph and all of its data."""
@@ -204,7 +161,6 @@ class GraphAGE(BaseGraph[VT, ET]):
                 self.conn.rollback()
                 return
         self.conn.commit()
-        self._stats_commits += 1
         self._read_cache.clear()
 
     def inputs(self) -> Tuple[VT, ...]:

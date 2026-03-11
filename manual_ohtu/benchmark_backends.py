@@ -13,7 +13,7 @@ import os
 import sys
 from time import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pyzx as zx
 from pyzx.graph.graph_s import GraphS
@@ -161,7 +161,6 @@ class RunResult:
     e_after: int
     elapsed: float
     correct: Optional[bool]          # None = not checked / error
-    stats: Optional[Mapping[str, int]] = None
     error: Optional[str] = field(default=None)
 
 
@@ -197,7 +196,6 @@ def _run_age(circuit: zx.Circuit, qubits: int, depth: int) -> RunResult:
     try:
         graph_id = f"bench_age_{qubits}_{depth}_{int(time() * 1_000_000)}"
         g = GraphAGE(graph_id=graph_id)
-        g.reset_stats()
         g_simple = circuit.to_graph(backend="simple")
         for v in g_simple.vertices():
             g.add_vertex_indexed(v)
@@ -242,7 +240,6 @@ def _run_age(circuit: zx.Circuit, qubits: int, depth: int) -> RunResult:
             e1,
             elapsed,
             correct,
-            stats=g.stats(),
         )
     except Exception as exc:
         return RunResult("age", qubits, depth, 0, 0, 0, 0, 0.0, None, error=str(exc))
@@ -408,16 +405,16 @@ ENABLED_BACKENDS = [b for b in REQUESTED_BACKENDS if BACKENDS_AVAILABLE.get(b, F
 # ── Correctness detail level: True = full compare_tensors, False = vertex count only
 USE_TENSOR_COMPARISON = True
 
-
 def main() -> None:
     print()
-    print("=" * (_sep().__len__()))
-    print("  PyZX full_reduce benchmark")
-    print(f"  Backends: {', '.join(ENABLED_BACKENDS)}")
-    print(f"  Seed: {SEED}  |  Tensor comparison: {USE_TENSOR_COMPARISON}")
-    print("=" * (_sep().__len__()))
-    print(_header())
-    print(_sep())
+    print("SPEED COMPARISON")
+    print(f"Backends: {', '.join(ENABLED_BACKENDS)}")
+    print()
+    print("live per-graph results")
+    print("-" * 44)
+    live_fmt = f"  {{:<{COL_BACKEND}}}  {{:>{COL_QUBITS}}}  {{:>{COL_DEPTH}}}  {{:>10}}  {{:>10}}"
+    print(live_fmt.format("backend", "qubits", "depth", "time(s)", "vs simple"))
+    print("-" * 44)
 
     all_results: List[RunResult] = []
 
@@ -427,23 +424,31 @@ def main() -> None:
         circuit = zx.generate.CNOT_HAD_PHASE_circuit(qubits=qubits, depth=depth)
 
         block_results: List[RunResult] = []
+
         for backend in ENABLED_BACKENDS:
             runner = _RUNNER[backend]
             result = runner(circuit, qubits, depth)
-            block_results.append(result)
             all_results.append(result)
-            print(_row(result))
+            block_results.append(result)
 
-        # Separator between size groups
-        print(_sep())
+        simple_time = next((r.elapsed for r in block_results if r.backend == "simple"), None)
+        for r in block_results:
+            if r.error:
+                speedup = "ERROR"
+            elif simple_time and r.elapsed > 0 and simple_time > 0:
+                speedup = f"{(r.elapsed / simple_time):.2f}x"
+            else:
+                speedup = "N/A"
+            print(live_fmt.format(r.backend, r.qubits, r.depth, f"{r.elapsed:.3f}", speedup))
+        print()
 
     # ── Summary: speedups relative to 'simple' ────────────────────────────────
     print()
-    print("SUMMARY (time relative to 'simple')")
-    print(_sep())
+    print("time relative to simple")
+    print("-" * 44)
     fmt = f"  {{:<{COL_BACKEND}}}  {{:>{COL_QUBITS}}}  {{:>{COL_DEPTH}}}  {{:>10}}  {{:>10}}"
     print(fmt.format("backend", "qubits", "depth", "time(s)", "vs simple"))
-    print(_sep())
+    print("-" * 44)
 
     # Group by (qubits, depth)
     from itertools import groupby
@@ -461,28 +466,6 @@ def main() -> None:
                 speedup = "N/A"
             print(fmt.format(r.backend, r.qubits, r.depth, f"{r.elapsed:.3f}", speedup))
         print()
-
-    age_rows = [r for r in all_results if r.backend == "age" and r.stats]
-    if age_rows:
-        print("AGE INTERNAL STATS")
-        print(_sep())
-        print("  qubits depth      reads     writes    commits  cache(h/m)   batches(c/r)")
-        print(_sep())
-        for r in age_rows:
-            s = r.stats or {}
-            reads = s.get("reads", 0)
-            writes = s.get("writes", 0)
-            commits = s.get("commits", 0)
-            cache_hits = s.get("cache_hits", 0)
-            cache_miss = s.get("cache_misses", 0)
-            b_started = s.get("batches_started", 0)
-            b_rolled = s.get("batches_rolled_back", 0)
-            print(
-                f"  {r.qubits:>6} {r.depth:>5} "
-                f"{reads:>10} {writes:>10} {commits:>10} "
-                f"{cache_hits:>7}/{cache_miss:<7} "
-                f"{b_started:>7}/{b_rolled:<7}"
-            )
 
 
 if __name__ == "__main__":
