@@ -67,35 +67,134 @@ class GraphAGE(BaseGraph[VT, ET]):
             connect_kwargs["conninfo"] = db_uri
 
         self.conn = psycopg.connect(**connect_kwargs)
+        self._session_prepared = False
+        self._batch_depth = 0
+        self._stats_reads = 0
+        self._stats_writes = 0
+        self._stats_commits = 0
+        self._stats_batches_started = 0
+        self._stats_batches_committed = 0
+        self._stats_batches_rolled_back = 0
+        self._stats_cache_hits = 0
+        self._stats_cache_misses = 0
+        self._read_cache: dict[str, Any] = {}
+        self._prepare_session()
 
         with self.conn.cursor() as cur:
-            # 1. Load extension
-            cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path TO ag_catalog;")
-            self.conn.commit()
-
-            # 2. Create graph (search_path is already set in options)
             try:
                 cur.execute(f"SELECT create_graph('{self.graph_id}');")
                 self.conn.commit()
+                self._stats_commits += 1
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
 
-    def db_execute(self, query: str) -> None:
-        """Execute a SQL query with AGE extension and search_path configured."""
+    def _prepare_session(self) -> None:
+        """Prepare AGE session once per DB connection."""
+        if self._session_prepared:
+            return
         with self.conn.cursor() as cur:
+            cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
         self.conn.commit()
+        self._stats_commits += 1
+        self._session_prepared = True
+
+    def _fetchone(self, query: str):
+        """Execute read query and return one row."""
+        cache_key = f"one:{query}"
+        cached = self._read_cache.get(cache_key, None)
+        if cached is not None:
+            self._stats_cache_hits += 1
+            return cached
+
+        self._stats_cache_misses += 1
+        self._stats_reads += 1
+        with self.conn.cursor() as cur:
+            cur.execute(query)
+            row = cur.fetchone()
+        self._read_cache[cache_key] = row
+        return row
+
+    def _fetchall(self, query: str):
+        """Execute read query and return all rows."""
+        cache_key = f"all:{query}"
+        cached = self._read_cache.get(cache_key, None)
+        if cached is not None:
+            self._stats_cache_hits += 1
+            return cached
+
+        self._stats_cache_misses += 1
+        self._stats_reads += 1
+        with self.conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+        self._read_cache[cache_key] = rows
+        return rows
+
+    def db_execute(self, query: str) -> None:
+        """Execute a SQL query with AGE extension and search_path configured."""
+        self._stats_writes += 1
+        self._read_cache.clear()
+        with self.conn.cursor() as cur:
+            cur.execute(query)
+        if self._batch_depth == 0:
+            self.conn.commit()
+            self._stats_commits += 1
+
+    def begin_batch(self) -> None:
+        """Begin a batched write section (defers commits until end_batch)."""
+        if self._batch_depth == 0:
+            self._stats_batches_started += 1
+        self._batch_depth += 1
+
+    def end_batch(self) -> None:
+        """End a batched write section and commit on outermost end."""
+        if self._batch_depth <= 0:
+            return
+        self._batch_depth -= 1
+        if self._batch_depth == 0:
+            self.conn.commit()
+            self._stats_commits += 1
+            self._stats_batches_committed += 1
+
+    def rollback_batch(self) -> None:
+        """Rollback active batched writes and reset batching state."""
+        self.conn.rollback()
+        self._read_cache.clear()
+        self._stats_batches_rolled_back += 1
+        self._batch_depth = 0
+
+    def reset_stats(self) -> None:
+        """Reset internal instrumentation counters."""
+        self._stats_reads = 0
+        self._stats_writes = 0
+        self._stats_commits = 0
+        self._stats_batches_started = 0
+        self._stats_batches_committed = 0
+        self._stats_batches_rolled_back = 0
+        self._stats_cache_hits = 0
+        self._stats_cache_misses = 0
+        self._read_cache.clear()
+
+    def stats(self) -> Mapping[str, int]:
+        """Return internal instrumentation counters."""
+        return {
+            "reads": self._stats_reads,
+            "writes": self._stats_writes,
+            "commits": self._stats_commits,
+            "batches_started": self._stats_batches_started,
+            "batches_committed": self._stats_batches_committed,
+            "batches_rolled_back": self._stats_batches_rolled_back,
+            "cache_hits": self._stats_cache_hits,
+            "cache_misses": self._stats_cache_misses,
+        }
 
     def delete_graph(self) -> None:
         """Drop the current AGE graph and all of its data."""
+        self._read_cache.clear()
         with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
             try:
                 cur.execute(
                     "SELECT drop_graph(%s, %s);",
@@ -105,6 +204,8 @@ class GraphAGE(BaseGraph[VT, ET]):
                 self.conn.rollback()
                 return
         self.conn.commit()
+        self._stats_commits += 1
+        self._read_cache.clear()
 
     def inputs(self) -> Tuple[VT, ...]:
         """Gets the inputs of the graph."""
@@ -192,21 +293,49 @@ class GraphAGE(BaseGraph[VT, ET]):
         index: Optional[VT] = None,
     ) -> VT:
         """Add a single vertex to the graph and return its index."""
-        if index is not None:
-            self.add_vertex_indexed(index)
-            v = index
-        else:
-            v = self.add_vertices(1)[0]
-        self.set_type(v, ty)
         if phase is None:
             if ty == VertexType.H_BOX:
                 phase = 1
             else:
                 phase = 0
-        self.set_qubit(v, qubit)
-        self.set_row(v, row)
-        if phase:
-            self.set_phase(v, phase)
+        try:
+            phase = phase % 2
+        except Exception:
+            pass
+        phase_str = str(phase)
+
+        if index is not None:
+            self.add_vertex_indexed(index)
+            v = index
+            query = f"""
+            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                MATCH (n:Node {{id: {v}}})
+                SET n.t = {ty.value},
+                    n.qubit = {qubit},
+                    n.row = {row},
+                    n.phase = '{phase_str}'
+                REMOVE n.ty
+                RETURN count(n)
+            $$) AS (count agtype);
+            """
+            self.db_execute(query)
+        else:
+            v = self._vindex
+            query = f"""
+            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                CREATE (n:Node {{
+                    id: {v},
+                    t: {ty.value},
+                    phase: '{phase_str}',
+                    qubit: {qubit},
+                    row: {row}
+                }})
+                RETURN count(n)
+            $$) AS (count agtype);
+            """
+            self.db_execute(query)
+            self._vindex += 1
+
         if ground:
             self.set_ground(v, True)
         if self.track_phases:
@@ -226,12 +355,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN count(n)
         $$) AS (count agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(q_exists)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(q_exists)
 
         if row and int(str(row[0]).split("::", 1)[0].strip('"')) > 0:
             raise ValueError("Vertex with this index already exists")
@@ -390,12 +514,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN count(n)
         $$) AS (count agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
         if row:
             return int(str(row[0]).split("::", 1)[0].strip('"'))
         return 0
@@ -441,12 +560,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             $$) AS (count agtype);
             """
 
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
         if row:
             return int(str(row[0]).split("::", 1)[0].strip('"'))
         return 0
@@ -460,12 +574,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN max(n.row)
         $$) AS (maxr agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row or row[0] is None:
             self._maxr = -1
@@ -542,12 +651,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             MATCH (n:Node) WHERE n.id IS NOT NULL RETURN n.id
         $$) AS (id agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         return [int(str(row[0]).split("::", 1)[0].strip('"')) for row in rows]
 
@@ -563,12 +667,7 @@ class GraphAGE(BaseGraph[VT, ET]):
                 RETURN n1.id AS src, n2.id AS tgt
             $$) AS (src agtype, tgt agtype);
             """
-            with self.conn.cursor() as cur:
-                cur.execute("LOAD 'age';")
-                cur.execute("SET search_path = ag_catalog, public;")
-                cur.execute(query)
-                rows = cur.fetchall()
-                self.conn.commit()
+            rows = self._fetchall(query)
             return [(int(str(row[0]).split("::", 1)[0].strip('"')),
                      int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
 
@@ -580,12 +679,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n1.id AS s, n2.id AS t
         $$) AS (s agtype, t agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
         return [(int(str(row[0]).split("::", 1)[0].strip('"')),
                  int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
 
@@ -614,12 +708,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN count(r)
         $$) AS (count agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row:
             return False
@@ -634,12 +723,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN m.id
         $$) AS (id agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         neighbors = {
             int(str(row[0]).split("::", 1)[0].strip('"'))
@@ -656,12 +740,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN count(r)
         $$) AS (count agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if row:
             return int(str(row[0]).split("::", 1)[0].strip('"'))
@@ -676,12 +755,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.id, m.id
         $$) AS (src agtype, tgt agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         return [
             (int(str(row[0]).split("::", 1)[0].strip('"')),
@@ -700,12 +774,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN r.t
         $$) AS (t agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row:
             raise KeyError(f"{e} has no edge type")
@@ -735,12 +804,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.t, n.ty
         $$) AS (t agtype, ty agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row:
             raise KeyError(f"{vertex} has no type")
@@ -763,12 +827,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.id, n.t, n.ty
         $$) AS (id agtype, t agtype, ty agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         result: dict[VT, VertexType] = {}
         for row in rows:
@@ -807,12 +866,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.phase
         $$) AS (phase agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row:
             return Fraction(0)
@@ -834,12 +888,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.id, n.phase
         $$) AS (id agtype, phase agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         result: dict[VT, FractionLike] = {}
         for row in rows:
@@ -880,12 +929,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.qubit
         $$) AS (qubit agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row:
             return -1
@@ -905,12 +949,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.id, n.qubit
         $$) AS (id agtype, qubit agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         result: dict[VT, FloatInt] = {}
         for row in rows:
@@ -944,12 +983,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.row
         $$) AS (row agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
+        row = self._fetchone(query)
 
         if not row:
             return -1
@@ -969,12 +1003,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             RETURN n.id, n.row
         $$) AS (id agtype, row agtype);
         """
-        with self.conn.cursor() as cur:
-            cur.execute("LOAD 'age';")
-            cur.execute("SET search_path = ag_catalog, public;")
-            cur.execute(query)
-            rows = cur.fetchall()
-            self.conn.commit()
+        rows = self._fetchall(query)
 
         result: dict[VT, FloatInt] = {}
         for row in rows:
