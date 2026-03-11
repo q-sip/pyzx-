@@ -28,6 +28,10 @@ from ..utils import (
     FloatInt,
     FractionLike,
     VertexType,
+    get_z_box_label,
+    set_z_box_label,
+    vertex_is_z_like,
+    vertex_is_zx_like,
 )
 
 load_dotenv()
@@ -249,19 +253,92 @@ class GraphAGE(BaseGraph[VT, ET]):
         if v >= self._vindex:
             self._vindex = v + 1
 
-    def add_edge(
+    def add_edge(  # noqa: too-many-branches
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
     ) -> ET:
-        """Add a single edge of the given type and return its id."""
-        src, dst = self.edge_st(edge_pair)
-        query = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            MATCH (a:Node {{id: {src}}}), (b:Node {{id: {dst}}})
-            CREATE (a)-[e:Wire {{t: {int(edgetype)}}}]->(b)
-            RETURN count(e)
-        $$) AS (count agtype);
+        """Add a single edge of the given type and return its canonical id.
+
+        Mirrors graph_s.py: direction is always normalised to min→max,
+        and parallel edges are resolved via the Hopf / spider laws.
         """
-        self.db_execute(query)
+        s, t = edge_pair
+
+        # ── self-loops ──────────────────────────────────────────────────────
+        if s == t:
+            t1 = self.type(s)
+            if not vertex_is_zx_like(t1):
+                raise ValueError(
+                    f"Cannot add self-loop on non-ZX vertex {s} (type {t1})"
+                )
+            if edgetype == EdgeType.SIMPLE:
+                return self.edge(s, s)  # simple self-loop is a no-op
+            if edgetype == EdgeType.HADAMARD:
+                self.add_to_phase(s, 1)
+                return self.edge(s, s)
+            raise ValueError(f"Unexpected edge type {edgetype} for self-loop")
+
+        # ── normalise direction ──────────────────────────────────────────────
+        src, dst = (s, t) if s < t else (t, s)
+
+        if not self.connected(src, dst):
+            # ── no existing edge: create it ──────────────────────────────────
+            query = f"""
+            SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+                MATCH (a:Node {{id: {src}}}), (b:Node {{id: {dst}}})
+                CREATE (a)-[e:Wire {{t: {int(edgetype)}}}]->(b)
+                RETURN count(e)
+            $$) AS (count agtype);
+            """
+            self.db_execute(query)
+        else:
+            # ── parallel edge: apply Hopf / spider laws ──────────────────────
+            t1 = self.type(src)
+            t2 = self.type(dst)
+            if vertex_is_zx_like(t1) and vertex_is_zx_like(t2):
+                et1 = self.edge_type(self.edge(src, dst))
+                # same colour → SIMPLE is 'fuse', HADAMARD is 'hopf'
+                if vertex_is_z_like(t1) == vertex_is_z_like(t2):
+                    fuse, hopf = EdgeType.SIMPLE, EdgeType.HADAMARD
+                else:
+                    fuse, hopf = EdgeType.HADAMARD, EdgeType.SIMPLE
+
+                if edgetype == fuse and et1 == fuse:
+                    pass  # two fuse-type edges → keep one (no-op)
+                elif (edgetype == fuse and et1 == hopf) or (
+                    edgetype == hopf and et1 == fuse
+                ):
+                    # one of each → keep fuse edge, add π to src, scalar ×½
+                    self.set_edge_type((src, dst), fuse)
+                    if t1 == VertexType.Z_BOX:
+                        set_z_box_label(
+                            self, src, get_z_box_label(self, src) * -1
+                        )
+                    else:
+                        self.add_to_phase(src, 1)
+                    self.scalar.add_power(-1)
+                elif edgetype == hopf and et1 == hopf:
+                    # two hopf-type edges → remove edge, scalar ×¼
+                    self.remove_edge(self.edge(src, dst))
+                    self.scalar.add_power(-2)
+                else:
+                    raise ValueError(
+                        f"Unexpected edge types: {edgetype}, {et1} for "
+                        f"vertices {src}({t1}), {dst}({t2})"
+                    )
+            else:
+                # H-box / non-ZX-like boundary — simple parallel just reduces
+                if (
+                    vertex_is_z_like(t1) and t2 == VertexType.H_BOX
+                ) or (
+                    vertex_is_z_like(t2) and t1 == VertexType.H_BOX
+                ):
+                    if edgetype == EdgeType.SIMPLE:
+                        return self.edge(src, dst)  # single simple edge kept
+                raise ValueError(
+                    f"Attempted to add unreducible parallel edge {edge_pair}, "
+                    f"types: {t1}, {t2}"
+                )
+
         return self.edge(src, dst)
 
     def remove_vertices(self, vertices):
