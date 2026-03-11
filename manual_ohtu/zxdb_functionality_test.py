@@ -11,28 +11,6 @@ c = zx.generate.CNOT_HAD_PHASE_circuit(2, 20, seed=50)
 g = c.to_graph(backend='memgraph')
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
-def graph_full_reduce():
-    zxdb.spider_fusion()
-    print('hadamard_cancel')
-    zxdb.hadamard_cancel()
-    print('remove_identities')
-    zxdb.remove_identities()
-    print('pivot_rule')
-    zxdb.pivot_rule()
-    print('local_complementation_rule')
-    zxdb.local_complementation_rule()
-    print('phase_gadget_fusion_rule')
-    zxdb.phase_gadget_fusion_rule()
-    print('pivot_gadget_rule')
-    zxdb.pivot_gadget_rule()
-    print('pivot_boundary_rule')
-    zxdb.pivot_boundary_rule()
-    print('bialgebra_simp')
-    zxdb.bialgebra_simp()
-    print('get_degree_distribution')
-    zxdb.get_degree_distribution()
-    print('turn_hadamard_gates_into_edges')
-    zxdb.turn_hadamard_gates_into_edges()
 
 
 def heal_graph_ids(g):
@@ -73,16 +51,13 @@ def heal_graph_ids(g):
         session.run("MATCH (n:Node {graph_id: $graph_id}) WHERE n.r IS NULL SET n.r = 0", graph_id=g.graph_id)
         print("HEALED: Filled in missing layout coordinates.")
 
-# zxdb.to_gh()
-# for x in range(50):
-#     graph_full_reduce()
-
 #heal_graph_ids(g)
 
 zxdb.full_reduce()
 
 # 2. Now PyZX can safely read it
 g.normalize()
+zx.to_graph_like(g)
 
 # 3. Copy the graph to local memory (Simple backend) so the tensor calculation
 # doesn't have to send 10,000 queries to Memgraph, which takes forever.

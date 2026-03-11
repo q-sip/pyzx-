@@ -482,8 +482,10 @@ class ZXdb:
 
             # Remove identities
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
-            result = tx.run(query_remove_identities, graph_id=self.graph_id)
+            result = tx.run(query_remove_identities)
+            print(f'result = {result}')
             record = result.single()
+            print(f'record = {record['removed_identities']}')
             #print(record)
             #deleted = record["marked"]
             #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
@@ -491,7 +493,7 @@ class ZXdb:
             # Turn Hadamard gates into edges
             #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
             #tx.run(query_gates_to_edges, graph_id=graph_id)
-            return record
+            return record['removed_identities']
         
         #with self.driver.session() as analyze_session:
         #    analyze_session.run("ANALYZE GRAPH;")
@@ -500,6 +502,8 @@ class ZXdb:
             #deleted = 1
             #while deleted:
             deleted = session.execute_write(process_identity_removal)
+
+            return deleted
             #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
 
             # Hadamard cancellation can be done outside the transaction for better performance
@@ -869,21 +873,17 @@ class ZXdb:
                 def _remove_operations(tx):
                     # Remove completely isolated vertices (degree 0)
                     tx.run("""
-                        MATCH (n:Node {graph_id: $graph_id})
-                        WHERE size((n)--()) = 0
-                        DELETE n
-                    """, graph_id=self.graph_id)
+                        // 1. Find and delete isolated pairs (two nodes only connected to each other)
+                        MATCH (n)-[r]-(m)
+                        WHERE degree(n) = 1 AND degree(m) = 1
+                        DETACH DELETE n, m
+                        WITH count(n) AS deleted_pairs
 
-                # Remove isolated pairs (two nodes connected only to each other)
-                # Find nodes with degree 1, check if their neighbor also has degree 1
-                    tx.run("""
-                        MATCH (n:Node {graph_id: $graph_id})
-                        WHERE size((n)--()) = 1
-                        WITH n
-                        MATCH (n)-[r:Wire]-(m:Node {graph_id: $graph_id})
-                        WHERE id(n) < id(m) AND size((m)--()) = 1
-                        DELETE n, m, r
-                    """, graph_id=self.graph_id)
+                        // 2. Find and delete completely isolated single vertices
+                        MATCH (v)
+                        WHERE degree(v) = 0
+                        DELETE v;
+                        """)
 
                 session.execute_write(_remove_operations)
 
@@ -975,11 +975,16 @@ class ZXdb:
     def interior_clifford_simp(self):
         self.spider_fusion()
         self.to_gh()
+        i = 0
         while True:
             i1 = self.remove_identities()
             i2 = self.spider_fusion()
             i3 = self.pivot_rule()
             i4 = self.local_complementation_rule()
+            # print(f'i1 = {i1}')
+            # print(f'i2 = {i2}')
+            # print(f'i3 = {i3}')
+            # print(f'i4 = {i4}')
             if not (i1 or i2 or i3 or i4): break
             i += 1
         return i != 0
