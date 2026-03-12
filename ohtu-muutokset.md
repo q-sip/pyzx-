@@ -1165,3 +1165,63 @@ g.close()
 ```
 
 See source [/pyzx/graph/graph_neo4j.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_neo4j.py)
+
+# GraphAGE
+
+GraphAGE is a class that implements graph database functionality to pyzx, using ApacheAGE as the backend.
+
+It is initialized like this:
+
+## Initialization
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env.pyzx")
+gid = f"example_{uuid.uuid4().hex}"
+
+g = GraphAGE()
+```
+
+## GraphAGE.add_vertices(amount: int) -> List[VT]
+
+Adds `amount` number new vertices to the graph in Neo4j and returns a list of containing the created vertex IDs.
+
+Vertices are created as `(:Node {graph_id, id, t, phase, qubit, row})` with the following defaults:
+
+- t: `VertexType.BOUNDARY`
+- phase: `"0"`
+- qubit: `-1`
+- row: `-1`
+
+Vertex ids are allocated consecutively starting from the current internal vertex index (`self._vindex`). After insertio>
+
+### Parameters
+
+- amount: `int`
+  Number of vertices to create. Must be `>= 0`.
+  - If `amount == 0`, the method returns an empty list and performs no database writes.
+  - If `amount < 0`, the method raises `ValueError`.
+### Returns
+
+- `List[VT]`
+  A list of the new vertex ids, e.g. `[0, 1, 2]`.
+
+### Example
+
+```python
+from pyzx.graph.graph_age import GraphAGE
+from dotenv import load_dotenv
+import os, uuid
+
+load_dotenv(".env")
+
+g = GraphAGE()
+
+vs = g.add_vertices(3)
+
+print(vs)  # e.g. [0, 1, 2]
+
+```
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
