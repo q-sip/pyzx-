@@ -58,6 +58,8 @@ print(vs)  # e.g. [0, 1, 2]
 ```
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
 
+---
+
 ## GraphAGE.remove_vertices(vertices) -> None
 
 Removes multiple vertices from the graph in a single database operation.
@@ -383,5 +385,197 @@ g.close()
 - Only non-negative rows are considered (`row >= 0`).
 - Vertices with `row` missing, null, or negative are ignored by this query.
 - `depth()` reflects the current database state each time it is called.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.remove_isolated_vertices() -> None
+
+Deletes isolated vertices and isolated vertex pairs, while updating the ZX scalar correctly.
+
+This is a semantic simplification step: it removes components that are disconnected (or effectively disconnected) from the rest of the diagram and folds their contribution into `self.scalar`.
+
+### Behaviour
+
+The method iterates over vertices and applies two main rules:
+
+#### 1. Isolated single vertices (`degree == 0`)
+
+- If the vertex is `BOUNDARY`, it raises `TypeError` (diagram is ill-typed).
+- If the vertex is `H_BOX`, it is removed and its phase is added via `self.scalar.add_phase(...)`.
+- Otherwise (ZX-like node), it is removed and added via `self.scalar.add_node(...)`.
+
+#### 2. Isolated pairs (`degree == 1` on both ends)
+
+For a vertex `v` with degree 1, let `w` be its only neighbor:
+
+- Skip if `v` is already marked for removal.
+- Skip if `v` or `w` is a boundary vertex.
+- Skip if `w` has degree greater than 1 (not an isolated pair).
+
+If valid, both vertices are removed, and scalar update depends on:
+
+- edge type (`SIMPLE` vs `HADAMARD`)
+- effective spider types
+
+`H_BOX` is treated as `Z` for this local pair rule before deciding scalar updates.
+
+After collecting all removable vertices, it performs one bulk `remove_vertices(rem)` call.
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Raises
+
+- `TypeError`  
+  If an isolated boundary vertex is found.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType, EdgeType
+from fractions import Fraction
+
+g = GraphAGE(graph_id="example_remove_isolated")
+
+# Create an isolated Z vertex
+v_iso = g.add_vertex(ty=VertexType.Z, phase=Fraction(1, 4))
+
+# Create an isolated pair
+v1 = g.add_vertex(ty=VertexType.Z, phase=Fraction(1, 4))
+v2 = g.add_vertex(ty=VertexType.Z, phase=Fraction(1, 4))
+g.add_edge((v1, v2), EdgeType.SIMPLE)
+
+before = g.num_vertices()
+g.remove_isolated_vertices()
+after = g.num_vertices()
+
+print(before, after)  # after is smaller; scalar updated internally
+
+g.close()
+```
+
+### Notes
+
+- This method updates `self.scalar` as part of simplification semantics.
+- It is not a plain structural delete; scalar math is part of the operation.
+- For isolated pairs, the scalar contribution depends on both edge type and spider types.
+- Removal happens in bulk at the end, not immediately per vertex.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.vertices() -> Iterable[VT]
+
+Returns all vertex IDs currently in the graph.
+
+Internally, this method queries AGE for all node ids and converts each returned AGType value into a Python integer.
+
+### Behaviour
+
+- Runs a Cypher query matching all `Node` vertices with a non-null `id`
+- Fetches all rows through the backend read helper (`_fetchall`)
+- Converts each returned AGType value to `int`
+- Returns a Python list of vertex ids (typed as `Iterable[VT]`)
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Iterable[VT]`  
+  The vertex IDs currently in the graph.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_vertices")
+
+g.add_vertices(4)  # [0, 1, 2, 3]
+
+verts = g.vertices()
+print(verts)            # e.g. [0, 1, 2, 3]
+print(list(verts))      # can be iterated like any iterable
+
+g.remove_vertices([1])
+print(g.vertices())     # e.g. [0, 2, 3]
+
+g.close()
+```
+
+### Notes
+
+- In this backend implementation, the method currently returns a concrete Python list.
+- Ordering is determined by query results and should not be relied on as a strict sorted guarantee unless explicitly sorted by caller.
+- Useful as a snapshot of current vertex ids before bulk graph transformations.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edges(s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]
+
+Returns edges from the graph, either globally or only between a specific vertex pair.
+
+### Behaviour
+
+- If both `s` and `t` are provided:
+  - Returns edges that connect exactly those two vertices
+  - Uses an undirected match in Cypher (`-[r:Wire]-`)
+- If `s` and `t` are not both provided:
+  - Returns all edges in the graph
+  - Applies `WHERE n1.id <= n2.id` to avoid duplicate reversed pairs
+- Converts AGType endpoint values to Python `int`
+- Returns edge tuples as `(source, target)` pairs
+
+### Parameters
+
+- `s`: `Optional[VT]`  
+  First vertex for pair-specific edge query.
+- `t`: `Optional[VT]`  
+  Second vertex for pair-specific edge query.
+
+### Returns
+
+- `Iterable[ET]`  
+  Iterable of edge tuples.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_edges")
+
+v0, v1, v2 = g.add_vertices(3)
+g.add_edge((v0, v1))
+g.add_edge((v1, v2))
+
+# All edges
+print(g.edges())
+
+# Only edges between two specific vertices
+print(g.edges(v0, v1))
+print(g.edges(v0, v2))  # usually []
+
+g.close()
+```
+
+### Notes
+
+- In this backend, the result is currently a concrete Python list.
+- For all-edge queries, duplicate reverse edge tuples are filtered with `n1.id <= n2.id`.
+- For pair-specific queries, orientation in storage does not matter because matching is undirected.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
