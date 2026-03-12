@@ -151,6 +151,8 @@ class GraphDiff(Generic[VT, ET]):
         for e in self.changed_edge_types:
             g.set_edge_type(e,self.changed_edge_types[e])
 
+        for name in self.var_registry.vars():
+            g.var_registry.set_type(name, self.var_registry.get_type(name))
         g.rebind_variables_to_registry()
         return g
 

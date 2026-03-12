@@ -381,7 +381,9 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
     ) -> VT:
         """Add a single vertex to the graph and return its index.
         The optional parameters allow you to respectively set
-        the type, qubit index, row index and phase of the vertex."""
+        the type, qubit index, row index and phase of the vertex.
+        For H-boxes and Z-boxes with complex labels, use set_h_box_label
+        or set_z_box_label after creating the vertex."""
         if index is not None:
             self.add_vertex_indexed(index)
             v = index
@@ -556,6 +558,12 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
             vtab[v] = i
             for k in self.vdata_keys(v):
                 g.set_vdata(i, k, self.vdata(v, k))
+            if adjoint and ty[v] == VertexType.Z_BOX:
+                label = get_z_box_label(self, v)
+                set_z_box_label(g, i, label.conjugate())
+            if adjoint and ty[v] == VertexType.H_BOX and hbox_has_complex_label(self, v):
+                label = get_h_box_label(self, v)
+                set_h_box_label(g, i, label.conjugate())
         for v in self.grounds():
             g.set_ground(vtab[v], True)
 
@@ -667,6 +675,9 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
         for no, ni, et in plugs:
             self.add_edge((no, vtab[ni]), edgetype=et)
         self.set_outputs(tuple(vtab[v] for v in other.outputs()))
+        for name in other.var_registry.vars():
+            self.var_registry.set_type(name, other.var_registry.get_type(name))
+        self.rebind_variables_to_registry()
 
     def tensor(self, other: BaseGraph[VT, ET]) -> BaseGraph[VT, ET]:
         """Take the tensor product of two graphs. Places the second graph below the first one.
@@ -687,6 +698,10 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
             s, t = other.edge_st(e)
             new_e = g.add_edge((vertex_map[s], vertex_map[t]), other.edge_type(e))
             g.set_edata_dict(new_e, other.edata_dict(e))
+
+        for name in other.var_registry.vars():
+            g.var_registry.set_type(name, other.var_registry.get_type(name))
+        g.rebind_variables_to_registry()
 
         inputs = g.inputs() + tuple(vertex_map[v] for v in other.inputs())
         outputs = g.outputs() + tuple(vertex_map[v] for v in other.outputs())
@@ -775,6 +790,10 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
             s, t = self.edge_st(e)
             new_e = g.add_edge((vert_map[s], vert_map[t]), self.edge_type(e))
             g.set_edata_dict(new_e, self.edata_dict(e))
+
+        for name in self.var_registry.vars():
+            g.var_registry.set_type(name, self.var_registry.get_type(name))
+        g.rebind_variables_to_registry()
 
         return g
 
