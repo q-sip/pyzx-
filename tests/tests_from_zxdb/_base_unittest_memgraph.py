@@ -13,7 +13,7 @@ def _env_present() -> bool:
 
 class MemgraphUnitTestCase(unittest.TestCase):
     """
-    Base class for end-to-end tests: requires reachable Neo4j.
+    Base class for end-to-end tests: requires reachable Memgraph.
     Creates a unique graph_id per test and cleans up nodes for that graph_id.
     """
 

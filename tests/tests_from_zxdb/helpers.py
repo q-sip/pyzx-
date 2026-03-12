@@ -69,7 +69,7 @@ def run_rule_on_backends(
     pyzx_rule: Callable[[Any], Any],
     db_query: str,
     pyzx_name: str = "pyzx_rule",
-    db_name: str = "neo4j_rule",
+    db_name: str = "memgraph_rule",
     db_params: Optional[Dict[str, Any]] = None,
     print_results: bool = True,
 ) -> RuleRunResult:
@@ -153,7 +153,7 @@ def validate_rule_results(
         report["db_boundary_ok"] = db_boundary_ok
 
         assert pyzx_boundary_ok, "PyZX rewrite changed boundary counts"
-        assert db_boundary_ok, "Neo4j rewrite changed boundary counts"
+        assert db_boundary_ok, "Benchmark rewrite changed boundary counts"
 
     pyzx_vs_original = _tensor_equal(
         original_graph,
@@ -170,7 +170,7 @@ def validate_rule_results(
     report["db_vs_original"] = db_vs_original
 
     assert pyzx_vs_original, "PyZX result is not semantically equal to the original graph"
-    assert db_vs_original, "Neo4j result is not semantically equal to the original graph"
+    assert db_vs_original, "Benchmark result is not semantically equal to the original graph"
 
     if check_backend_agreement:
         db_vs_pyzx = _tensor_equal(
@@ -179,7 +179,7 @@ def validate_rule_results(
             preserve_scalar=preserve_scalar,
         )
         report["db_vs_pyzx"] = db_vs_pyzx
-        assert db_vs_pyzx, "Neo4j result is not semantically equal to the PyZX result"
+        assert db_vs_pyzx, "Benchmark result is not semantically equal to the PyZX result"
 
     if print_results:
         print("\nValidation")
@@ -317,7 +317,7 @@ def run_db_rule_only(
     original_graph: Any,
     db_graph: Any,
     db_query: str,
-    db_name: str = "neo4j_rule",
+    db_name: str = "Benchmark_rule",
     db_params: Optional[Dict[str, Any]] = None,
     print_results: bool = True,
 ) -> RuleRunResult:
@@ -409,7 +409,7 @@ def validate_db_only_rule(
             and len(db_graph_after.outputs()) == orig_out
         )
         report["db_boundary_ok"] = db_boundary_ok
-        assert db_boundary_ok, "Neo4j rewrite changed boundary counts"
+        assert db_boundary_ok, "Benchmark rewrite changed boundary counts"
 
     # 3) Semantic equivalence
     db_vs_original = _tensor_equal(
@@ -418,7 +418,7 @@ def validate_db_only_rule(
         preserve_scalar=preserve_scalar,
     )
     report["db_vs_original"] = db_vs_original
-    assert db_vs_original, "Neo4j result is not semantically equal to the original graph"
+    assert db_vs_original, "Benchmark result is not semantically equal to the original graph"
 
     if print_results:
         print("\nDB-only Validation")
@@ -543,9 +543,6 @@ def _phase_to_float_pi_units(p: Any) -> Optional[float]:
 
 
 def load_simple_graph(src_graph, dst_graph):
-    """
-    Copy a PyZX in-memory graph (simple OR multigraph backend) into an existing GraphNeo4j.
-    """
     # Start clean for this graph_id
     with dst_graph._get_session() as session:
         session.run(
