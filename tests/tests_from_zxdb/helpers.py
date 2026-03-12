@@ -484,6 +484,7 @@ def _count_processed_records(return_value: Any) -> int:
         "fusions_performed",
         "pivot_operations_performed",
         "interior_pauli_removed",
+        "merged",
         "marked",
         "c",
     )
@@ -788,3 +789,35 @@ def load_simple_graph(src_graph, dst_graph):
         dst_graph.add_edge((vmap[s], vmap[t]), edgetype=ety)
 
     return dst_graph
+
+def make_z_spider_fusion_fixture():
+    g = zx.Graph(backend="simple")
+
+    i = g.add_vertex(zx.VertexType.BOUNDARY, 0, 0)
+    a = g.add_vertex(zx.VertexType.Z, 0, 1, phase=Fraction(1, 4))
+    b = g.add_vertex(zx.VertexType.Z, 0, 2, phase=Fraction(1, 2))
+    o = g.add_vertex(zx.VertexType.BOUNDARY, 0, 3)
+
+    g.add_edge((i, a), edgetype=zx.EdgeType.SIMPLE)
+    g.add_edge((a, b), edgetype=zx.EdgeType.SIMPLE)
+    g.add_edge((b, o), edgetype=zx.EdgeType.SIMPLE)
+
+    g.set_inputs((i,))
+    g.set_outputs((o,))
+    return g
+
+def make_x_spider_fusion_fixture():
+    g = zx.Graph(backend="simple")
+
+    i = g.add_vertex(zx.VertexType.BOUNDARY, 0, 0)
+    a = g.add_vertex(zx.VertexType.X, 0, 1, phase=Fraction(1, 4))
+    b = g.add_vertex(zx.VertexType.X, 0, 2, phase=Fraction(1, 2))
+    o = g.add_vertex(zx.VertexType.BOUNDARY, 0, 3)
+
+    g.add_edge((i, a), edgetype=zx.EdgeType.SIMPLE)
+    g.add_edge((a, b), edgetype=zx.EdgeType.SIMPLE)
+    g.add_edge((b, o), edgetype=zx.EdgeType.SIMPLE)
+
+    g.set_inputs((i,))
+    g.set_outputs((o,))
+    return g
