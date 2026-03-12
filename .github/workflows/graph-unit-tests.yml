@@ -1,0 +1,39 @@
+name: Fork unit tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          python -m unittest discover -s tests/test_graph_neo4j -t . -v
+          python -m unittest discover -s tests/test_simple_backend -t . -v
+          python -m unittest discover -s tests/tests_from_zxdb -t . -v
+
+      - name: Run AGE tests with Docker Compose
+        if: always() # Run this step even if previous steps fail
+        # This might not be the best way to test but idk whats better :/
+        run: |
+          cat > .env << EOF
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_DB=age_db
+          DB_HOST=age
+          DB_PORT=5432
+          DATABASE_URL=postgresql://postgres:postgres@age:5432/age_db
+          EOF
+          docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
