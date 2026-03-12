@@ -68,7 +68,7 @@ class TestPhaseGadgetFusionHadamard(MemgraphUnitTestCase):
             db_query=ZXQueryStore()._gadget_fusion_hadamard(),
             pyzx_name="pyzx_gadget_simp",
             db_name="memgraph_gadget_fusion_hadamard",
-            print_results=True,
+            print_results=False,
         )
 
         db_fusions = _sum_fusions(run.db.return_value)
@@ -83,7 +83,7 @@ class TestPhaseGadgetFusionHadamard(MemgraphUnitTestCase):
             max_tensor_qubits=9,
             check_backend_agreement=True,
             check_boundary_counts=True,
-            print_results=True,
+            print_results=False,
         )
 
         self.assertTrue(report["pyzx_vs_original"])

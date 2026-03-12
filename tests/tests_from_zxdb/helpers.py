@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Dict
-import time
+from typing import Any, Callable, Optional, Dict, Sequence, Union
 import pyzx as zx
 from pyzx.utils import VertexType, EdgeType
 import re
 from fractions import Fraction
+from collections import Counter
 
 @dataclass
 class BackendRunResult:
@@ -18,88 +18,160 @@ class RuleRunResult:
     pyzx: BackendRunResult
     db: BackendRunResult
 
+def _graph_signature(graph: Any) -> dict:
+    vertices = list(graph.vertices())
+    edges = list(graph.edges())
 
+    vertex_type_counts = Counter(int(_as_vertex_type(graph.type(v))) for v in vertices)
+    edge_type_counts = Counter(int(_as_edge_type(graph.edge_type(e))) for e in edges)
 
-def _run_pyzx_rule(
-    graph: Any,
-    rule_fn: Callable[[Any], Any],
-    name: str,
-    print_results: bool = True,
-) -> BackendRunResult:
-    return_value = rule_fn(graph)
+    phase_multiset = Counter()
+    degree_multiset = Counter()
+    boundary_degree_multiset = Counter()
 
-    if print_results:
-        print(f"\n{name}")
-        print(f"  return: {return_value}")
+    for v in vertices:
+        vt = _as_vertex_type(graph.type(v))
+        deg = graph.vertex_degree(v)
+        degree_multiset[deg] += 1
 
-    return BackendRunResult(return_value = return_value, graph_after = graph)
+        if vt == VertexType.BOUNDARY:
+            boundary_degree_multiset[deg] += 1
+        else:
+            p = _phase_to_float_pi_units(_safe_get(lambda: graph.phase(v), 0))
+            if p is None:
+                p = 0.0
+            phase_multiset[_phase_mod_2(p)] += 1
 
-def _run_memgraph_query(
-    graph: Any,
-    query: str,
-    name: str,
-    params: Optional[Dict[str, Any]] = None,
-    print_results: bool = True,
-) -> BackendRunResult:
-    """
-    Executes a Cypher rewrite query against the memgraph backend.
+    try:
+        n_inputs = len(list(graph.inputs()))
+    except Exception:
+        n_inputs = 0
+    try:
+        n_outputs = len(list(graph.outputs()))
+    except Exception:
+        n_outputs = 0
 
-    Assumes:
-    - graph._get_session() exists
-    - graph.graph_id exists if your query uses $graph_id
-    """
-    run_params = dict(params or {})
-    if "graph_id" not in run_params and hasattr(graph, "graph_id"):
-        run_params["graph_id"] = graph.graph_id
+    return {
+        "num_vertices": len(vertices),
+        "num_edges": len(edges),
+        "num_inputs": n_inputs,
+        "num_outputs": n_outputs,
+        "vertex_type_counts": dict(sorted(vertex_type_counts.items())),
+        "edge_type_counts": dict(sorted(edge_type_counts.items())),
+        "degree_multiset": dict(sorted(degree_multiset.items())),
+        "boundary_degree_multiset": dict(sorted(boundary_degree_multiset.items())),
+        "phase_multiset": dict(sorted(phase_multiset.items())),
+    }
 
-    with graph._get_session() as session:
-        cursor = session.run(query, run_params)
-        return_value = list(cursor)
-
-    if print_results:
-        print(f"\n{name}")
-        print(f"  return: {return_value}")
-
-    return BackendRunResult(return_value = return_value, graph_after = graph)
-
-def run_rule_on_backends(
+def validate_structural_rule_results(
     *,
     original_graph: Any,
-    db_graph: Any,
-    pyzx_rule: Callable[[Any], Any],
-    db_query: str,
-    pyzx_name: str = "pyzx_rule",
-    db_name: str = "memgraph_rule",
-    db_params: Optional[Dict[str, Any]] = None,
+    pyzx_graph_after: Any,
+    db_graph_after: Any,
+    check_boundary_counts: bool = True,
+    require_changed: bool = True,
     print_results: bool = True,
-) -> RuleRunResult:
+) -> dict:
+    """
+    Validation for fixtures that are not tensor-valid in PyZX, but where we still
+    want a deterministic unit test comparing PyZX and DB rewrites structurally.
+    """
+    report: Dict[str, Any] = {}
 
-    original_copy = original_graph.copy()
-    pyzx_graph = original_graph.copy()
+    original_sig = _graph_signature(original_graph)
+    pyzx_sig = _graph_signature(pyzx_graph_after)
+    db_sig = _graph_signature(db_graph_after)
 
-    pyzx_result = _run_pyzx_rule(
-        graph=pyzx_graph,
-        rule_fn=pyzx_rule,
-        name=pyzx_name,
-        print_results=print_results,
+    if check_boundary_counts:
+        pyzx_boundary_ok = (
+            original_sig["num_inputs"] == pyzx_sig["num_inputs"]
+            and original_sig["num_outputs"] == pyzx_sig["num_outputs"]
+        )
+        db_boundary_ok = (
+            original_sig["num_inputs"] == db_sig["num_inputs"]
+            and original_sig["num_outputs"] == db_sig["num_outputs"]
+        )
+        report["pyzx_boundary_ok"] = pyzx_boundary_ok
+        report["db_boundary_ok"] = db_boundary_ok
+
+        assert pyzx_boundary_ok, "PyZX rewrite changed boundary counts"
+        assert db_boundary_ok, "Benchmark rewrite changed boundary counts"
+
+    backend_agreement = pyzx_sig == db_sig
+    report["db_vs_pyzx_structural"] = backend_agreement
+    assert backend_agreement, (
+        "Benchmark result does not match PyZX structurally.\n"
+        f"PyZX: {pyzx_sig}\n"
+        f"DB:   {db_sig}"
     )
 
-    db_result = _run_memgraph_query(
-        graph=db_graph,
-        query=db_query,
-        name=db_name,
-        params=db_params,
-        print_results=print_results,
-    )
+    if require_changed:
+        pyzx_changed = pyzx_sig != original_sig
+        db_changed = db_sig != original_sig
+        report["pyzx_changed"] = pyzx_changed
+        report["db_changed"] = db_changed
 
-    return RuleRunResult(
-        original_graph=original_copy,
-        pyzx=pyzx_result,
-        db=db_result,
-    )
+        assert pyzx_changed, "PyZX rewrite did not change the graph"
+        assert db_changed, "Benchmark rewrite did not change the graph"
+
+    if print_results:
+        print("\nStructural Validation")
+        for k, v in report.items():
+            print(f"  {k}: {v}")
+
+    return report
+
+
+def _boundary_vertices(graph: Any) -> list:
+    out = []
+    for v in graph.vertices():
+        try:
+            if _as_vertex_type(graph.type(v)) == VertexType.BOUNDARY:
+                out.append(v)
+        except Exception:
+            pass
+    return out
+
+
+def _prepare_graph_for_validation(graph: Any) -> Any:
+    """
+    Make a safe copy for boundary-count checks and tensor comparison.
+
+    Key fix:
+    - If the graph contains BOUNDARY vertices but its inputs/outputs are missing
+      or incomplete, run auto_detect_io() on the copy.
+    """
+    g = graph.copy()
+
+    boundaries = _boundary_vertices(g)
+    if boundaries:
+        try:
+            inputs = list(g.inputs())
+        except Exception:
+            inputs = []
+        try:
+            outputs = list(g.outputs())
+        except Exception:
+            outputs = []
+
+        io_set = set(inputs) | set(outputs)
+
+        # If some boundary vertices are not classified as inputs/outputs,
+        # tensor conversion will fail. Repair that on the validation copy.
+        if len(io_set) != len(boundaries) or any(v not in io_set for v in boundaries):
+            try:
+                g.auto_detect_io()
+            except Exception as e:
+                raise ValueError(
+                    "Graph contains boundary vertices but inputs/outputs are not "
+                    f"properly set, and auto_detect_io() failed: {e}"
+                ) from e
+
+    return g
+
 
 def _normalized_copy(graph: Any) -> Any:
-    g = graph.copy()
+    g = _prepare_graph_for_validation(graph)
     try:
         g.normalize()
     except Exception:
@@ -136,17 +208,23 @@ def validate_rule_results(
 
     report = {}
 
+    # Use prepared copies here too, so boundary-count checks are based on a
+    # tensor-valid interpretation of the graph.
+    original_prepared = _prepare_graph_for_validation(original_graph)
+    pyzx_prepared = _prepare_graph_for_validation(pyzx_graph_after)
+    db_prepared = _prepare_graph_for_validation(db_graph_after)
+
     if check_boundary_counts:
-        orig_in = len(original_graph.inputs())
-        orig_out = len(original_graph.outputs())
+        orig_in = len(original_prepared.inputs())
+        orig_out = len(original_prepared.outputs())
 
         pyzx_boundary_ok = (
-            len(pyzx_graph_after.inputs()) == orig_in
-            and len(pyzx_graph_after.outputs()) == orig_out
+            len(pyzx_prepared.inputs()) == orig_in
+            and len(pyzx_prepared.outputs()) == orig_out
         )
         db_boundary_ok = (
-            len(db_graph_after.inputs()) == orig_in
-            and len(db_graph_after.outputs()) == orig_out
+            len(db_prepared.inputs()) == orig_in
+            and len(db_prepared.outputs()) == orig_out
         )
 
         report["pyzx_boundary_ok"] = pyzx_boundary_ok
@@ -187,6 +265,89 @@ def validate_rule_results(
             print(f"  {k}: {v}")
 
     return report
+
+
+
+def _run_pyzx_rule(
+    graph: Any,
+    rule_fn: Callable[[Any], Any],
+    name: str,
+    print_results: bool = True,
+) -> BackendRunResult:
+    return_value = rule_fn(graph)
+
+    if print_results:
+        print(f"\n{name}")
+        print(f"  return: {return_value}")
+
+    return BackendRunResult(return_value=return_value, graph_after=graph)
+
+def _run_memgraph_query(
+    graph: Any,
+    query: Union[str, Sequence[str]],
+    name: str,
+    params: Optional[Dict[str, Any]] = None,
+    print_results: bool = True,
+) -> BackendRunResult:
+    """
+    Executes one or more Cypher rewrite queries against the Memgraph backend.
+
+    If `query` is a list/tuple of queries, they are executed sequentially in the
+    same session against the same graph, mirroring multi-step upstream rewrites.
+    """
+    run_params = dict(params or {})
+    if "graph_id" not in run_params and hasattr(graph, "graph_id"):
+        run_params["graph_id"] = graph.graph_id
+
+    queries = [query] if isinstance(query, str) else list(query)
+    return_value = []
+
+    with graph._get_session() as session:
+        for q in queries:
+            cursor = session.run(q, run_params)
+            return_value.extend(list(cursor))
+
+    if print_results:
+        print(f"\n{name}")
+        print(f"  return: {return_value}")
+
+    return BackendRunResult(return_value=return_value, graph_after=graph)
+
+def run_rule_on_backends(
+    *,
+    original_graph: Any,
+    db_graph: Any,
+    pyzx_rule: Callable[[Any], Any],
+    db_query: Union[str, Sequence[str]],
+    pyzx_name: str = "pyzx_rule",
+    db_name: str = "memgraph_rule",
+    db_params: Optional[Dict[str, Any]] = None,
+    print_results: bool = True,
+) -> RuleRunResult:
+
+    original_copy = original_graph.copy()
+    pyzx_graph = original_graph.copy()
+
+    pyzx_result = _run_pyzx_rule(
+        graph=pyzx_graph,
+        rule_fn=pyzx_rule,
+        name=pyzx_name,
+        print_results=print_results,
+    )
+
+    db_result = _run_memgraph_query(
+        graph=db_graph,
+        query=db_query,
+        name=db_name,
+        params=db_params,
+        print_results=print_results,
+    )
+
+    return RuleRunResult(
+        original_graph=original_copy,
+        pyzx=pyzx_result,
+        db=db_result,
+    )
 
 
 def make_bialgebra_fixture():
@@ -312,6 +473,37 @@ def _noop_rule(graph: Any) -> Any:
     return None
 
 
+def _count_processed_records(return_value: Any) -> int:
+    total = 0
+    if not isinstance(return_value, list):
+        return total
+
+    count_keys = (
+        "patterns_processed",
+        "rewrites_applied",
+        "fusions_performed",
+        "pivot_operations_performed",
+        "interior_pauli_removed",
+        "marked",
+        "c",
+    )
+
+    for rec in return_value:
+        try:
+            keys = set(rec.keys())
+        except Exception:
+            continue
+
+        for key in count_keys:
+            if key in keys:
+                try:
+                    total += int(rec[key])
+                except Exception:
+                    pass
+                break
+
+    return total
+
 def run_db_rule_only(
     *,
     original_graph: Any,
@@ -392,10 +584,22 @@ def validate_db_only_rule(
         # - list(cursor) => [] when nothing matched
         # - list(cursor) => [Record(...)] when something returned
         # - might also be None on cursor-consumption errors
-        if isinstance(rv, list):
-            fired = len(rv) > 0
+        if isinstance(rv, list) and len(rv) > 0:
+            rec = rv[0]
+            if "patterns_processed" in rec.keys():
+                fired = int(rec["patterns_processed"]) > 0
+            elif "rewrites_applied" in rec.keys():
+                fired = int(rec["rewrites_applied"]) > 0
+            elif "fusions_performed" in rec.keys():
+                fired = int(rec["fusions_performed"]) > 0
+            elif "pivot_operations_performed" in rec.keys():
+                fired = int(rec["pivot_operations_performed"]) > 0
+            elif "interior_pauli_removed" in rec.keys():
+                fired = int(rec["interior_pauli_removed"]) > 0
+            else:
+                fired = len(rv) > 0
         else:
-            fired = (rv is not None)
+            fired = rv is not None
 
         report["db_fired"] = fired
         assert fired, "DB rewrite did not fire"
@@ -428,7 +632,7 @@ def validate_db_only_rule(
     return report
 
 def make_lcomp_fixture():
-    """
+    r"""
     Minimal local-complementation fixture (1 qubit):
       input --(S)-- n1 --(S)-- output
                     \
@@ -436,7 +640,6 @@ def make_lcomp_fixture():
                       \
                       center(Z, phase=0.5) --(H)-- n2
                                          \--(H)-- n3
-
     The lcomp rewrite should:
       - toggle edges among neighbors {n1,n2,n3} (create H edges since none exist)
       - add -center.phase to each neighbor phase
@@ -494,6 +697,12 @@ def _as_vertex_type(t: Any) -> VertexType:
         return t
     # VertexType is an IntEnum, so VertexType(1) -> VertexType.Z, etc.
     return VertexType(int(t))
+
+def _phase_mod_2(p: float) -> float:
+    x = float(p) % 2.0
+    if abs(x - 2.0) < 1e-12:
+        x = 0.0
+    return round(x, 12)
 
 
 def _as_edge_type(t: Any) -> EdgeType:

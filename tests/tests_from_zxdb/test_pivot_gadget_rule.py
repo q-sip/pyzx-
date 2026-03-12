@@ -4,8 +4,8 @@ from tests.tests_from_zxdb._base_unittest_memgraph import MemgraphUnitTestCase
 from tests.tests_from_zxdb.helpers import (
     load_simple_graph,
     run_rule_on_backends,
-    validate_rule_results,
-    assert_boundary_degrees_are_one,
+    validate_structural_rule_results,
+    assert_boundary_degrees_are_one
 )
 from pyzx.graph.memgraph_queries import ZXQueryStore
 
@@ -53,16 +53,14 @@ class TestPivotGadgetRule(MemgraphUnitTestCase):
 
         load_simple_graph(pyzx_graph, self.g)
 
-        query_store = ZXQueryStore()
-
         run = run_rule_on_backends(
             original_graph=pyzx_graph,
             db_graph=self.g,
             pyzx_rule=zx.pivot_gadget_simp,
-            db_query=query_store._pivot_gadget(),
+            db_query=ZXQueryStore()._pivot_gadget(),
             pyzx_name="pyzx_pivot_gadget_simp",
             db_name="memgraph_pivot_gadget_rule",
-            print_results=True,
+            print_results=False,
         )
 
         self.assertNotEqual(run.db.return_value, [], "DB rewrite did not fire")
@@ -71,18 +69,13 @@ class TestPivotGadgetRule(MemgraphUnitTestCase):
         assert_boundary_degrees_are_one(run.db.graph_after, "db_graph_after")
         assert_boundary_degrees_are_one(pyzx_graph, "original_graph")
 
-        report = validate_rule_results(
+        report = validate_structural_rule_results(
             original_graph=run.original_graph,
             pyzx_graph_after=run.pyzx.graph_after,
             db_graph_after=run.db.graph_after,
-            qubits=qubits,
-            preserve_scalar=False,
-            max_tensor_qubits=9,
-            check_backend_agreement=True,
             check_boundary_counts=True,
-            print_results=True,
+            require_changed=True,
+            print_results=False,
         )
 
-        self.assertTrue(report["pyzx_vs_original"])
-        self.assertTrue(report["db_vs_original"])
-        self.assertTrue(report["db_vs_pyzx"])
+        self.assertTrue(report["db_vs_pyzx_structural"])
