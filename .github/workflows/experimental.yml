@@ -1,0 +1,71 @@
+name: custom-unittests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-memgraph:
+    runs-on: ubuntu-latest
+
+    services:
+      memgraph:
+        image: memgraph/memgraph-mage:latest
+        ports:
+          - 7445:7687
+
+      age:
+        image: apache/age:latest
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Memgraph
+        run: |
+          for i in {1..60}; do
+            if (echo > /dev/tcp/127.0.0.1/7445) >/dev/null 2>&1; then
+              echo "Memgraph is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Wait for AGE
+        run: |
+          for i in {1..60}; do
+            if (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
+              echo "AGE is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Load repo .env for later steps
+        run: |
+          grep -v '^\s*#' .env | grep -v '^\s*$' >> "$GITHUB_ENV"
+
+      - name: Run tests
+        env:
+          MEMGRAPH_URI: bolt://localhost:7445
+          MEMGRAPH_AUTH: "1"
+          DB_USER: "customer"
+          DB_PASSWORD: "testkala"
+          BACKEND_NAME: "memgraph"
+          POSTGRES_PASSWORD: "postgres"
+
+        run: python -m unittest discover -s tests -t .
