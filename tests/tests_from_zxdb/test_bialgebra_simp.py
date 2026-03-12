@@ -20,15 +20,11 @@ class TestBialgebraFixture(MemgraphUnitTestCase):
         marked = mark_bialgebra_fixture_pattern(self.g)
         self.assertEqual(marked, 4, "Expected exactly 4 marked pattern nodes")
 
-        query_store = ZXQueryStore()
-
-        query = query_store._bialgebra_simplification()
-
         run = run_rule_on_backends(
             original_graph=pyzx_graph,
             db_graph=self.g,
             pyzx_rule=zx.bialg_simp,
-            db_query=query,
+            db_query=ZXQueryStore()._bialgebra_simplification(),
             pyzx_name="pyzx_bialg_simp",
             db_name="memgraph_bialg_simp",
             print_results=False,
@@ -52,7 +48,7 @@ class TestBialgebraFixture(MemgraphUnitTestCase):
             max_tensor_qubits=9,
             check_backend_agreement=True,
             check_boundary_counts=True,
-            print_results=True,
+            print_results=False,
         )
 
         self.assertTrue(report["pyzx_vs_original"])
