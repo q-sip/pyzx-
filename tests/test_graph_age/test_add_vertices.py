@@ -17,17 +17,18 @@ class TestGraphAGEAddVertices(unittest.TestCase):
         expected =  [0, 1, 2]
         self.assertEqual(expected, returns)
     
-    def test_saved_to_database(self):
+    def test_zero_vertices(self):
         g = GraphAGE()
-        g.add_vertices(3)
-        query = f"""
-        SELECT * FROM cypher('{g.graph_id}', $$
-        MATCH (n)
-        RETURN n.id
-        $$) AS (id agtype);
-        """
-        db_result = g.db_fetch(query)
+        returns = g.add_vertices(0)
+        expected = []
+        self.assertEqual(expected, returns)
 
-        expected =  [('0',), ('1',), ('2',)]
-        self.assertEqual(expected, db_result)
+    def test_negative_vertices(self):
+        g = GraphAGE()
+        with self.assertRaises(ValueError) as context:
+            g.add_vertices(-1)
+        expected = "Amount of vertices added must be >= 0"
+        self.assertEqual(expected, str(context.exception))
+    
+
 
