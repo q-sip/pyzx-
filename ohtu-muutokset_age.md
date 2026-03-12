@@ -983,3 +983,116 @@ g.close()
 - Returns an empty list if the vertex has no incident edges.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edge_type(e: ET) -> EdgeType
+
+Returns the edge type of a given edge.
+
+This method looks up the `t` property on the matched `Wire` relationship and converts it to a PyZX `EdgeType`.
+
+### Behaviour
+
+- Matches a `Wire` relationship between the two endpoints in `e`
+- Reads `r.t` from AGE
+- If no matching edge is found, raises `KeyError`
+- If `r.t` is missing or null, defaults to `EdgeType.SIMPLE`
+- Otherwise converts the numeric value to `EdgeType`
+
+### Parameters
+
+- `e`: `ET`  
+  Edge tuple whose type should be returned.
+
+### Returns
+
+- `EdgeType`  
+  The edge type (typically `SIMPLE` or `HADAMARD`).
+
+### Raises
+
+- `KeyError`  
+  If the specified edge is not found.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import EdgeType
+
+g = GraphAGE(graph_id="example_edge_type")
+
+v0, v1 = g.add_vertices(2)
+g.add_edge((v0, v1), EdgeType.HADAMARD)
+
+print(g.edge_type((v0, v1)))  # EdgeType.HADAMARD
+
+try:
+    print(g.edge_type((v0, 99)))
+except KeyError as e:
+    print(e)
+
+g.close()
+```
+
+### Notes
+
+- Query matching is undirected, so endpoint order in `e` does not matter.
+- Missing edge-type property is treated as `SIMPLE`.
+- This method reads one edge at a time; bulk type inspection should use backend-specific batching patterns if needed.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_edge_type(e: ET, t: EdgeType) -> None
+
+Sets the type of a given edge.
+
+This method updates the `t` property of the matched `Wire` relationship in AGE.
+
+### Behaviour
+
+- Matches a `Wire` relationship between the two endpoints in `e`
+- Sets `r.t` to `t.value`
+- Executes the update directly in AGE
+- Does not return a value
+
+### Parameters
+
+- `e`: `ET`  
+  Edge tuple to update.
+- `t`: `EdgeType`  
+  New edge type to store (for example `EdgeType.SIMPLE` or `EdgeType.HADAMARD`).
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import EdgeType
+
+g = GraphAGE(graph_id="example_set_edge_type")
+
+v0, v1 = g.add_vertices(2)
+g.add_edge((v0, v1), EdgeType.SIMPLE)
+
+print(g.edge_type((v0, v1)))  # EdgeType.SIMPLE
+
+g.set_edge_type((v0, v1), EdgeType.HADAMARD)
+print(g.edge_type((v0, v1)))  # EdgeType.HADAMARD
+
+g.close()
+```
+
+### Notes
+
+- Endpoint order in `e` is not important because the relationship is matched undirected.
+- If no matching edge exists, AGE updates zero rows; this method does not raise by itself.
+- Type validation is expected from the `EdgeType` enum passed by caller code.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
