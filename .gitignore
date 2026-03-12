@@ -16,3 +16,17 @@ pyzx.egg-info
 pyzx/js/d3.v5.js
 *~
 .DS_store
+.env
+.env*
+app.log
+pyzx/graph/app.log
+pyzx/graph/temp_random_metadata.json
+pyzx/graph/temp_simple_graph_metadata.json
+pyzx/graph/zxdb/run.py
+test_output.txt
+zxdb
+
+mutants
+true
+.coverage
+htmlcov

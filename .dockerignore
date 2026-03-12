@@ -1,0 +1,20 @@
+*.md
+!readme.md
+*.png
+*.log
+Dockerfile*
+.dockerignore
+*.env*
+# .git
+*.tmp
+*~
+/demos
+/doc
+/images
+#/circuits
+/misc
+/scratchpads
+/internal
+/pynguin
+mutants
+htmlcov

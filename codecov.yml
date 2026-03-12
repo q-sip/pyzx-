@@ -1,0 +1,17 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+        target: 0%
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false  # Post a comment even if coverage didn't change
+
+ignore:
+  - "tests/**/*"
