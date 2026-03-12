@@ -1417,3 +1417,306 @@ g.close()
 - If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.qubit(vertex: VT) -> FloatInt
+
+Returns the qubit index associated with a given vertex.
+
+This is layout metadata used by PyZX: it indicates which circuit wire the vertex belongs to. If no qubit index is stored, the method returns `-1`.
+
+### Behaviour
+
+- Matches one node by `id`
+- Reads `n.qubit`
+- Returns `-1` if the node is missing
+- Returns `-1` if `n.qubit` is empty/null
+- Converts the stored value to `float`
+- Returns `int(val)` when the value is numerically integral; otherwise returns the float value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose qubit index should be returned.
+
+### Returns
+
+- `FloatInt`  
+  The qubit index as an `int` or `float`, or `-1` if no index has been set.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_qubit")
+
+v0, = g.add_vertices(1)
+
+print(g.qubit(v0))  # -1 by default
+
+g.set_qubit(v0, 3)
+print(g.qubit(v0))  # 3
+
+g.close()
+```
+
+### Notes
+
+- `-1` is the sentinel value for “no qubit assigned”.
+- The qubit index is a wire/location label, not a quantum state value.
+- The method preserves non-integer values if the backend stores fractional layout positions.
+- Missing vertex does not raise; it also returns `-1`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.qubits() -> Mapping[VT, FloatInt]
+
+Returns a mapping of all vertices to their qubit indices.
+
+Like `qubit(vertex)`, this returns layout metadata telling which circuit wire each vertex belongs to.
+
+### Behaviour
+
+- Matches all `Node` vertices
+- Reads `n.id` and `n.qubit`
+- Converts each id to integer vertex id
+- Stores `-1` for empty/null qubit values
+- Converts stored numeric values to `float`
+- Returns `int(val)` when a value is numerically integral; otherwise keeps the float value
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Mapping[VT, FloatInt]`  
+  Dictionary mapping each vertex id to its qubit index.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_qubits")
+
+v0, v1 = g.add_vertices(2)
+g.set_qubit(v0, 0)
+g.set_qubit(v1, 1)
+
+qmap = g.qubits()
+print(qmap[v0], qmap[v1])  # 0 1
+
+g.close()
+```
+
+### Notes
+
+- `-1` means that no qubit/wire assignment has been stored for that vertex.
+- The values describe layout or wire placement, not quantum state values.
+- Non-integer stored positions are preserved as floats.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_qubit(vertex: VT, q: FloatInt) -> None
+
+Sets the qubit index associated with a given vertex.
+
+This stores the wire/layout position metadata used by PyZX to indicate which circuit wire the vertex belongs to.
+
+### Behaviour
+
+- Matches one node by `id`
+- Sets `n.qubit` to the provided value `q`
+- Executes the update in AGE and returns no value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose qubit index should be updated.
+- `q`: `FloatInt`  
+  New qubit/wire index to store.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_set_qubit")
+
+v0, = g.add_vertices(1)
+g.set_qubit(v0, 2)
+
+print(g.qubit(v0))  # 2
+
+g.close()
+```
+
+### Notes
+
+- The stored value is layout metadata, not a quantum state value.
+- Integer and non-integer numeric positions are both accepted.
+- If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.row(vertex: VT) -> FloatInt
+
+Returns the row index associated with a given vertex.
+
+This is layout metadata used by PyZX to indicate where the vertex sits along the circuit from left to right. If no row index is stored, the method returns `-1`.
+
+### Behaviour
+
+- Matches one node by `id`
+- Reads `n.row`
+- Returns `-1` if the node is missing
+- Returns `-1` if `n.row` is empty/null
+- Converts the stored value to `float`
+- Returns `int(val)` when the value is numerically integral; otherwise returns the float value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose row index should be returned.
+
+### Returns
+
+- `FloatInt`  
+  The row index as an `int` or `float`, or `-1` if no index has been set.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_row")
+
+v0, = g.add_vertices(1)
+
+print(g.row(v0))  # -1 by default
+
+g.set_row(v0, 4)
+print(g.row(v0))  # 4
+
+g.close()
+```
+
+### Notes
+
+- `-1` is the sentinel value for “no row assigned”.
+- The row index is layout/order metadata, not a quantum state value.
+- Missing vertex does not raise; it also returns `-1`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.rows() -> Mapping[VT, FloatInt]
+
+Returns a mapping of all vertices to their row indices.
+
+Like `row(vertex)`, this returns layout/order metadata describing each vertex position along the circuit.
+
+### Behaviour
+
+- Matches all `Node` vertices
+- Reads `n.id` and `n.row`
+- Converts each id to integer vertex id
+- Stores `-1` for empty/null row values
+- Converts stored numeric values to `float`
+- Returns `int(val)` when a value is numerically integral; otherwise keeps the float value
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Mapping[VT, FloatInt]`  
+  Dictionary mapping each vertex id to its row index.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_rows")
+
+v0, v1 = g.add_vertices(2)
+g.set_row(v0, 0)
+g.set_row(v1, 3)
+
+rmap = g.rows()
+print(rmap[v0], rmap[v1])  # 0 3
+
+g.close()
+```
+
+### Notes
+
+- `-1` means no row position has been stored for that vertex.
+- Row values represent layout/order positions, not quantum state data.
+- Non-integer stored positions are preserved as floats.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_row(vertex: VT, r: FloatInt) -> None
+
+Sets the row index associated with a given vertex.
+
+This stores the layout/order position used by PyZX to place the vertex along the circuit.
+
+### Behaviour
+
+- Matches one node by `id`
+- Sets `n.row` to the provided value `r`
+- Executes the update in AGE and returns no value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose row index should be updated.
+- `r`: `FloatInt`  
+  New row/layout position to store.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_set_row")
+
+v0, = g.add_vertices(1)
+g.set_row(v0, 5)
+
+print(g.row(v0))  # 5
+
+g.close()
+```
+
+### Notes
+
+- The stored value is layout/order metadata, not a quantum state value.
+- Integer and non-integer numeric positions are both accepted.
+- If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
