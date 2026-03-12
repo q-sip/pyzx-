@@ -55,6 +55,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
 
+<<<<<<< HEAD
         db_uri = os.getenv("DB_URI")
         connect_kwargs = {
             "host": os.getenv("DB_HOST"),
@@ -72,6 +73,15 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
         self._read_cache: dict[str, Any] = {}
         self._prepare_session()
+=======
+        self.conn = psycopg.connect(
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+            dbname=os.getenv("POSTGRES_DB"),
+            user=os.getenv("POSTGRES_USER"),
+            password=os.getenv("POSTGRES_PASSWORD"),
+        )
+>>>>>>> experimental
 
         with self.conn.cursor() as cur:
             try:
@@ -80,11 +90,16 @@ class GraphAGE(BaseGraph[VT, ET]):
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
+<<<<<<< HEAD
                 
     def _prepare_session(self) -> None:
         """Prepare AGE session once per DB connection."""
         if self._session_prepared:
             return
+=======
+
+    def db_execute(self, query):
+>>>>>>> experimental
         with self.conn.cursor() as cur:
             cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
             cur.execute("LOAD 'age';")
@@ -238,6 +253,28 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         self._vindex += amount
         return vertex_ids
+<<<<<<< HEAD
+=======
+    def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
+        """Add a vertex to the AGE graph"""
+        props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
+        if phase is not None:
+            props += f", phase:{float(phase)}"
+        props += "}"
+        query = (
+            f"SELECT * FROM cypher('{self.graph_id}', $$ "
+            f"CREATE (n:{ty.name} {props}) "
+            "RETURN id(n) $$) AS (id agtype)"
+        )
+        with self.conn.cursor() as cur:
+            cur.execute(query)
+            row = cur.fetchone()
+            self.conn.commit()
+        if row is None:
+            raise RuntimeError("Failed to create vertex; no id returned")
+        vertex_id = str(row[0]).split("::", 1)[0].strip('"')
+        return int(vertex_id)
+>>>>>>> experimental
 
     def add_vertex(
         self,
@@ -999,6 +1036,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             row = cur.fetchone()
             self.conn.commit()
 
+<<<<<<< HEAD
         if not row:
             return []
 
@@ -1216,3 +1254,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         cpy.set_inputs(self.inputs())
         cpy.set_outputs(self.outputs())
         return cpy
+=======
+    def close(self):
+        self.conn.close()
+>>>>>>> experimental

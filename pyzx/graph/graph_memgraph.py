@@ -53,9 +53,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def __init__(
         self,
-        uri: str = os.getenv("DB_URI", ""),
-        user: str = os.getenv("DB_USER", ""),
-        password: str = os.getenv("DB_PASSWORD", ""),
+        uri: str = os.getenv("MEMGRAPH_URI", "bolt://localhost:7445"),
+        user: str = os.getenv("DB_USER", "customer"),
+        password: str = os.getenv("DB_PASSWORD", "testkala"),
         graph_id: Optional[str] = None,
         database: Optional[str] = None,
     ):
@@ -121,6 +121,18 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def get_graph_id(self):
         return self.graph_id
+    
+    def clear_clones(self):
+        query = """
+        MATCH (n:Node)
+        WHERE n.graph_id CONTAINS "clone"
+        DETACH DELETE n
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query)
+            )
 
     def create_graph(
         self,

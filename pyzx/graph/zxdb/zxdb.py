@@ -482,8 +482,10 @@ class ZXdb:
 
             # Remove identities
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
-            result = tx.run(query_remove_identities, graph_id=self.graph_id)
+            result = tx.run(query_remove_identities)
+            print(f'result = {result}')
             record = result.single()
+            print(f'record = {record['removed_identities']}')
             #print(record)
             #deleted = record["marked"]
             #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
@@ -491,7 +493,7 @@ class ZXdb:
             # Turn Hadamard gates into edges
             #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
             #tx.run(query_gates_to_edges, graph_id=graph_id)
-            return record
+            return record['removed_identities']
         
         #with self.driver.session() as analyze_session:
         #    analyze_session.run("ANALYZE GRAPH;")
@@ -500,6 +502,8 @@ class ZXdb:
             #deleted = 1
             #while deleted:
             deleted = session.execute_write(process_identity_removal)
+
+            return deleted
             #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
 
             # Hadamard cancellation can be done outside the transaction for better performance
@@ -535,6 +539,13 @@ class ZXdb:
 
                     # Fuse green spiders
                     cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion rewrite 2"]["query"]["code"]["value"])
+                    cancel_query = cancel_query.replace(
+                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x)",
+                        "FOREACH (_ IN CASE WHEN x IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x))"
+                    ).replace(
+                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y)",
+                        "FOREACH (_ IN CASE WHEN y IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y))"
+                    )
                     result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
                     merged = result_fuse_green.single()["merged"]
 
@@ -625,6 +636,8 @@ class ZXdb:
         with self.driver.session() as session:
             #start_time = time.time()
             iteration = 0
+            total_changed = 0
+
             while True:
                 iteration += 1
                 print(f'{iteration}th iteration')
@@ -638,19 +651,21 @@ class ZXdb:
                    break  # No more patterns found
                 
                 def apply_local_complementation_rewrite(tx):
-                    lc_query = str(self.basic_rewrite_rule_queries["Local complement full"]["query"]["code"]["value"])
+                    lc_query = str(self.basic_rewrite_rule_queries["Local complement rewrite"]["query"]["code"]["value"])
                     result = tx.run(lc_query, graph_id=self.graph_id)
                     #print(result)
-                    return result.single()
+                    return result.single()["num_processed"]
                 
                 changed = session.execute_write(apply_local_complementation_rewrite)
-                if changed:
+                if changed == 0:
                     break  # No more patterns found
+
+                total_changed += changed
 
 
             #end_time = time.time()
             #logging.info(f"Local complementation applied for graph ID '{graph_id}' with {changed} patterns processed in {end_time - start_time} seconds")
-            return changed
+            return total_changed
         
     
     def phase_gadget_fusion_rule(self) -> int:
@@ -826,3 +841,172 @@ class ZXdb:
                 tx.run(query, graph_id=self.graph_id)
 
             session.execute_write(apply_hadamard_to_edge_conversion)
+
+    def copy_simp(self) -> None:
+        """
+        Perform the copy simp operation
+        """
+        with self.driver.session() as session:
+            def apply_copy_simp(tx):
+                query = str(self.basic_rewrite_rule_queries["State copy"]["query"]["code"]["value"])
+                tx.run(query)
+
+            session.execute_write(apply_copy_simp)
+
+    def to_gh(self) -> None:
+        """
+        Change color of all red vertices to green
+        """
+        with self.driver.session() as session:
+            def apply_change_color(tx):
+                query = str(self.basic_rewrite_rule_queries["Change color"]["query"]["code"]["value"])
+                tx.run(query, graph_id=self.graph_id)
+
+            session.execute_write(apply_change_color)
+    
+    def remove_isolated_vertices(self) -> None:
+            """
+            Remove isolated vertices from the graph.
+            Also remove dangling pairs of vertices that aren't connected to the graph but only to each other.
+            """
+            with self.driver.session() as session:
+                def _remove_operations(tx):
+                    # Remove completely isolated vertices (degree 0)
+                    tx.run("""
+                        // 1. Find and delete isolated pairs (two nodes only connected to each other)
+                        MATCH (n)-[r]-(m)
+                        WHERE degree(n) = 1 AND degree(m) = 1
+                        DETACH DELETE n, m
+                        WITH count(n) AS deleted_pairs
+
+                        // 2. Find and delete completely isolated single vertices
+                        MATCH (v)
+                        WHERE degree(v) = 0
+                        DELETE v;
+                        """)
+
+                session.execute_write(_remove_operations)
+
+    def supplementarity_simp(self) -> int:
+        """
+        Apply the supplementarity rule to the graph.
+        Removes pairs of non-Clifford spiders that have the same set of neighbors.
+        """
+        count = 0
+        with self.driver.session() as session:
+            while True:
+                def _supp_type_1(tx):
+                    # Type 1: Disconnected, same neighbors
+                    # Check conditions: 
+                    # 1. Z-spiders (t:1)
+                    # 2. Non-Clifford phases (approx check if phase * 2 is integer)
+                    # 3. Disconnected
+                    # 4. Same degree
+                    # 5. Same neighbors (inclusion + same degree)
+                    query = """
+                    MATCH (v:Node {graph_id: $graph_id, t: 1}), (w:Node {graph_id: $graph_id, t: 1})
+                    WHERE id(v) < id(w)
+                      AND NOT (v)-[:Wire]-(w)
+                      AND abs((v.phase * 2) - round(v.phase * 2)) > 1e-5
+                      AND abs((w.phase * 2) - round(w.phase * 2)) > 1e-5
+                      AND size((v)-[:Wire]-()) = size((w)-[:Wire]-())
+                      AND size([(v)-[:Wire]-(n) WHERE NOT (n)-[:Wire]-(w) | 1]) = 0
+                    WITH v, w
+                    WITH v, w, v.phase + w.phase AS s, v.phase - w.phase AS d
+                    WITH v, w,
+                         (abs(s - round(s)) < 1e-5 AND toInteger(round(s)) % 2 <> 0) AS sum_odd,
+                         (abs(d - round(d)) < 1e-5 AND toInteger(round(d)) % 2 <> 0) AS diff_odd
+                    WHERE sum_odd OR diff_odd
+                    OPTIONAL MATCH (v)-[:Wire]-(n)
+                    FOREACH (_ IN CASE WHEN sum_odd THEN [1] ELSE [] END | 
+                        SET n.phase = coalesce(n.phase, 0.0) + 1.0
+                    )
+                    DETACH DELETE v, w
+                    RETURN count(*) as c
+                    """
+                    result = tx.run(query, graph_id=self.graph_id)
+                    record = result.single()
+                    return record["c"] if record else 0
+
+                c1 = session.execute_write(_supp_type_1)
+                
+                def _supp_type_2(tx):
+                    # Type 2: Connected, same neighbors (excluding each other)
+                    # Check conditions:
+                    # 1. Z-spiders (t:1)
+                    # 2. Non-Clifford phases
+                    # 3. Connected
+                    # 4. Same degree
+                    # 5. Same other neighbors
+                    query = """
+                    MATCH (v:Node {graph_id: $graph_id, t: 1}), (w:Node {graph_id: $graph_id, t: 1})
+                    WHERE id(v) < id(w)
+                      AND (v)-[:Wire]-(w)
+                      AND abs((v.phase * 2) - round(v.phase * 2)) > 1e-5
+                      AND abs((w.phase * 2) - round(w.phase * 2)) > 1e-5
+                      AND size((v)-[:Wire]-()) = size((w)-[:Wire]-())
+                      AND size([(v)-[:Wire]-(n) WHERE n <> w AND NOT (n)-[:Wire]-(w) | 1]) = 0
+                    WITH v, w
+                    WITH v, w, v.phase + w.phase AS s, v.phase - w.phase AS d
+                    WITH v, w,
+                         (abs(s - round(s)) < 1e-5 AND toInteger(round(s)) % 2 = 0) AS sum_even,
+                         (abs(d - round(d)) < 1e-5 AND toInteger(round(d)) % 2 <> 0) AS diff_odd
+                    WHERE sum_even OR diff_odd
+                    OPTIONAL MATCH (v)-[:Wire]-(n)
+                    WHERE n <> w
+                    FOREACH (_ IN CASE WHEN sum_even THEN [1] ELSE [] END | 
+                        SET n.phase = coalesce(n.phase, 0.0) + 1.0
+                    )
+                    DETACH DELETE v, w
+                    RETURN count(*) as c
+                    """
+                    result = tx.run(query, graph_id=self.graph_id)
+                    record = result.single()
+                    return record["c"] if record else 0
+
+                c2 = session.execute_write(_supp_type_2)
+                
+                if c1 == 0 and c2 == 0:
+                    break
+                count += c1 + c2
+        
+        return count
+
+    def interior_clifford_simp(self):
+        self.spider_fusion()
+        self.to_gh()
+        i = 0
+        while True:
+            i1 = self.remove_identities()
+            i2 = self.spider_fusion()
+            i3 = self.pivot_rule()
+            i4 = self.local_complementation_rule()
+            # print(f'i1 = {i1}')
+            # print(f'i2 = {i2}')
+            # print(f'i3 = {i3}')
+            # print(f'i4 = {i4}')
+            if not (i1 or i2 or i3 or i4): break
+            i += 1
+        return i != 0
+    
+    def clifford_simp(self):
+        i = False
+        while True:
+            i = self.interior_clifford_simp()
+            i2 = self.pivot_boundary_rule()
+            if not i2: break
+        return i
+
+    def full_reduce(self):
+        self.interior_clifford_simp()
+        self.pivot_gadget_rule()
+        while True:
+            self.clifford_simp()
+            i = self.phase_gadget_fusion_rule()
+            self.interior_clifford_simp()
+            k = self.copy_simp()
+            l = self.supplementarity_simp()
+            j = self.pivot_gadget_rule()
+            if not (i or k or j or l):
+                self.remove_isolated_vertices()
+                break

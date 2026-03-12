@@ -1,5 +1,6 @@
 #Scelaton
 from pyzx.graph.graph_AGE import GraphAGE
+
 from pyzx.utils import VertexType, EdgeType
 from tests.test_graph_age import test_add_vertices
 import networkx as nx
@@ -7,8 +8,13 @@ import matplotlib.pyplot as plt
 from fractions import Fraction
 
 # connect to AGE database
+<<<<<<< HEAD
 
  
+=======
+g = GraphAGE()
+
+>>>>>>> experimental
 print("Successfully connected to AGE database")
 
 # Minimal Cypher smoke test to verify AGE functionality
@@ -48,6 +54,7 @@ def delete_graph():
     print("\nGraph deleted")
 
 #is_there_smoke()
+<<<<<<< HEAD
 g = GraphAGE()
 #vertices = g.add_vertices(3)
 def manually_constructing():
@@ -59,3 +66,8 @@ def manually_constructing():
 
 
 g.delete_graph()
+=======
+g.add_vertices(3)
+print("vertices added")
+g.delete_graph()
+>>>>>>> experimental
