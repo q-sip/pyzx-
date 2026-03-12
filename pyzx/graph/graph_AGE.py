@@ -72,6 +72,7 @@ class GraphAGE(BaseGraph[VT,ET]):
         self.conn = psycopg.connect(**connect_kwargs)
 
         with self.conn.cursor() as cur:
+
             # 1. Load extension
             cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
             cur.execute("LOAD 'age';")
@@ -92,6 +93,14 @@ class GraphAGE(BaseGraph[VT,ET]):
             cur.execute("SET search_path = ag_catalog, public;")
             cur.execute(query)
         self.conn.commit()
+    
+    def db_fetch(self, query):
+        with self.conn.cursor() as cur:
+            cur.execute("LOAD 'age';")
+            cur.execute("SET search_path = ag_catalog, public;")
+            cur.execute(query)
+            rows = cur.fetchall()
+        return rows
 
     def delete_graph(self):
         with self.conn.cursor() as cur:

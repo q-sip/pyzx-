@@ -1,6 +1,7 @@
 #Scelaton
 from pyzx.graph.graph_AGE import GraphAGE
 from pyzx.utils import VertexType, EdgeType
+from tests.test_graph_age import test_add_vertices
 
 # connect to AGE database
 g = GraphAGE()
@@ -87,6 +88,6 @@ def delete_graph():
     print("\nGraph deleted")
 
 #is_there_smoke()
-g.add_vertices(3)
-print("vertices added")
+vertices = g.add_vertices(3)
+print(vertices)
 g.delete_graph()
