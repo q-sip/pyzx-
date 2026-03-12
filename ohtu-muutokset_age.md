@@ -1262,3 +1262,158 @@ g.close()
 - If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.phase(vertex: VT) -> FractionLike
+
+Returns the phase value of a given vertex.
+
+This method reads `n.phase` and converts it to a Python `Fraction`, with safe fallback to `Fraction(0)` when the value is missing or invalid.
+
+### Behaviour
+
+- Matches one node by `id`
+- Reads `n.phase`
+- Returns `Fraction(0)` if the node is missing
+- Returns `Fraction(0)` if phase is empty/null
+- Attempts `Fraction(phase_raw).limit_denominator(10**9)` for valid values
+- Returns `Fraction(0)` if conversion raises `ValueError`
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose phase should be returned.
+
+### Returns
+
+- `FractionLike`  
+  Parsed phase value, normalized as a `Fraction` when possible.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from fractions import Fraction
+
+g = GraphAGE(graph_id="example_phase")
+
+v0, = g.add_vertices(1)
+g.set_phase(v0, Fraction(1, 2))
+
+print(g.phase(v0))     # Fraction(1, 2)
+print(g.phase(99999))  # Fraction(0, 1)
+
+g.close()
+```
+
+### Notes
+
+- Missing vertex does not raise; it returns zero phase.
+- Invalid stored phase strings are treated as zero.
+- Denominator is bounded using `limit_denominator(10**9)`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.phases() -> Mapping[VT, FractionLike]
+
+Returns a mapping of all vertices to their phase values.
+
+In PyZX, phases are represented in units of $\pi$ (so `1/2` means $\pi/2$), and each stored value is parsed into a `Fraction` when possible.
+
+### Behaviour
+
+- Matches all `Node` vertices
+- Reads `n.id` and `n.phase`
+- Converts each id to integer vertex id
+- Parses phase as `Fraction(phase_raw).limit_denominator(10**9)`
+- Stores `Fraction(0)` for empty/null phase values
+- Stores `Fraction(0)` for invalid phase strings (`ValueError`)
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Mapping[VT, FractionLike]`  
+  Dictionary mapping each vertex id to its phase value.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from fractions import Fraction
+
+g = GraphAGE(graph_id="example_phases")
+
+v0, v1 = g.add_vertices(2)
+g.set_phase(v0, Fraction(1, 2))  # pi/2
+g.set_phase(v1, 1)               # pi
+
+pmap = g.phases()
+print(pmap[v0], pmap[v1])        # Fraction(1, 2) Fraction(1, 1)
+
+g.close()
+```
+
+### Notes
+
+- Returned values are per-vertex and tolerant to malformed backend values.
+- Missing/invalid phase values are normalized to zero phase.
+- Conversion uses bounded rational approximation via `limit_denominator(10**9)`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_phase(vertex: VT, phase: FractionLike) -> None
+
+Sets the phase value of a given vertex.
+
+In PyZX, phases are stored in units of $\pi$, so a value like `1/2` means an angle of $\pi/2$. Before writing, this method tries to reduce the phase modulo `2`, because phases differing by $2$ represent the same angle modulo $2\pi$.
+
+### Behaviour
+
+- Matches one node by `id`
+- Tries to normalize `phase` with `phase % 2`
+- If modulo fails, keeps the original value unchanged
+- Converts the final value to string and stores it in `n.phase`
+- Executes the update in AGE and returns no value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose phase should be updated.
+- `phase`: `FractionLike`  
+  New phase value, interpreted in units of $\pi$.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from fractions import Fraction
+
+g = GraphAGE(graph_id="example_set_phase")
+
+v0, = g.add_vertices(1)
+
+g.set_phase(v0, Fraction(5, 2))
+print(g.phase(v0))  # Fraction(1, 2) because 5/2 mod 2 = 1/2
+
+g.close()
+```
+
+### Notes
+
+- Phase values are angles measured as multiples of $\pi$.
+- Modulo `2` corresponds to periodicity modulo $2\pi$.
+- If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
