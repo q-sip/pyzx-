@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import cmath
+import math
 import os
 from argparse import ArgumentTypeError
 from enum import IntEnum
@@ -26,6 +28,21 @@ from .symbolic import Poly
 
 FloatInt = Union[float, int]
 FractionLike = Union[Fraction, int, Poly]
+
+def assert_phase_real(phase: FractionLike) -> None:
+    """Raise a TypeError if ``phase`` contains complex coefficients.
+
+    Phases represent multiples of pi and must be real-valued.  Complex
+    coefficients are only valid in Z-box labels, which are stored as
+    vertex data rather than as phases.
+    """
+    if isinstance(phase, complex) and phase.imag != 0:
+        raise TypeError(f"Phase must be real, got {phase}")
+    if isinstance(phase, Poly):
+        for c, _ in phase.terms:
+            if isinstance(c, complex) and c.imag != 0:
+                raise TypeError(
+                    f"Phase must have real coefficients, got {c}")
 
 
 class VertexType(IntEnum):
@@ -344,6 +361,36 @@ def get_z_box_label(g, v):
 def set_z_box_label(g, v, label):
     assert g.type(v) == VertexType.Z_BOX
     g.set_vdata(v, "label", label)
+
+
+
+def get_h_box_label(g, v) -> complex:
+    assert g.type(v) == VertexType.H_BOX
+    label = g.vdata(v, 'label', None)
+    if label is not None:
+        return complex(label)
+    phase = g.phase(v)
+    if isinstance(phase, Poly):
+        raise ValueError("Cannot convert symbolic phase to complex label")
+    return cmath.exp(1j * math.pi * float(phase))
+
+def set_h_box_label(g, v, label: complex) -> None:
+    assert g.type(v) == VertexType.H_BOX
+    g.set_vdata(v, 'label', complex(label))
+    g.set_phase(v, 0)
+
+def is_standard_hbox(g, v) -> bool:
+    """Check if H-box has the standard Hadamard label (-1)."""
+    assert g.type(v) == VertexType.H_BOX
+    label = g.vdata(v, 'label', None)
+    if label is not None:
+        return cmath.isclose(label, -1)
+    return g.phase(v) == 1
+
+def hbox_has_complex_label(g, v) -> bool:
+    """Check if H-box uses a complex label instead of legacy phase."""
+    assert g.type(v) == VertexType.H_BOX
+    return g.vdata(v, 'label', None) is not None
 
 
 # Return position 'perc'%-distance between 2 points:

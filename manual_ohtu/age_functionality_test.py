@@ -2,54 +2,20 @@
 from pyzx.graph.graph_AGE import GraphAGE
 
 from pyzx.utils import VertexType, EdgeType
+from tests.test_graph_age import test_add_vertices
+import networkx as nx
+import matplotlib.pyplot as plt
+from fractions import Fraction
 
 # connect to AGE database
+<<<<<<< HEAD
 g = GraphAGE()
 
+=======
+
+ 
+>>>>>>> dev
 print("Successfully connected to AGE database")
-
-# Add a vertex
-#try:
-#    v0 = g.add_vertex(VertexType.BOUNDARY, 0, 0)
-#    v1 = g.add_vertex(VertexType.Z, 0, 1)
-#    v2 = g.add_vertex(VertexType.X, 0, 2)
-#    print("Vertices created successfully")
-#except Exception as e:
-#    print(f"Error creating vertices: {type(e).__name__}: {e}")
-#    v0 = v1 = v2 = None
-
-# Add edges
-#try:
-#    if v0 and v1 and v2:
-#        g.add_edge(v0, v1, EdgeType.SIMPLE)
-#        g.add_edge(v1, v2, EdgeType.SIMPLE)
-#        print("Vertices and edges added!")
-#except Exception as e:
-#    print(f"Error adding edges: {type(e).__name__}: {e}")
-
-#graph = g.graph_id  # e.g., 'test_graph'
-
-# Fetch vertices
-##try:
-#    with g.conn.cursor() as cur:
-#        cur.execute(f"SELECT * FROM cypher('{graph}', $$ MATCH (n) RETURN n $$) AS (n agtype);")
-#        vertices = cur.fetchall()
-#        print("Vertices in the graph:")
-#        for v in vertices:
-#            print(v[0])
-#except Exception as e:
-#    print(f"Error fetching vertices: {type(e).__name__}: {e}")
-
-# Fetch edges
-#try:
-#    with g.conn.cursor() as cur:
-#        cur.execute(f"SELECT * FROM cypher('{graph}', $$ MATCH ()-[e]->() RETURN e $$) AS (e agtype);")
-#        edges = cur.fetchall()
-#        print("\nEdges in the graph:")
-#        for e in edges:
-#            print(e[0])
-#except Exception as e:
-#    print(f"Error fetching edges: {type(e).__name__}: {e}")
 
 # Minimal Cypher smoke test to verify AGE functionality
 def is_there_smoke():
@@ -88,6 +54,20 @@ def delete_graph():
     print("\nGraph deleted")
 
 #is_there_smoke()
+<<<<<<< HEAD
 g.add_vertices(3)
 print("vertices added")
 g.delete_graph()
+=======
+g = GraphAGE()
+#vertices = g.add_vertices(3)
+def manually_constructing():
+    i = g.add_vertex(0,0,0)
+    v = g.add_vertex(1,0,1, Fraction(1,2))
+    w = g.add_vertex(2,0,2, Fraction(-1,2))
+    o = g.add_verte(0,0,3)
+    g.add_edges([(i,v), (v,w),(w,o)])
+
+
+g.delete_graph()
+>>>>>>> dev
