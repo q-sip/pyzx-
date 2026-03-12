@@ -1096,3 +1096,169 @@ g.close()
 - Type validation is expected from the `EdgeType` enum passed by caller code.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.type(vertex: VT) -> VertexType
+
+Returns the type of a given vertex.
+
+This method first tries the numeric AGE property `n.t`, and if missing, falls back to the legacy/string property `n.ty`.
+
+### Behaviour
+
+- Matches the node by `id`
+- Reads `n.t` and `n.ty`
+- If `n.t` is present, converts it to `VertexType` from numeric value
+- Otherwise, if `n.ty` is present, converts it by enum name lookup
+- Raises `KeyError` if the node does not exist or neither type field is available
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose type should be returned.
+
+### Returns
+
+- `VertexType`  
+  The vertex type value for the given node.
+
+### Raises
+
+- `KeyError`  
+  If the vertex is not found, or if both type fields are missing/null.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_type")
+
+v0, = g.add_vertices(1)
+g.set_type(v0, VertexType.Z)
+
+print(g.type(v0))  # VertexType.Z
+
+try:
+    print(g.type(99999))
+except KeyError as e:
+    print(e)
+
+g.close()
+```
+
+### Notes
+
+- Numeric `n.t` takes precedence over string `n.ty` when both exist.
+- This dual-read behavior preserves compatibility with older stored graph representations.
+- Return value is always a `VertexType` enum member.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.types() -> Mapping[VT, VertexType]
+
+Returns a mapping of all vertices to their types.
+
+This method reads all nodes and resolves each type using `n.t` first, then `n.ty` as fallback.
+
+### Behaviour
+
+- Matches all `Node` vertices in the graph
+- Reads `n.id`, `n.t`, and `n.ty` for each row
+- Converts `n.id` to integer vertex id
+- Uses numeric `n.t` when present; otherwise uses enum-name lookup via `n.ty`
+- Raises `KeyError` if any vertex has neither usable `t` nor `ty`
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Mapping[VT, VertexType]`  
+  Dictionary mapping each vertex id to a `VertexType` value.
+
+### Raises
+
+- `KeyError`  
+  If at least one returned vertex has no valid type information.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_types")
+
+v0, v1 = g.add_vertices(2)
+g.set_type(v0, VertexType.Z)
+g.set_type(v1, VertexType.X)
+
+tmap = g.types()
+print(tmap[v0], tmap[v1])  # VertexType.Z VertexType.X
+
+g.close()
+```
+
+### Notes
+
+- Numeric `n.t` has priority over string `n.ty`, matching `type(vertex)` semantics.
+- The method returns all currently stored vertices in one query.
+- A single malformed/missing type field causes the whole call to raise `KeyError`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_type(vertex: VT, t: VertexType) -> None
+
+Sets the type of a given vertex.
+
+This method stores the numeric type in `n.t` and clears legacy `n.ty` to keep the representation canonical.
+
+### Behaviour
+
+- Matches one node by `id`
+- Sets `n.t` to `t.value`
+- Removes `n.ty` from the node
+- Executes update in AGE and returns no value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose type should be updated.
+- `t`: `VertexType`  
+  New vertex type.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_set_type")
+
+v0, = g.add_vertices(1)
+g.set_type(v0, VertexType.X)
+
+print(g.type(v0))  # VertexType.X
+
+g.close()
+```
+
+### Notes
+
+- This normalizes type storage to numeric `n.t`.
+- Removing `n.ty` avoids ambiguity between old and new representations.
+- If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
