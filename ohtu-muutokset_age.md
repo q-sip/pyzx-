@@ -775,3 +775,108 @@ g.close()
 - Use `edge_s(edge)` to get the first endpoint.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.connected(v1: VT, v2: VT) -> bool
+
+Returns whether two vertices share at least one edge.
+
+The method queries AGE for `Wire` relationships between `v1` and `v2` and returns `True` if the relationship count is greater than zero.
+
+### Behaviour
+
+- Runs a Cypher query matching `:Wire` edges between `v1` and `v2`
+- Uses an undirected pattern (`-[r:Wire]-`), so edge orientation does not matter
+- Computes `count(r)`
+- Returns `False` if no row is returned
+- Otherwise returns `True` when count is greater than `0`
+
+### Parameters
+
+- `v1`: `VT`  
+  First vertex id.
+- `v2`: `VT`  
+  Second vertex id.
+
+### Returns
+
+- `bool`  
+  `True` if at least one edge exists between `v1` and `v2`, else `False`.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_connected")
+
+v0, v1, v2 = g.add_vertices(3)
+g.add_edge((v0, v1))
+
+print(g.connected(v0, v1))  # True
+print(g.connected(v0, v2))  # False
+
+g.close()
+```
+
+### Notes
+
+- This method checks existence, not edge type.
+- It is unaffected by stored edge direction due to undirected matching.
+- If multiple parallel edges existed, any positive count still returns `True`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.neighbors(vertex: VT) -> Sequence[VT]
+
+Returns all neighboring vertices connected to the given vertex.
+
+The method queries all `Wire` edges touching `vertex`, collects neighbor ids, removes duplicates, and returns them as a list.
+
+### Behaviour
+
+- Runs a Cypher query with an undirected edge pattern: `(n)-[r:Wire]-(m)`
+- Filters by `n.id = vertex`
+- Returns the ids of adjacent vertices `m.id`
+- Converts AGType values to Python integers
+- Uses a set internally to remove duplicate neighbor ids
+- Returns the neighbors as a Python list
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose neighbors should be returned.
+
+### Returns
+
+- `Sequence[VT]`  
+  Neighbor vertex ids.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_neighbors")
+
+v0, v1, v2, v3 = g.add_vertices(4)
+g.add_edge((v0, v1))
+g.add_edge((v0, v2))
+g.add_edge((v3, v0))
+
+n = g.neighbors(v0)
+print(n)  # e.g. [1, 2, 3] (order may vary)
+
+g.close()
+```
+
+### Notes
+
+- Result order is not guaranteed because deduplication is done with a set.
+- Returns an empty list when no neighbors exist.
+- Matching is undirected, so stored edge direction does not affect results.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
