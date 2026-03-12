@@ -483,9 +483,7 @@ class ZXdb:
             # Remove identities
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
             result = tx.run(query_remove_identities)
-            print(f'result = {result}')
             record = result.single()
-            print(f'record = {record['removed_identities']}')
             #print(record)
             #deleted = record["marked"]
             #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
@@ -512,7 +510,9 @@ class ZXdb:
 
     def spider_fusion(self) -> int:
         """
-        Perform spider fusion on the graph.
+        Perform spider fusion on the graph, matching spider_simp() behavior from simplify.py.
+        Spider fusion fuses same-colored spiders connected by simple edges,
+        then removes self-loops.
         
         Args:
             graph_id: Identifier for the graph to process
@@ -520,25 +520,19 @@ class ZXdb:
         Returns:
             Number of spider fusion patterns processed
         """
-        #with self.driver.session() as analyze_session:
-        #    analyze_session.run("ANALYZE GRAPH;")
         # Use a single session and transaction for all operations to reduce connection overhead
         with self.driver.session() as session:
             total_patterns = 0
             while True:
                 # Use explicit transaction for all queries in one batch
                 def spider_fusion_batch(tx):
-                    # Label green spiders
-                    #mark_query_green = str(self.basic_rewrite_rule_queries["Spider labeling query"]["query"]["code"]["value"])
-                    #result_green = tx.run(mark_query_green)
-                    #record_green = result_green.single()
-                    #if record_green is None:
-                    #    patterns_labeled_green = 0
-                    #else:
-                    #    patterns_labeled_green = len(set([record_green["pid"]]))
-
-                    # Fuse green spiders
+                    # Fuse same-colored spiders connected by simple edges (r.t = 1)
                     cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion rewrite 2"]["query"]["code"]["value"])
+                    # Fix operator precedence bug: ensure r.t = 1 applies to both color cases
+                    cancel_query = cancel_query.replace(
+                        "WHERE (a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2) AND r.t = 1",
+                        "WHERE ((a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2)) AND r.t = 1"
+                    )
                     cancel_query = cancel_query.replace(
                         "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x)",
                         "FOREACH (_ IN CASE WHEN x IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x))"
@@ -549,26 +543,33 @@ class ZXdb:
                     result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
                     merged = result_fuse_green.single()["merged"]
 
-                    # Label red spiders
-                    #mark_query_red = str(self.basic_rewrite_rule_queries["Spider labeling query red"]["query"]["code"]["value"])
-                    #result_red = tx.run(mark_query_red)
-                    #record_red = result_red.single()
-                    #patterns_labeled_red = record_red["patterns_labeled"] if record_red and record_red["patterns_labeled"] else 0
-
-                    # Fuse red spiders
-                    #result_fuse_red = tx.run(cancel_query, graph_id=graph_id)
-                    #processed_red = result_fuse_red.single()["patterns_processed"]
-
-                    # It is also possible to label green spiders connected to red spiders with Hadamard edge
-                    # but this is not in PyZX spider fusion by default and we omit it here as well
-                    # although the queries support it.
-
-                    # Hopf rule
-                    hopf_query = str(self.basic_rewrite_rule_queries["Hopf"]["query"]["code"]["value"])
-                    result_hopf = tx.run(hopf_query, graph_id=self.graph_id)
-                    processed_hopf = result_hopf.single()
-
-                    # You can add both-color spider fusion here if needed
+                    # Remove self-loops (matching remove_self_loop_simp behavior)
+                    # For ZX-like vertices: simple self-loops are removed, 
+                    # hadamard self-loops add pi phase and are removed
+                    self_loop_query = """
+                    // Find all self-loops on ZX-like vertices (t=1 or t=2)
+                    MATCH (v:Node)-[r:Wire]-(v)
+                    WHERE v.t IN [1, 2]
+                    WITH v, collect(r) AS self_loops
+                    WHERE size(self_loops) > 0
+                    
+                    // Count hadamard self-loops (t=2)
+                    WITH v, self_loops,
+                         size([r IN self_loops WHERE r.t = 2]) AS hadamard_count
+                    
+                    // If odd number of hadamard self-loops, add pi to phase
+                    FOREACH (_ IN CASE WHEN hadamard_count % 2 = 1 THEN [1] ELSE [] END |
+                        SET v.phase = coalesce(v.phase, 0) + 1
+                    )
+                    
+                    // Delete all self-loop edges
+                    WITH v, self_loops
+                    UNWIND self_loops AS loop_edge
+                    DELETE loop_edge
+                    
+                    RETURN count(DISTINCT v) AS vertices_processed
+                    """
+                    tx.run(self_loop_query)
 
                     return merged
 
@@ -640,7 +641,6 @@ class ZXdb:
 
             while True:
                 iteration += 1
-                print(f'{iteration}th iteration')
                 def apply_local_complementation_labeling(tx):
                    lc_query = str(self.basic_rewrite_rule_queries["Local complement labeling"]["query"]["code"]["value"])
                    result = tx.run(lc_query, graph_id=self.graph_id)

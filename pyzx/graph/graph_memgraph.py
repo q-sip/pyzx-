@@ -774,7 +774,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single())
         #Muutetaan .datasta .singleksi, kun tarkastellaan vain yhtä vertexiä kuitenkin kerralla
-        return result["qubit"] if result else -1
+        return result["qubit"] if result and result["qubit"] is not None else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
@@ -889,10 +889,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 ).data()
             )
 
-        if len(result) > 1:
-            raise ValueError(
-                f"Expected single Wire between {edge}, found {len(result)}"
-            )
+        
         return result[0]["propertyKey"] if result else []
 
     def edata(self, edge: ET, key: str, default: Any = None) -> Any:
