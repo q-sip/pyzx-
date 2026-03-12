@@ -3,47 +3,35 @@ import os
 import unittest
 import uuid
 from dotenv import load_dotenv
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx.graph.graph_memgraph import GraphMemgraph
 load_dotenv()
 
 
-def _neo4j_env_present() -> bool:
-    return all(os.getenv(k) for k in ("DB_URI", "DB_USER", "DB_PASSWORD"))
+def _env_present() -> bool:
+    return all(os.getenv(k) for k in ("MEMGRAPH_AUTH", "MEMGRAPH_URI"))
 
 
-def _ensure_phase_to_str_exists() -> None:
-    # Safety patch for older forks/branches.
-    if not hasattr(GraphNeo4j, "_phase_to_str"):
-
-        def _phase_to_str(_, phase):
-            return "0" if phase is None else str(phase)
-
-        setattr(GraphNeo4j, "_phase_to_str", _phase_to_str)
-
-class Neo4jUnitTestCase(unittest.TestCase):
+class MemgraphUnitTestCase(unittest.TestCase):
     """
     Base class for end-to-end tests: requires reachable Neo4j.
     Creates a unique graph_id per test and cleans up nodes for that graph_id.
     """
 
     def setUp(self):
-        _ensure_phase_to_str_exists()
-
-
-        if not _neo4j_env_present():
+        if not _env_present():
             raise unittest.SkipTest(
-                "Neo4j env vars missing (NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD)."
+                "Memgraph env vars missing (MEMGRAPH_AUTH, MEMGRAPH_URI)."
             )
 
         self.graph_id = f"test_graph_{uuid.uuid4().hex}"
 
-        self.backend_name = "neo4j"
-        self.g = GraphNeo4j(
-            uri=os.getenv("DB_URI", ""),
-            user=os.getenv("DB_USER", ""),
-            password=os.getenv("DB_PASSWORD", ""),
+        self.backend_name = "memgraph"
+        self.g = GraphMemgraph(
+            uri=os.getenv("MEMGRAPH_URI"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database="memgraph",
             graph_id=self.graph_id,
-            database=os.getenv("NEO4J_DATABASE"),
         )
 
         # sanity-check connection
@@ -53,7 +41,7 @@ class Neo4jUnitTestCase(unittest.TestCase):
             try:
                 self.g.close()
             finally:
-                raise unittest.SkipTest(f"Neo4j not reachable: {e}")
+                raise unittest.SkipTest(f"Memgraph not reachable: {e}")
 
 
     def tearDown(self):

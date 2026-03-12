@@ -375,3 +375,36 @@ CALL () {
 }
 RETURN patterns_processed;
 """
+
+GADGET_FUSION_HADAMARD_NEO4J = """
+MATCH (p:Node {t: 1, graph_id:$graph_id})-[r:Wire {graph_id:$graph_id}]-(neighbor:Node {graph_id:$graph_id})
+WITH p, count(r) AS deg
+WHERE deg = 1
+
+MATCH (p)-[e:Wire {t: 2, graph_id:$graph_id}]-(z_center:Node {t: 1, graph_id:$graph_id})
+
+WITH p, z_center
+MATCH (z_center)-[:Wire {t: 2, graph_id:$graph_id}]-(n:Node {t: 1, graph_id:$graph_id})
+WHERE n <> p
+WITH p, z_center, n
+ORDER BY elementId(n)
+WITH p, z_center, collect(elementId(n)) AS neighbor_key
+
+WITH neighbor_key, collect(p) AS phase_spiders, collect(z_center) AS central_spiders
+WHERE size(phase_spiders) > 1
+
+UNWIND phase_spiders AS ps
+WITH neighbor_key, phase_spiders, central_spiders, sum(coalesce(ps.phase, 0.0)) AS total_phase
+
+WITH total_phase,
+     phase_spiders[0] AS survivor_p,
+     central_spiders[0] AS survivor_z,
+     phase_spiders[1..] AS to_delete_p,
+     central_spiders[1..] AS to_delete_z
+
+SET survivor_p.phase = total_phase
+FOREACH (p_del IN to_delete_p | DETACH DELETE p_del)
+FOREACH (z_del IN to_delete_z | DETACH DELETE z_del)
+
+RETURN count(*) AS fusions_performed;
+"""

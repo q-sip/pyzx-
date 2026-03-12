@@ -3,15 +3,13 @@ from typing import Any, Callable, Optional, Dict
 import time
 import pyzx as zx
 from pyzx.utils import VertexType, EdgeType
+import re
+from fractions import Fraction
 
 @dataclass
 class BackendRunResult:
-    name: str
-    elapsed_s: float
     return_value: Any
     graph_after: Any
-    stats_before: Optional[str]
-    stats_after: Optional[str]
 
 
 @dataclass
@@ -21,12 +19,6 @@ class RuleRunResult:
     db: BackendRunResult
 
 
-def _safe_stats(graph: Any) -> Optional[str]:
-    try:
-        return graph.stats()
-    except Exception:
-        return None
-
 
 def _run_pyzx_rule(
     graph: Any,
@@ -34,32 +26,15 @@ def _run_pyzx_rule(
     name: str,
     print_results: bool = True,
 ) -> BackendRunResult:
-    stats_before = _safe_stats(graph)
-
-    start = time.perf_counter()
     return_value = rule_fn(graph)
-    elapsed_s = time.perf_counter() - start
-
-    stats_after = _safe_stats(graph)
 
     if print_results:
         print(f"\n{name}")
-        print(f"  time:   {elapsed_s:.6f}s")
-        print(f"  before: {stats_before}")
-        print(f"  after:  {stats_after}")
         print(f"  return: {return_value}")
 
-    return BackendRunResult(
-        name=name,
-        elapsed_s=elapsed_s,
-        return_value=return_value,
-        graph_after=graph,
-        stats_before=stats_before,
-        stats_after=stats_after,
-    )
+    return BackendRunResult(return_value = return_value, graph_after = graph)
 
-
-def _run_neo4j_query(
+def _run_memgraph_query(
     graph: Any,
     query: str,
     name: str,
@@ -67,42 +42,25 @@ def _run_neo4j_query(
     print_results: bool = True,
 ) -> BackendRunResult:
     """
-    Executes a Cypher rewrite query against a GraphNeo4j-like backend.
+    Executes a Cypher rewrite query against the memgraph backend.
 
     Assumes:
     - graph._get_session() exists
     - graph.graph_id exists if your query uses $graph_id
     """
-    stats_before = _safe_stats(graph)
-
     run_params = dict(params or {})
     if "graph_id" not in run_params and hasattr(graph, "graph_id"):
         run_params["graph_id"] = graph.graph_id
 
-    start = time.perf_counter()
     with graph._get_session() as session:
         cursor = session.run(query, run_params)
         return_value = list(cursor)
-    elapsed_s = time.perf_counter() - start
-
-    stats_after = _safe_stats(graph)
 
     if print_results:
         print(f"\n{name}")
-        print(f"  time:   {elapsed_s:.6f}s")
-        print(f"  before: {stats_before}")
-        print(f"  after:  {stats_after}")
         print(f"  return: {return_value}")
 
-    return BackendRunResult(
-        name=name,
-        elapsed_s=elapsed_s,
-        return_value=return_value,
-        graph_after=graph,
-        stats_before=stats_before,
-        stats_after=stats_after,
-    )
-
+    return BackendRunResult(return_value = return_value, graph_after = graph)
 
 def run_rule_on_backends(
     *,
@@ -115,13 +73,7 @@ def run_rule_on_backends(
     db_params: Optional[Dict[str, Any]] = None,
     print_results: bool = True,
 ) -> RuleRunResult:
-    """
-    Run the same logical rewrite on:
-    - a copied in-memory PyZX graph
-    - a DB-backed Neo4j graph via Cypher
 
-    Returns both mutated graphs and timing/results.
-    """
     original_copy = original_graph.copy()
     pyzx_graph = original_graph.copy()
 
@@ -132,7 +84,7 @@ def run_rule_on_backends(
         print_results=print_results,
     )
 
-    db_result = _run_neo4j_query(
+    db_result = _run_memgraph_query(
         graph=db_graph,
         query=db_query,
         name=db_name,
@@ -235,48 +187,6 @@ def validate_rule_results(
             print(f"  {k}: {v}")
 
     return report
-
-def load_simple_graph_into_neo4j(src_graph, dst_graph):
-    """
-    Copy a normal in-memory PyZX graph into an existing GraphNeo4j instance.
-
-    src_graph: graph from backend="simple"
-    dst_graph: already-created GraphNeo4j, with the graph_id you want to keep
-    """
-    # Start clean for this graph_id
-    with dst_graph._get_session() as session:
-        session.run(
-            "MATCH (n {graph_id: $graph_id}) DETACH DELETE n",
-            {"graph_id": dst_graph.graph_id},
-        )
-
-    vmap = {}
-
-    # 1) Copy vertices
-    for v in src_graph.vertices():
-        new_v = dst_graph.add_vertex(
-            src_graph.type(v),
-            qubit=src_graph.qubit(v),
-            row=src_graph.row(v),
-            phase=src_graph.phase(v),
-        )
-        vmap[v] = new_v
-
-    # 2) Copy boundary lists
-    dst_graph.set_inputs([vmap[v] for v in src_graph.inputs()])
-    dst_graph.set_outputs([vmap[v] for v in src_graph.outputs()])
-
-    # 3) Copy edges
-    for e in src_graph.edges():
-        s, t = src_graph.edge_st(e)
-        dst_graph.add_edge(
-            (vmap[s], vmap[t]),
-            edgetype=src_graph.edge_type(e),
-        )
-
-    return dst_graph
-
-
 
 
 def make_bialgebra_fixture():
@@ -422,22 +332,15 @@ def run_db_rule_only(
 
     # "pyzx" placeholder: no mutation, no real timing significance
     pyzx_graph = original_graph.copy()
-    pyzx_stats_before = _safe_stats(pyzx_graph)
-    start = time.perf_counter()
     pyzx_ret = _noop_rule(pyzx_graph)
-    pyzx_elapsed = time.perf_counter() - start
-    pyzx_stats_after = _safe_stats(pyzx_graph)
+
 
     pyzx_result = BackendRunResult(
-        name="pyzx_noop",
-        elapsed_s=pyzx_elapsed,
         return_value=pyzx_ret,
         graph_after=pyzx_graph,
-        stats_before=pyzx_stats_before,
-        stats_after=pyzx_stats_after,
     )
 
-    db_result = _run_neo4j_query(
+    db_result = _run_memgraph_query(
         graph=db_graph,
         query=db_query,
         name=db_name,
@@ -585,3 +488,97 @@ def mark_lcomp_fixture_pattern(db_graph, pattern_id="fixture_lcomp"):
             {"graph_id": db_graph.graph_id, "pattern_id": pattern_id},
         ).single()
     return result["marked"]
+
+def _as_vertex_type(t: Any) -> VertexType:
+    if isinstance(t, VertexType):
+        return t
+    # VertexType is an IntEnum, so VertexType(1) -> VertexType.Z, etc.
+    return VertexType(int(t))
+
+
+def _as_edge_type(t: Any) -> EdgeType:
+    if isinstance(t, EdgeType):
+        return t
+    return EdgeType(int(t))
+
+
+def _safe_get(fn, default=None):
+    try:
+        return fn()
+    except Exception:
+        return default
+
+
+def _phase_to_float_pi_units(p: Any) -> Optional[float]:
+    if p is None:
+        return None
+    if isinstance(p, (int, float)):
+        return float(p)
+    if isinstance(p, Fraction):
+        return float(p)
+
+    if isinstance(p, str):
+        s = p.strip().replace("Π", "pi").replace("π", "pi").replace(" ", "")
+        if s in ("0", "0.0", "+0", "-0"):
+            return 0.0
+
+        # "pi", "-pi", "pi/3", "-pi/3", "3pi/2", "-3pi/2"
+        m = re.fullmatch(r"([+-]?\d*)?pi(?:/(\d+))?", s)
+        if m:
+            num_str, den_str = m.group(1), m.group(2)
+            if num_str in (None, "", "+"):
+                num = 1
+            elif num_str == "-":
+                num = -1
+            else:
+                num = int(num_str)
+            den = int(den_str) if den_str else 1
+            return float(Fraction(num, den))
+
+        # "1/2" etc
+        return float(Fraction(s))
+
+    # last resort
+    return float(p)
+
+
+def load_simple_graph(src_graph, dst_graph):
+    """
+    Copy a PyZX in-memory graph (simple OR multigraph backend) into an existing GraphNeo4j.
+    """
+    # Start clean for this graph_id
+    with dst_graph._get_session() as session:
+        session.run(
+            "MATCH (n {graph_id: $graph_id}) DETACH DELETE n",
+            {"graph_id": dst_graph.graph_id},
+        )
+
+    vmap = {}
+
+    # 1) Copy vertices (coerce types + phases)
+    for v in src_graph.vertices():
+        ty = _as_vertex_type(src_graph.type(v))
+
+        qubit = _safe_get(lambda: src_graph.qubit(v), None)
+        row = _safe_get(lambda: src_graph.row(v), None)
+        phase = _phase_to_float_pi_units(_safe_get(lambda: src_graph.phase(v), None))
+
+        new_v = dst_graph.add_vertex(
+            ty,
+            qubit=qubit,
+            row=row,
+            phase=phase,
+        )
+        vmap[v] = new_v
+
+    # 2) Copy boundary lists
+    dst_graph.set_inputs([vmap[v] for v in _safe_get(lambda: src_graph.inputs(), [])])
+    dst_graph.set_outputs([vmap[v] for v in _safe_get(lambda: src_graph.outputs(), [])])
+
+    # 3) Copy edges (coerce edge type)
+    for e in src_graph.edges():
+        s, t = src_graph.edge_st(e)
+        ety = _as_edge_type(src_graph.edge_type(e))
+        dst_graph.add_edge((vmap[s], vmap[t]), edgetype=ety)
+
+    return dst_graph
