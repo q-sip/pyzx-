@@ -579,3 +579,199 @@ g.close()
 - For pair-specific queries, orientation in storage does not matter because matching is undirected.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edge(s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET
+
+Returns the canonical edge tuple for two vertices.
+
+This method does not query the database and does not create or validate an edge. It only returns the normalized edge identifier used by the backend.
+
+### Behaviour
+
+- Takes two vertex ids `s` and `t`
+- Ignores the `et` argument in this backend implementation
+- Returns a canonical tuple ordered by vertex id
+  - `(s, t)` if `s < t`
+  - `(t, s)` otherwise
+
+### Parameters
+
+- `s`: `VT`  
+  First vertex id.
+- `t`: `VT`  
+  Second vertex id.
+- `et`: `EdgeType`  
+  Edge type parameter from the shared interface. Present for compatibility; not used by this method.
+
+### Returns
+
+- `ET`  
+  Canonical edge tuple `(min(s, t), max(s, t))`.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import EdgeType
+
+g = GraphAGE(graph_id="example_edge")
+
+print(g.edge(5, 2))                       # (2, 5)
+print(g.edge(2, 5))                       # (2, 5)
+print(g.edge(7, 7, EdgeType.HADAMARD))    # (7, 7)
+
+g.close()
+```
+
+### Notes
+
+- This is a pure helper for canonicalizing edge ids.
+- It does not check whether vertices exist.
+- It does not check whether an actual edge is present in the graph.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edge_st(edge: ET) -> Tuple[VT, VT]
+
+Returns the source/target tuple representation of an edge.
+
+In this backend, edge identifiers are already stored as tuples, so `edge_st()` is a direct identity mapping.
+
+### Behaviour
+
+- Takes an edge identifier `edge`
+- Returns the same tuple unchanged
+- Performs no database access
+- Performs no validation of edge existence
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge identifier tuple.
+
+### Returns
+
+- `Tuple[VT, VT]`  
+  The edge endpoints as `(source, target)` in the backend's stored order.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_edge_st")
+
+e = g.edge(9, 3)      # (3, 9)
+st = g.edge_st(e)
+
+print(e)   # (3, 9)
+print(st)  # (3, 9)
+
+g.close()
+```
+
+### Notes
+
+- In GraphAGE, `edge_st(edge)` currently returns `edge` as-is.
+- This method exists mainly for backend interface consistency across implementations.
+- Use `edge_s()` / `edge_t()` when you specifically need one endpoint.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edge_s(edge: ET) -> VT
+
+Returns the source endpoint (first element) of an edge tuple.
+
+In GraphAGE, this method delegates to `edge_st(edge)` and returns index `0`.
+
+### Behaviour
+
+- Accepts an edge identifier tuple
+- Calls `edge_st(edge)`
+- Returns the first endpoint of that tuple
+- Performs no database access
+- Does not validate that the edge exists in the graph
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge identifier tuple.
+
+### Returns
+
+- `VT`  
+  The source endpoint (first item in the backend edge tuple).
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_edge_s")
+
+e = g.edge(8, 3)   # canonicalized to (3, 8)
+print(g.edge_s(e)) # 3
+
+g.close()
+```
+
+### Notes
+
+- In this backend, edges are canonicalized as ordered tuples, so `edge_s` returns the smaller endpoint id for canonical edges.
+- This is a lightweight tuple helper for interface consistency.
+- Use `edge_t(edge)` to get the second endpoint.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edge_t(edge: ET) -> VT
+
+Returns the target endpoint (second element) of an edge tuple.
+
+In GraphAGE, this method delegates to `edge_st(edge)` and returns index `1`.
+
+### Behaviour
+
+- Accepts an edge identifier tuple
+- Calls `edge_st(edge)`
+- Returns the second endpoint of that tuple
+- Performs no database access
+- Does not validate that the edge exists in the graph
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge identifier tuple.
+
+### Returns
+
+- `VT`  
+  The target endpoint (second item in the backend edge tuple).
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_edge_t")
+
+e = g.edge(8, 3)   # canonicalized to (3, 8)
+print(g.edge_t(e)) # 8
+
+g.close()
+```
+
+### Notes
+
+- In this backend, edges are canonicalized as ordered tuples, so `edge_t` returns the larger endpoint id for canonical edges.
+- This is a lightweight tuple helper for interface consistency.
+- Use `edge_s(edge)` to get the first endpoint.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
