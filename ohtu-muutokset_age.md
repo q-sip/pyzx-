@@ -880,3 +880,106 @@ g.close()
 - Matching is undirected, so stored edge direction does not affect results.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.vertex_degree(vertex: VT) -> int
+
+Returns the degree of a vertex (the number of incident `Wire` edges).
+
+The method runs a count query in AGE over all `Wire` relationships touching the given vertex id.
+
+### Behaviour
+
+- Matches edges using an undirected pattern: `(n)-[r:Wire]-()`
+- Filters by `n.id = vertex`
+- Computes `count(r)`
+- Converts the AGType count value into a Python integer
+- Returns `0` when no row is returned
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose degree should be computed.
+
+### Returns
+
+- `int`  
+  Number of incident edges.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_vertex_degree")
+
+v0, v1, v2 = g.add_vertices(3)
+g.add_edge((v0, v1))
+g.add_edge((v0, v2))
+
+print(g.vertex_degree(v0))  # 2
+print(g.vertex_degree(v1))  # 1
+print(g.vertex_degree(v2))  # 1
+
+g.close()
+```
+
+### Notes
+
+- Degree is purely edge-count based and does not depend on edge type.
+- Uses undirected matching, so storage direction does not matter.
+- For isolated vertices, this returns `0`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.incident_edges(vertex: VT) -> Sequence[ET]
+
+Returns all edges incident to the given vertex.
+
+The method queries all `Wire` relationships touching `vertex` and returns endpoint tuples for each matched edge.
+
+### Behaviour
+
+- Matches edges with an undirected pattern: `(n)-[r:Wire]-(m)`
+- Filters by `n.id = vertex`
+- Returns endpoint ids `(n.id, m.id)` for each match
+- Converts AGType values to Python integers
+- Returns a list of edge tuples
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose incident edges should be listed.
+
+### Returns
+
+- `Sequence[ET]`  
+  Edge tuples incident to `vertex`.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_incident_edges")
+
+v0, v1, v2 = g.add_vertices(3)
+g.add_edge((v0, v1))
+g.add_edge((v2, v0))
+
+ie = g.incident_edges(v0)
+print(ie)  # e.g. [(0, 1), (0, 2)] or equivalent orientation
+
+g.close()
+```
+
+### Notes
+
+- Because matching is undirected, tuple orientation may vary by query result.
+- Unlike `edges()`, this method does not explicitly canonicalize tuple order.
+- Returns an empty list if the vertex has no incident edges.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
