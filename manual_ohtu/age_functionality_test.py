@@ -2,9 +2,12 @@
 from pyzx.graph.graph_AGE import GraphAGE
 from pyzx.utils import VertexType, EdgeType
 from tests.test_graph_age import test_add_vertices
+import networkx as nx
+import matplotlib.pyplot as plt
+from fractions import Fraction
 
 # connect to AGE database
-g = GraphAGE()
+
  
 print("Successfully connected to AGE database")
 
@@ -45,6 +48,14 @@ def delete_graph():
     print("\nGraph deleted")
 
 #is_there_smoke()
-vertices = g.add_vertices(3)
-print(vertices)
+g = GraphAGE()
+#vertices = g.add_vertices(3)
+def manually_constructing():
+    i = g.add_vertex(0,0,0)
+    v = g.add_vertex(1,0,1, Fraction(1,2))
+    w = g.add_vertex(2,0,2, Fraction(-1,2))
+    o = g.add_verte(0,0,3)
+    g.add_edges([(i,v), (v,w),(w,o)])
+
+
 g.delete_graph()
