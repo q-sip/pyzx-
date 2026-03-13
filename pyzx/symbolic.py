@@ -154,6 +154,11 @@ class Term:
             if c1 != c2: return c1 < c2
         return False
 
+    @property
+    def is_bool(self) -> bool:
+        """Check if this term is a Boolean term (i.e. all variables are Boolean)"""
+        return all(v.is_bool for v, _ in self.vars)
+
     def substitute(self, var_map: Dict[Var, Union[float, complex, 'Fraction']]) -> Tuple[Union[float, complex, 'Fraction'], 'Term']:
         """Evaluate variables present in ``var_map`` and return residual term.
 
@@ -263,7 +268,13 @@ class Poly:
         return self * (self ** (other - 1))
 
     def __mod__(self, other: int) -> 'Poly':
-        return Poly([(c % other, t) for c, t in self.terms if not isinstance(c, complex)])
+        new_terms = []
+        for c, t in self.terms:
+            if isinstance(c, complex) or not t.is_bool:
+                new_terms.append((c, t))
+            else:
+                new_terms.append((c % other, t))
+        return Poly(new_terms)
 
     def __repr__(self) -> str:
         return f'Poly({str(self)})'
@@ -364,6 +375,14 @@ class Poly:
         """Return a shallow copy of the polynomial."""
         return Poly([(c, t) for c, t in self.terms])
 
+    def conjugate(self) -> 'Poly':
+        """Return the complex conjugate of the polynomial."""
+        def conj_coeff(c):
+            if isinstance(c, complex):
+                return c.conjugate()
+            return c
+        return Poly([(conj_coeff(c), t) for c, t in self.terms])
+
     def rebind_variables_to_registry(self, new_registry: VarRegistry) -> None:
         """Rebind all variables in this polynomial to the given registry."""
         for _, term in self.terms:
@@ -397,7 +416,7 @@ poly_grammar = Lark("""
     ?factor    : base ("^" exponent)?
     base       : intf | frac | decimal | pi | pifrac | var | "(" expr ")"
     exponent   : intf
-    var        : CNAME
+    var        : CNAME ("[" INT "]")?
     intf       : INT
     decimal    : DECIMAL
     pi         : "\\pi" | "pi" | "π"
@@ -456,6 +475,8 @@ class PolyTransformer(Transformer):
 
     def var(self, items: List[Any]) -> Poly:
         v = str(items[0])
+        if len(items) > 1 and items[1] is not None:
+            v += "[{}]".format(int(items[1]))
         return self._new_var(v)
 
     def pi(self, _: List[Any]) -> Poly:

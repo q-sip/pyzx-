@@ -159,7 +159,7 @@ class TestGraphBasicMethods(unittest.TestCase):
         self.assertEqual(g.num_edges(),g2.num_edges())
         v1, v2 = list(g2.vertices())
         self.assertEqual(g.edge_type(g.edge(v1,v2)),EdgeType.HADAMARD)
-        
+
     def test_adjoint_scalar(self):
         g = Graph()
         scalar = Scalar()
@@ -170,6 +170,51 @@ class TestGraphBasicMethods(unittest.TestCase):
         g.scalar = scalar
         g_adj = g.adjoint()
         self.assertAlmostEqual(g_adj.scalar.to_number(), scalar.to_number().conjugate())
+
+    def test_adjoint_z_box_label(self):
+        from pyzx.utils import get_z_box_label, set_z_box_label
+        g = Graph()
+        v = g.add_vertex(VertexType.Z_BOX)
+        set_z_box_label(g, v, (2+3j))
+        g_adj = g.adjoint()
+        adj_v = list(g_adj.vertices())[0]
+        self.assertEqual(get_z_box_label(g_adj, adj_v), (2-3j))
+
+    def test_adjoint_h_box_label(self):
+        from pyzx.utils import get_h_box_label, set_h_box_label
+        g = Graph()
+        v = g.add_vertex(VertexType.H_BOX)
+        set_h_box_label(g, v, (2+3j))
+        g_adj = g.adjoint()
+        adj_v = list(g_adj.vertices())[0]
+        self.assertEqual(get_h_box_label(g_adj, adj_v), (2-3j))
+
+    def test_adjoint_h_box_phase(self):
+        """Adjoint of a phase-based H-box should negate the phase
+        without converting to a complex label."""
+        from pyzx.utils import hbox_has_complex_label
+        g = Graph()
+        phase = Fraction(1, 2)
+        v = g.add_vertex(VertexType.H_BOX, phase=phase)
+        self.assertFalse(hbox_has_complex_label(g, v))
+        g_adj = g.adjoint()
+        adj_v = list(g_adj.vertices())[0]
+        self.assertEqual(g_adj.phase(adj_v), (-phase) % 2)
+        self.assertFalse(hbox_has_complex_label(g_adj, adj_v))
+
+    def test_set_phase_rejects_complex(self):
+        g = Graph()
+        v = g.add_vertex(VertexType.Z)
+        with self.assertRaises(TypeError):
+            g.set_phase(v, (1+2j))
+
+    def test_add_vertex_rejects_complex_phase(self):
+        from pyzx.symbolic import Poly, Term, Var
+        g = Graph()
+        var = Var('x')
+        phase = Poly([((3+2j), Term([(var, 1)]))])
+        with self.assertRaises(TypeError):
+            g.add_vertex(VertexType.Z, phase=phase)
 
     @unittest.skipUnless(np, "numpy needs to be installed for this to run")
     def test_remove_isolated_vertex_preserves_semantics(self):
@@ -409,6 +454,69 @@ class TestPhaseGadget(unittest.TestCase):
 
         e_phase = g.edge(hub, phase_v)
         self.assertEqual(g.edge_type(e_phase), EdgeType.HADAMARD)
+
+
+class TestVarRegistryPropagation(unittest.TestCase):
+    """Tests that variable type metadata is preserved through graph transforms."""
+
+    def _make_bool_var_circuit(self):
+        """Create a single-wire circuit with a boolean variable 'b' on a Z spider."""
+        from pyzx.symbolic import new_var
+        g = Graph()
+        phase = new_var('b', is_bool=True, registry=g.var_registry)
+        i = g.add_vertex(VertexType.BOUNDARY, 0, 0)
+        v = g.add_vertex(VertexType.Z, 0, 1, phase=phase)
+        o = g.add_vertex(VertexType.BOUNDARY, 0, 2)
+        g.add_edges([(i, v), (v, o)])
+        g.set_inputs((i,))
+        g.set_outputs((o,))
+        return g, v
+
+    def _make_identity_wire(self):
+        """Create a single-wire identity circuit."""
+        g = Graph()
+        i = g.add_vertex(VertexType.BOUNDARY, 0, 0)
+        o = g.add_vertex(VertexType.BOUNDARY, 0, 1)
+        g.add_edge((i, o))
+        g.set_inputs((i,))
+        g.set_outputs((o,))
+        return g
+
+    def _check_bool_var(self, g):
+        self.assertTrue(g.var_registry.get_type('b', default=False))
+
+    def test_subgraph_from_vertices_preserves_var_registry(self):
+        g, v = self._make_bool_var_circuit()
+        self._check_bool_var(g.subgraph_from_vertices([v]))
+
+    def test_merge_preserves_var_registry(self):
+        g, _ = self._make_bool_var_circuit()
+        target = Graph()
+        target.merge(g)
+        self._check_bool_var(target)
+        # Verify variables in phases are bound to target's registry.
+        target.var_registry.set_type('b', False)
+        v = [v for v in target.vertices() if target.type(v) == VertexType.Z][0]
+        var = next(iter(target.phase(v).free_vars()))
+        self.assertFalse(var.is_bool)
+
+    def test_tensor_preserves_var_registry(self):
+        g, _ = self._make_bool_var_circuit()
+        self._check_bool_var(self._make_identity_wire().tensor(g))
+
+    def test_compose_preserves_var_registry(self):
+        g, _ = self._make_bool_var_circuit()
+        wire = self._make_identity_wire()
+        wire.compose(g)
+        self._check_bool_var(wire)
+
+    def test_apply_diff_preserves_var_registry(self):
+        from pyzx.graph.diff import GraphDiff
+        g, _ = self._make_bool_var_circuit()
+        empty = Graph()
+        empty.add_vertex(VertexType.Z, 0, 0)
+        result = GraphDiff(empty, g).apply_diff(empty)
+        self._check_bool_var(result)
 
 
 if __name__ == '__main__':
