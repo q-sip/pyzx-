@@ -63,4 +63,21 @@ def simplify():
     zx.simplify.full_reduce(g)
     g.normalise()
 
+def draw_graph(g):
+
+    vertices = g.get_vertices()
+    print(vertices)
+    edges = g.get_edges()
+    print(edges)
+
+    G = nx.Graph()
+    G.add_nodes_from(vertices)
+    G.add_edges_from(edges)
+    plt.figure()
+    nx.draw(G, with_labels=True, node_color='skyblue', node_size=600, font_size=12, edge_color='gray')
+    plt.savefig("graphs/graph.png")
+    plt.show()
+manually_constructing()
+draw_graph(g)
+
 g.delete_graph()
