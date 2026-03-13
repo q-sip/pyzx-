@@ -83,6 +83,65 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
+## GraphAGE.add_vertex_indexed(v: VT) -> None
+
+Adds a vertex with a guaranteed explicit vertex id.
+
+This method is intended for workflows where vertex ids must be preserved (for example cloning/import/undo flows).
+
+### Behaviour
+
+- Checks whether a node with id `v` already exists
+- Raises `ValueError` if the id is already in use
+- Otherwise creates a new node with default values:
+  - `t = VertexType.BOUNDARY`
+  - `phase = '0'`
+  - `qubit = -1`
+  - `row = -1`
+- Updates internal `_vindex` to `v + 1` when needed
+
+### Parameters
+
+- `v`: `VT`  
+  Exact vertex id to reserve and create.
+
+### Returns
+
+- `None`
+
+### Raises
+
+- `ValueError`  
+  If a vertex with id `v` already exists.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_add_vertex_indexed")
+
+g.add_vertex_indexed(42)
+print(42 in g.vertices())  # True
+
+try:
+    g.add_vertex_indexed(42)
+except ValueError as e:
+    print(e)  # Vertex with this index already exists
+
+g.close()
+```
+
+### Notes
+
+- Created vertex uses backend defaults; customize with `set_type`, `set_phase`, `set_qubit`, `set_row` after creation.
+- This method only creates the vertex and reserves the id; it does not set inputs/outputs or edges.
+- Useful when ids must stay stable across graph reconstruction.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
 ## GraphAGE.add_vertices(amount: int) -> List[VT]
 
 Adds `amount` number new vertices to the graph in Neo4j and returns a list of containing the created vertex IDs.
@@ -123,6 +182,68 @@ vs = g.add_vertices(3)
 print(vs)  # e.g. [0, 1, 2]
 
 ```
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.add_edge(edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE) -> ET
+
+Adds a single edge and returns its canonical edge tuple.
+
+This method normalizes endpoint order and applies ZX rewrite logic when a parallel edge already exists.
+
+### Behaviour
+
+- Accepts an edge endpoint pair `(s, t)` and edge type
+- Handles self-loops specially:
+  - simple self-loop: treated as no-op
+  - Hadamard self-loop: adds phase `π` to the vertex
+  - non-ZX-like self-loop: raises `ValueError`
+- Normalizes direction to `(min(s,t), max(s,t))`
+- If no edge exists, creates a `Wire` with the requested type
+- If a parallel edge exists, applies Hopf/spider-law reduction rules
+- Returns canonical edge id via `self.edge(src, dst)`
+
+### Parameters
+
+- `edge_pair`: `Tuple[VT, VT]`  
+  Endpoints of the edge to add.
+- `edgetype`: `EdgeType`  
+  Edge type to add (default: `EdgeType.SIMPLE`).
+
+### Returns
+
+- `ET`  
+  Canonical edge tuple for the resulting edge.
+
+### Raises
+
+- `ValueError`  
+  For invalid self-loop types or unreducible parallel-edge cases.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import EdgeType, VertexType
+
+g = GraphAGE(graph_id="example_add_edge")
+
+v0 = g.add_vertex(VertexType.Z, qubit=0, row=0)
+v1 = g.add_vertex(VertexType.Z, qubit=0, row=1)
+
+e = g.add_edge((v1, v0), EdgeType.SIMPLE)
+print(e)  # canonical order, e.g. (0, 1)
+
+g.close()
+```
+
+### Notes
+
+- Endpoint order is canonicalized internally.
+- Parallel-edge handling may modify phases/scalar or remove an edge depending on types.
+- Result is always returned as canonical edge tuple.
+
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
 
 ---
@@ -2328,5 +2449,49 @@ g.close()
 - Call `close()` when finished with a graph instance to release DB resources.
 - Closing does not drop the AGE graph; use `delete_graph()` for that.
 - This is intentionally the final lifecycle method to call for an instance.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.delete_graph() -> None
+
+Drops the current AGE graph and all of its stored data.
+
+This method issues `drop_graph(graph_id, true)` and clears local read cache state.
+
+### Behaviour
+
+- Clears internal read cache before deletion
+- Executes AGE `drop_graph` for the current `graph_id` with cascading delete enabled
+- Commits on success
+- If deletion raises an exception, rolls back and returns without raising
+- Clears read cache again after successful commit
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_delete_graph")
+g.add_vertices(2)
+
+g.delete_graph()  # removes the AGE graph and its contents
+g.close()
+```
+
+### Notes
+
+- This removes the whole graph namespace in AGE, not just selected vertices/edges.
+- The method is best-effort by design: backend deletion errors are swallowed after rollback.
+- After deletion, this instance should generally be considered disposed for data operations.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
