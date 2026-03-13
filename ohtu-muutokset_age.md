@@ -2495,3 +2495,191 @@ g.close()
 - After deletion, this instance should generally be considered disposed for data operations.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.db_execute(query: str) -> None
+
+Executes a write/query statement against the AGE-backed database connection.
+
+This helper is used by mutating methods to run SQL/Cypher and manage cache/commit behavior.
+
+### Behaviour
+
+- Clears internal read cache before execution
+- Executes the provided query via Psycopg cursor
+- Commits immediately when not inside a batch (`_batch_depth == 0`)
+- Defers commit when batch mode is active
+
+### Parameters
+
+- `query`: `str`  
+  SQL statement to execute (typically wrapping an AGE Cypher call).
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_db_execute")
+
+q = f"""
+SELECT * FROM ag_catalog.cypher('{g.graph_id}', $$
+    MATCH (n:Node)
+    RETURN count(n)
+$$) AS (count agtype);
+"""
+
+g.db_execute(q)
+g.close()
+```
+
+### Notes
+
+- Callers are responsible for constructing valid SQL/Cypher.
+- This method itself does not wrap execution in try/except.
+- For grouped writes, use `begin_batch()` / `end_batch()` to control commit timing.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.begin_batch() -> None
+
+Begins a batched write section.
+
+After calling this, write operations executed through `db_execute()` defer commits until the outermost `end_batch()` call.
+
+### Behaviour
+
+- Increments internal batch depth counter (`_batch_depth`)
+- Enables deferred commit behavior while depth is greater than zero
+- Supports nested batching via repeated `begin_batch()` calls
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_begin_batch")
+
+g.begin_batch()
+g.add_vertices(2)
+g.add_vertices(1)
+g.end_batch()  # commit happens here
+
+g.close()
+```
+
+### Notes
+
+- `begin_batch()` by itself does not execute SQL.
+- Use `end_batch()` to leave batch mode and commit at outermost depth.
+- Use `rollback_batch()` to discard pending batched writes.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.end_batch() -> None
+
+Ends a batched write section.
+
+When the outermost batch is ended, pending writes are committed.
+
+### Behaviour
+
+- If batch depth is already zero or negative, returns immediately (no-op)
+- Otherwise decrements internal batch depth counter (`_batch_depth`)
+- Commits the database transaction when depth reaches zero
+- For nested batches, intermediate `end_batch()` calls only reduce depth
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_end_batch")
+
+g.begin_batch()
+g.begin_batch()
+g.add_vertices(1)
+
+g.end_batch()  # still batched, no commit yet
+g.end_batch()  # outermost end, commit happens here
+
+g.close()
+```
+
+### Notes
+
+- Safe to call when not in batch mode (no-op).
+- Use matching `begin_batch()` / `end_batch()` calls for predictable commit behavior.
+- Use `rollback_batch()` if batched changes should be discarded.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.rollback_batch() -> None
+
+Rolls back active batched writes and resets batch state.
+
+This discards uncommitted transactional changes and exits batch mode.
+
+### Behaviour
+
+- Issues database rollback on the active connection
+- Clears internal read cache
+- Resets internal batch depth counter to `0`
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_rollback_batch")
+
+g.begin_batch()
+g.add_vertices(2)
+
+g.rollback_batch()  # pending writes are discarded, batch depth reset
+
+g.close()
+```
+
+### Notes
+
+- Use this when a batched operation sequence should be canceled.
+- After rollback, subsequent writes run in normal mode until `begin_batch()` is called again.
+- This method resets batch depth unconditionally.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
