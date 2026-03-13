@@ -2683,3 +2683,187 @@ g.close()
 - This method resets batch depth unconditionally.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.inputs() -> Tuple[VT, ...]
+
+Returns the currently stored input vertex ids.
+
+This method reads the in-memory input tuple tracked by the graph instance.
+
+### Behaviour
+
+- Returns `self._inputs` as a tuple
+- Does not query the database
+- Reflects values previously set via `set_inputs(...)`
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Tuple[VT, ...]`  
+  Tuple of input vertex ids.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_inputs")
+
+v0, v1 = g.add_vertices(2)
+g.set_inputs((v0, v1))
+
+print(g.inputs())  # (v0, v1)
+
+g.close()
+```
+
+### Notes
+
+- Input metadata is maintained on the graph object.
+- This getter has no side effects.
+- Use `set_inputs(...)` to update the returned tuple.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_inputs(inputs: Tuple[VT, ...]) -> None
+
+Sets the input vertex ids for the graph.
+
+This method stores input metadata in-memory on the graph instance.
+
+### Behaviour
+
+- Converts the provided iterable/tuple to `tuple(inputs)`
+- Stores it in `self._inputs`
+- Does not query or update the database
+
+### Parameters
+
+- `inputs`: `Tuple[VT, ...]`  
+  Vertex ids that should be treated as graph inputs.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_set_inputs")
+
+v0, v1 = g.add_vertices(2)
+g.set_inputs((v0, v1))
+
+print(g.inputs())  # (v0, v1)
+
+g.close()
+```
+
+### Notes
+
+- Input metadata is graph-instance state and is not persisted via a dedicated DB field by this setter.
+- Call `set_inputs(...)` whenever reconstruction/import logic defines new boundary inputs.
+- Use `inputs()` to read back the stored tuple.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.outputs() -> Tuple[VT, ...]
+
+Returns the currently stored output vertex ids.
+
+This method reads the in-memory output tuple tracked by the graph instance.
+
+### Behaviour
+
+- Returns `self._outputs` as a tuple
+- Does not query the database
+- Reflects values previously set via `set_outputs(...)`
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Tuple[VT, ...]`  
+  Tuple of output vertex ids.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_outputs")
+
+v0, v1 = g.add_vertices(2)
+g.set_outputs((v0, v1))
+
+print(g.outputs())  # (v0, v1)
+
+g.close()
+```
+
+### Notes
+
+- Output metadata is maintained on the graph object.
+- This getter has no side effects.
+- Use `set_outputs(...)` to update the returned tuple.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_outputs(outputs: Tuple[VT, ...]) -> None
+
+Sets the output vertex ids for the graph.
+
+This method stores output metadata in-memory on the graph instance.
+
+### Behaviour
+
+- Converts the provided iterable/tuple to `tuple(outputs)`
+- Stores it in `self._outputs`
+- Does not query or update the database
+
+### Parameters
+
+- `outputs`: `Tuple[VT, ...]`  
+  Vertex ids that should be treated as graph outputs.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_set_outputs")
+
+v0, v1 = g.add_vertices(2)
+g.set_outputs((v0, v1))
+
+print(g.outputs())  # (v0, v1)
+
+g.close()
+```
+
+### Notes
+
+- Output metadata is graph-instance state and is not persisted via a dedicated DB field by this setter.
+- Call `set_outputs(...)` whenever reconstruction/import logic defines boundary outputs.
+- Use `outputs()` to read back the stored tuple.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
