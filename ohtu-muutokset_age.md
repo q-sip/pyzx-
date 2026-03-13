@@ -1787,3 +1787,225 @@ g.close()
 - If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.vdata_keys(vertex: VT) -> Sequence[str]
+
+Returns the available vertex data key names for a given vertex.
+
+If the vertex is missing or keys cannot be parsed, this method returns an empty list.
+
+### Behaviour
+
+- Matches one node by `id`
+- Reads `keys(n)` from AGE
+- Returns `[]` if no row is returned
+- Returns `[]` if returned value is empty/null
+- Tries to parse the key list as JSON
+- Returns a string list when parsing succeeds
+- Returns `[]` if parsing fails
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose key names should be listed.
+
+### Returns
+
+- `Sequence[str]`  
+  List of key names currently stored on the vertex.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_vdata_keys")
+
+v0, = g.add_vertices(1)
+g.set_vdata(v0, "label", "hello")
+g.set_vdata(v0, "weight", 3)
+
+print(g.vdata_keys(v0))  # e.g. ['id', 't', 'phase', 'qubit', 'row', 'label', 'weight']
+
+g.close()
+```
+
+### Notes
+
+- Returned keys include both base graph fields and custom vdata fields.
+- Order is backend-dependent.
+- Missing vertex does not raise; it returns an empty list.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.vdata(vertex: VT, key: str, default: Any = None) -> Any
+
+Returns a vertex data value by key.
+
+If the key is missing, null, or the vertex does not exist, this method returns `default`.
+
+### Behaviour
+
+- Escapes single quotes in the key before query construction
+- Matches one node by `id`
+- Reads `n[key]` from AGE
+- Returns `default` if no row is returned
+- Returns `default` if value is empty/null
+- Tries to parse the value as JSON
+- Returns parsed JSON value when successful
+- Returns unquoted raw string when JSON parsing fails
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id to read from.
+- `key`: `str`  
+  Data key name to retrieve.
+- `default`: `Any`  
+  Fallback value used when key/vertex has no usable value.
+
+### Returns
+
+- `Any`  
+  Stored value for `key`, otherwise `default`.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_vdata")
+
+v0, = g.add_vertices(1)
+g.set_vdata(v0, "label", "hello")
+g.set_vdata(v0, "weight", 3)
+
+print(g.vdata(v0, "label"))                # hello
+print(g.vdata(v0, "weight"))               # 3
+print(g.vdata(v0, "missing", default=-1))  # -1
+
+g.close()
+```
+
+### Notes
+
+- JSON-like stored values are parsed into Python values when possible.
+- Explicit `null` values are treated as missing and return `default`.
+- Missing vertex does not raise; it returns `default`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_vdata(vertex: VT, key: str, val: Any) -> None
+
+Sets a vertex data value for a given key.
+
+This method writes a property on the matched node and converts Python values to compatible AGE/Cypher expressions.
+
+### Behaviour
+
+- Escapes backticks in the key name for safe property access
+- Matches one node by `id`
+- Converts values as follows:
+  - `None` -> `null`
+  - `bool` -> `true`/`false`
+  - `int`/`float` -> numeric literal
+  - other values -> escaped string literal
+- Executes an update query and returns no value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id to update.
+- `key`: `str`  
+  Data key name to set.
+- `val`: `Any`  
+  Value to store for `key`.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_set_vdata")
+
+v0, = g.add_vertices(1)
+g.set_vdata(v0, "label", "hello")
+g.set_vdata(v0, "weight", 3)
+g.set_vdata(v0, "enabled", True)
+
+print(g.vdata(v0, "label"))    # hello
+print(g.vdata(v0, "weight"))   # 3
+print(g.vdata(v0, "enabled"))  # True
+
+g.close()
+```
+
+### Notes
+
+- String values are escaped for quotes and backslashes before writing.
+- If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
+- Use `clear_vdata(vertex)` to remove custom vertex data fields in bulk.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.clear_vdata(vertex: VT) -> None
+
+Removes vertex data associated with a vertex.
+
+In this AGE backend implementation, the node is reset to a minimal property map containing only `id` and `t`.
+
+### Behaviour
+
+- Matches one node by `id`
+- Replaces the full node property map with `{id: n.id, t: n.t}`
+- Removes all other properties (including layout fields and custom vdata)
+- Executes update query and returns no value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id whose data should be cleared.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_clear_vdata")
+
+v0, = g.add_vertices(1)
+g.set_vdata(v0, "label", "hello")
+g.set_vdata(v0, "weight", 3)
+
+print(g.vdata(v0, "label", default=None))  # hello
+
+g.clear_vdata(v0)
+
+print(g.vdata(v0, "label", default=None))  # None
+
+g.close()
+```
+
+### Notes
+
+- This operation is broader than removing only custom keys in this backend.
+- After clear, properties like `phase`, `qubit`, and `row` are also removed from the stored node map.
+- If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
