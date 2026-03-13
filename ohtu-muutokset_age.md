@@ -16,6 +16,73 @@ gid = f"example_{uuid.uuid4().hex}"
 g = GraphAGE()
 ```
 
+## GraphAGE.add_vertex(ty: VertexType = VertexType.BOUNDARY, qubit: FloatInt = -1, row: FloatInt = -1, phase: Optional[FractionLike] = None, ground: bool = False, index: Optional[VT] = None) -> VT
+
+Adds a single vertex to the graph and returns its vertex id.
+
+This method supports both enum and integer vertex types. For example, `add_vertex(0, 1, 2)` is valid and means boundary vertex on qubit `1`, row `2`.
+
+### Behaviour
+
+- Accepts `ty` as either `VertexType` or its integer value
+- If `phase` is omitted, defaults to `1` for `H_BOX` and `0` otherwise
+- Normalizes phase with modulo `2` when possible
+- If `index` is provided, creates/uses that exact vertex id
+- Otherwise creates at current internal index and increments `_vindex`
+- Applies `ground` and phase-tracking metadata when enabled
+
+### Parameters
+
+- `ty`: `VertexType`  
+  Vertex type (enum or compatible integer value).
+- `qubit`: `FloatInt`  
+  Layout wire index.
+- `row`: `FloatInt`  
+  Layout/order position.
+- `phase`: `Optional[FractionLike]`  
+  Phase value in units of $\pi$.
+- `ground`: `bool`  
+  Whether to mark the vertex as ground.
+- `index`: `Optional[VT]`  
+  Explicit vertex id to use.
+
+### Returns
+
+- `VT`  
+  The created vertex id.
+
+### Raises
+
+- `ValueError`  
+  If `ty` is not a valid vertex type.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_add_vertex")
+
+v0 = g.add_vertex(VertexType.Z, qubit=0, row=1)
+v1 = g.add_vertex(0, 1, 2)  # same as VertexType.BOUNDARY
+
+print(v0, g.type(v0), g.qubit(v0), g.row(v0))
+print(v1, g.type(v1), g.qubit(v1), g.row(v1))
+
+g.close()
+```
+
+### Notes
+
+- Integer type mapping uses `VertexType` enum values (`0=BOUNDARY`, `1=Z`, `2=X`, ...).
+- Invalid integer types raise `ValueError`.
+- This is the single-vertex companion to `add_vertices(amount)`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
 ## GraphAGE.add_vertices(amount: int) -> List[VT]
 
 Adds `amount` number new vertices to the graph in Neo4j and returns a list of containing the created vertex IDs.

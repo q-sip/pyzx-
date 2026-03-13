@@ -249,6 +249,11 @@ class GraphAGE(BaseGraph[VT, ET]):
         index: Optional[VT] = None,
     ) -> VT:
         """Add a single vertex to the graph and return its index."""
+        try:
+            ty = VertexType(ty)
+        except ValueError as exc:
+            raise ValueError(f"Invalid vertex type: {ty}") from exc
+
         if phase is None:
             if ty == VertexType.H_BOX:
                 phase = 1
