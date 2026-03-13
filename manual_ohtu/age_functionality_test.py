@@ -5,6 +5,7 @@ from tests.test_graph_age import test_add_vertices
 import networkx as nx
 import matplotlib.pyplot as plt
 from fractions import Fraction
+import pyzx as zx
 
 # connect to AGE database
 
@@ -57,5 +58,9 @@ def manually_constructing():
     o = g.add_verte(0,0,3)
     g.add_edges([(i,v), (v,w),(w,o)])
 
+def simplify():
+    g = zx.generate.cliffordT(3,20)
+    zx.simplify.full_reduce(g)
+    g.normalise()
 
 g.delete_graph()

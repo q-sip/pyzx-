@@ -80,7 +80,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
-                
+
     def _prepare_session(self) -> None:
         """Prepare AGE session once per DB connection."""
         if self._session_prepared:
@@ -178,6 +178,9 @@ class GraphAGE(BaseGraph[VT, ET]):
     def set_outputs(self, outputs: Tuple[VT, ...]):
         """Sets the outputs of the graph."""
         self._outputs = tuple(outputs)
+
+    def __len__(self):
+        return len(self.vertices)
 
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs
@@ -332,6 +335,18 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         if v >= self._vindex:
             self._vindex = v + 1
+    
+    def get_vertices(self):
+        query = f"""
+        SELECT * FROM cypher('{self.graph_id}', $$
+        MATCH (n)
+        RETURN n.id
+        $$) AS (id agtype);
+        """
+
+        rows = self._fetchall(query)
+        #return rows
+        return [int(str(r[0]).split("::")[0].strip('"')) for r in rows]
 
     def add_edge(  # noqa: too-many-branches
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
@@ -420,7 +435,25 @@ class GraphAGE(BaseGraph[VT, ET]):
                 )
 
         return self.edge(src, dst)
+    
+    def get_edges(self):
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (a:Node)-[e]->(b:Node)
+            RETURN a.id, b.id
+        $$) AS (a agtype, b agtype);
+        """
 
+        rows = self._fetchall(query)
+        edges = []
+
+        for r in rows:
+            a = int(str(r[0]).split("::")[0].strip('"'))
+            b = int(str(r[1]).split("::")[0].strip('"'))
+            edges.append((a,b))
+
+        return edges
+    
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
         vertex_list = list(vertices)
