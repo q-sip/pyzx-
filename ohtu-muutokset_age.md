@@ -2235,3 +2235,98 @@ g.close()
 - Missing edge does not raise; it returns an empty list.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.clone() -> GraphAGE
+
+Creates and returns a deep clone of the graph in a new AGE graph id.
+
+The clone preserves vertex/edge ids, structure, core properties, scalar, phase-tracking metadata, and custom vertex/edge data.
+
+### Behaviour
+
+- Creates a new graph id based on current id plus a UUID suffix
+- Copies scalar and phase-tracking state (`phase_index`, `phase_mult`, etc.)
+- Copies internal indexes (`_vindex`, `_maxr`)
+- Recreates every vertex with the same id, type, qubit, row, and phase
+- Copies custom vdata keys (excluding base fields)
+- Recreates every edge with same endpoints and edge type
+- Copies custom edata keys (excluding base fields)
+- Copies inputs and outputs
+
+### Parameters
+
+- None
+
+### Returns
+
+- `GraphAGE`  
+  A new graph instance containing copied graph data.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_clone_src")
+
+v0, v1 = g.add_vertices(2)
+g.add_edge((v0, v1))
+g.set_vdata(v0, "label", "left")
+
+g2 = g.clone()
+
+print(g2.num_vertices())           # same count as g
+print(g2.vdata(v0, "label"))     # left
+print(g2.connected(v0, v1))        # True
+
+g.close()
+g2.close()
+```
+
+### Notes
+
+- The clone uses a different `graph_id`, so it is stored independently in AGE.
+- Base fields (`id`, `t`, etc.) are copied via dedicated setters, while custom data is copied key-by-key.
+- This is a data clone, not a shared view; later edits do not sync between source and clone.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.close() -> None
+
+Closes the database connection used by this graph instance.
+
+### Behaviour
+
+- Closes the underlying Psycopg connection
+- After closing, further graph operations on this instance are expected to fail
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_close")
+
+g.add_vertices(1)
+g.close()
+```
+
+### Notes
+
+- Call `close()` when finished with a graph instance to release DB resources.
+- Closing does not drop the AGE graph; use `delete_graph()` for that.
+- This is intentionally the final lifecycle method to call for an instance.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
