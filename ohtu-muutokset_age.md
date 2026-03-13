@@ -2009,3 +2009,229 @@ g.close()
 - If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edata(edge: ET, key: str, default: Any = None) -> Any
+
+Returns an edge data value by key.
+
+If the key is missing, null, or the edge does not exist, this method returns `default`.
+
+### Behaviour
+
+- Escapes single quotes in the key before query construction
+- Matches a `Wire` relationship between the endpoints in `edge`
+- Reads `r[key]` from AGE
+- Returns `default` if no row is returned
+- Returns `default` if value is empty/null
+- Tries to parse the value as JSON
+- Returns parsed JSON value when successful
+- Returns unquoted raw string when JSON parsing fails
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge tuple whose data should be read.
+- `key`: `str`  
+  Data key name to retrieve.
+- `default`: `Any`  
+  Fallback value used when edge/key has no usable value.
+
+### Returns
+
+- `Any`  
+  Stored value for `key`, otherwise `default`.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_edata")
+
+v0, v1 = g.add_vertices(2)
+e = g.add_edge((v0, v1))
+
+g.set_edata(e, "label", "wire-a")
+g.set_edata(e, "weight", 7)
+
+print(g.edata(e, "label"))                # wire-a
+print(g.edata(e, "weight"))               # 7
+print(g.edata(e, "missing", default=-1))  # -1
+
+g.close()
+```
+
+### Notes
+
+- Endpoint order is treated as undirected by the match pattern.
+- JSON-like stored values are parsed into Python values when possible.
+- Missing edge does not raise; it returns `default`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.set_edata(edge: ET, key: str, val: Any) -> None
+
+Sets an edge data value for a given key.
+
+This method writes a property on the matched `Wire` relationship and converts Python values to compatible AGE/Cypher expressions.
+
+### Behaviour
+
+- Escapes backticks in the key name for safe property access
+- Matches a `Wire` relationship between the endpoints in `edge`
+- Converts values as follows:
+  - `None` -> `null`
+  - `bool` -> `true`/`false`
+  - `int`/`float` -> numeric literal
+  - other values -> escaped string literal
+- Executes an update query and returns no value
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge tuple to update.
+- `key`: `str`  
+  Data key name to set.
+- `val`: `Any`  
+  Value to store for `key`.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_set_edata")
+
+v0, v1 = g.add_vertices(2)
+e = g.add_edge((v0, v1))
+
+g.set_edata(e, "label", "wire-a")
+g.set_edata(e, "weight", 7)
+g.set_edata(e, "active", True)
+
+print(g.edata(e, "label"))   # wire-a
+print(g.edata(e, "weight"))  # 7
+print(g.edata(e, "active"))  # True
+
+g.close()
+```
+
+### Notes
+
+- String values are escaped for quotes and backslashes before writing.
+- Endpoint order is matched undirected.
+- If no matching edge exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.clear_edata(edge: ET) -> None
+
+Removes edge data associated with an edge.
+
+In this AGE backend implementation, the relationship is reset to a minimal property map containing only `t`.
+
+### Behaviour
+
+- Matches a `Wire` relationship between the endpoints in `edge`
+- Replaces the full relationship property map with `{t: r.t}`
+- Removes all other edge properties
+- Executes update query and returns no value
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge tuple whose data should be cleared.
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_clear_edata")
+
+v0, v1 = g.add_vertices(2)
+e = g.add_edge((v0, v1))
+
+g.set_edata(e, "label", "wire-a")
+print(g.edata(e, "label", default=None))  # wire-a
+
+g.clear_edata(e)
+print(g.edata(e, "label", default=None))  # None
+
+g.close()
+```
+
+### Notes
+
+- This operation keeps only the edge type field `t`.
+- Endpoint order is matched undirected.
+- If no matching edge exists, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.edata_keys(edge: ET) -> Sequence[str]
+
+Returns the available edge data key names for a given edge.
+
+If the edge is missing or keys cannot be parsed, this method returns an empty list.
+
+### Behaviour
+
+- Matches a `Wire` relationship between the endpoints in `edge`
+- Reads `keys(r)` from AGE
+- Returns `[]` if no row is returned
+- Returns `[]` if returned value is empty/null
+- Tries to parse the key list as JSON
+- Returns a string list when parsing succeeds
+- Returns `[]` if parsing fails
+
+### Parameters
+
+- `edge`: `ET`  
+  Edge tuple whose key names should be listed.
+
+### Returns
+
+- `Sequence[str]`  
+  List of key names currently stored on the edge.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_edata_keys")
+
+v0, v1 = g.add_vertices(2)
+e = g.add_edge((v0, v1))
+g.set_edata(e, "label", "wire-a")
+g.set_edata(e, "weight", 7)
+
+print(g.edata_keys(e))  # e.g. ['t', 'label', 'weight']
+
+g.close()
+```
+
+### Notes
+
+- Returned keys include base edge fields and custom edata fields.
+- Endpoint order is matched undirected.
+- Missing edge does not raise; it returns an empty list.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
