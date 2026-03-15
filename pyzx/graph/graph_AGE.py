@@ -242,44 +242,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._vindex += amount
         return vertex_ids
 
-    def add_vertex(self, v):
-        """Adds a vertex with a guaranteed index in an Apache AGE graph.
-        Raises ValueError if the index already exists."""
-
-        # Check if vertex already exists
-        q_exists = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            MATCH (n:Node {{id: {v}}})
-            RETURN count(n)
-        $$) AS (count agtype);
-        """
-
-        row = self._fetchone(q_exists)
-
-        if row and int(str(row[0]).split("::", 1)[0].strip('"')) > 0:
-            raise ValueError("Vertex with this index already exists")
-
-        # Create the vertex
-        q_create = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            CREATE (n:Node {{
-                id: {v},
-                t: {VertexType.BOUNDARY.value},
-                phase: '0',
-                qubit: -1,
-                row: -1
-            }})
-            RETURN count(n)
-        $$) AS (count agtype);
-        """
-
-        self.db_execute(q_create)
-
-        # Update local index tracking
-        if v >= self._vindex:
-            self._vindex = v + 1
-
-    def add_vertex_old(
+    def add_vertex(
         self,
         ty: VertexType = VertexType.BOUNDARY,
         qubit: FloatInt = -1,
