@@ -63,4 +63,4 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
 #print("Memgraph:", comparison_1(42, "memgraph"))
 print("Neo4j:", comparison_1(42, "neo4j"))
-print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))
+#print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))

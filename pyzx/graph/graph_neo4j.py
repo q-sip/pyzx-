@@ -126,8 +126,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             if phase is not None:
                 try:
                     phase = phase % 2
-                except Exception:
-                    pass
+                    if hasattr(phase, "terms"):
+                        phase.terms = [(c,t) for c,t in phase.terms if c != 0]
+                except Exception as e:
+                    print(f"Error occurred while processing phase: {e}")
             phase_str = self._phase_to_str(phase) if phase is not None else "0"
 
             all_vertices.append(
@@ -734,8 +736,10 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         """Sets the phase of the vertex to the given value."""
         try:
             phase = phase % 2
-        except Exception:
-            pass
+            if hasattr(phase, "terms"):
+                phase.terms = [(c,t) for c,t in phase.terms if c != 0]
+        except Exception as e:
+            print(f"Error occurred while processing phase: {e}")
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.phase = $phase"""
         with self._get_session() as session:
             session.execute_write(
