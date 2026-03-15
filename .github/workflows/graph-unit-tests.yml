@@ -5,6 +5,13 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:latest
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+        ports:
+          - 7687:7687
 
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +26,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
+        env:
+          DB_URI: bolt://localhost:7687
+          DB_PASSWORD: testpassword
         run: |
           python -m unittest discover -s tests/test_graph_neo4j -t . -v
           python -m unittest discover -s tests/test_simple_backend -t . -v
@@ -36,4 +46,7 @@ jobs:
           DB_PORT=5432
           DATABASE_URL=postgresql://postgres:postgres@age:5432/age_db
           EOF
+          docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
+          EOF
+
           docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
