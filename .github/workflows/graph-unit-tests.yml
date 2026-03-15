@@ -29,6 +29,8 @@ jobs:
         env:
           DB_URI: bolt://localhost:7687
           DB_PASSWORD: testpassword
+          BACKEND_NAME: neo4j
+          
         run: |
           python -m unittest discover -s tests/test_graph_neo4j -t . -v
           python -m unittest discover -s tests/test_simple_backend -t . -v
@@ -46,7 +48,4 @@ jobs:
           DB_PORT=5432
           DATABASE_URL=postgresql://postgres:postgres@age:5432/age_db
           EOF
-          docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
-          EOF
-
           docker compose --profile age-prof run --build --rm pyzx-age sh -lc 'cd /usr/src/app/tests/test_graph_age && python -m unittest discover -v'
