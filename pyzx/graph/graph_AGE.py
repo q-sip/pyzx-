@@ -39,7 +39,6 @@ load_dotenv()
 VT = int
 ET = Tuple[int, int]
 
-
 class GraphAGE(BaseGraph[VT, ET]):
 
     """Apache AGE-backed graph implementation."""
@@ -180,7 +179,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._outputs = tuple(outputs)
 
     def __len__(self):
-        return len(self.vertices)
+        return len(self.vertices())
 
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs
