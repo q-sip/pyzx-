@@ -141,7 +141,99 @@ class TestGraphCreationE2E(Neo4jUnitTestCase):
         neo4j, simple = self._make_graphs()
         self.assertEqual(neo4j.depth(), simple.depth())
 
+class TestAddVerticesE2E(Neo4jUnitTestCase):
+    """Tarkistetaan, että vertexit luodaan oikein ja niille annetaan loogiset id:t"""
 
+    def test_add_vertices_returns_consecutive_ids(self):
+        neo4j = self.g
+        simple = GraphS()
+
+        neo4j_ids = list(neo4j.add_vertices(5))
+        simple_ids = list(simple.add_vertices(5))
+
+        self.assertEqual(neo4j_ids, simple_ids)
+        self.assertEqual(neo4j.num_vertices(), simple.num_vertices())
+
+    def test_add_vertex_with_properties(self):
+        neo4j = self.g
+        simple = GraphS()
+
+        nv = neo4j.add_vertex(VertexType.Z, qubit=2, row=3, phase=Fraction(1, 2))
+        sv = simple.add_vertex(VertexType.Z, qubit=2, row=3, phase=Fraction(1, 2))
+
+        self.assertEqual(nv, sv)
+        self.assertEqual(neo4j.type(nv), simple.type(sv))
+        self.assertEqual(neo4j.phase(nv), simple.phase(sv))
+        self.assertEqual(neo4j.qubit(nv), simple.qubit(sv))
+        self.assertEqual(neo4j.row(nv), simple.row(sv))
+
+class TestEdgeOperationsE2E(Neo4jUnitTestCase):
+    """Varmistetaan, että kaikki edgejen operaatiot toimivat loogiseti"""
+
+    def make_base_graphs(self):
+        neo4j = self.g
+        neo4j.create_graph(
+            vertices_data=[
+                {"ty": VertexType.Z, "qubit": 0, "row": 0},
+                {"ty": VertexType.X, "qubit": 1, "row": 1},
+                {"ty": VertexType.Z, "qubit": 2, "row": 2},
+            ],
+            edges_data=[
+                ((0, 1), EdgeType.SIMPLE),
+                ((1, 2), EdgeType.HADAMARD),
+            ],
+        )
+
+        simple = GraphS()
+        vs = list(simple.add_vertices(3))
+        simple.set_type(vs[0], VertexType.Z)
+        simple.set_qubit(vs[0], 0)
+        simple.set_row(vs[0], 0)
+
+        simple.set_type(vs[1], VertexType.X)
+        simple.set_qubit(vs[1], 1)
+        simple.set_row(vs[1], 1)
+
+        simple.set_type(vs[2], VertexType.Z)
+        simple.set_qubit(vs[2], 2)
+        simple.set_row(vs[2], 2)
+
+        simple.add_edge((0, 1), EdgeType.SIMPLE)
+        simple.add_edge((1, 2), EdgeType.HADAMARD)
+
+        return neo4j, simple
+
+    def test_add_edge_increases_count_equally(self):
+        neo4j, simple = self.make_base_graphs()
+
+        neo4j.add_edge((0, 2), EdgeType.SIMPLE)
+        simple.add_edge((0, 2), EdgeType.SIMPLE)
+
+        self.assertEqual(neo4j.num_edges(), simple.num_edges())
+
+    def test_edge_type_read_back(self):
+        neo4j, simple = self.make_base_graphs()
+
+        self.assertEqual(neo4j.edge_type((0, 1)), simple.edge_type((0, 1)))
+        self.assertEqual(neo4j.edge_type((1, 2)), simple.edge_type((1, 2)))
+
+    def test_set_edge_type(self):
+        neo4j, simple = self.make_base_graphs()
+
+        neo4j.set_edge_type((0, 1), EdgeType.HADAMARD)
+        simple.set_edge_type((0, 1), EdgeType.HADAMARD)
+
+        self.assertEqual(neo4j.edge_type((0, 1)), EdgeType.HADAMARD)
+        self.assertEqual(neo4j.edge_type((0, 1)), simple.edge_type((0, 1)))
+
+    def test_remove_edges(self):
+        neo4j, simple = self.make_base_graphs()
+
+        neo4j.remove_edges([(0, 1)])
+        simple.remove_edges([(0, 1)])
+
+        self.assertEqual(neo4j.num_edges(), simple.num_edges())
+        self.assertEqual(_sorted_edge_set(neo4j), _sorted_edge_set(simple))
 
 
 
