@@ -2867,3 +2867,9 @@ g.close()
 - Use `outputs()` to read back the stored tuple.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+# GraphAGE Functionality test
+
+Selected functionalities of the GraphAGE can be run with the age functionality test. 
+
+Function plt_graph can be used to draw a graph. The graph will be stored to folder AGE graphs. 

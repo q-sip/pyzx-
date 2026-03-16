@@ -66,12 +66,12 @@ def draw_graph(g):
     return G
 
 def plt_graph(G):
+    G_nx = nx_from_age(G)
     plt.figure()
-    pos = nx.spring_layout(G)
-    nx.draw(G, pos, with_labels=True, node_color='skyblue', node_size=600, font_size=12, edge_color='gray')
+    pos = nx.spring_layout(G_nx)
+    nx.draw(G_nx, pos, with_labels=True, node_color='skyblue', node_size=600, font_size=12, edge_color='gray')
     plt.savefig(os.path.abspath("AGE_graphs/graph.png"))
     print("Graph saved to folder pyzx/AGE_graphs.")
-    #plt.show()
 
 def nx_from_age(g):
     G_nx = nx.Graph()
@@ -82,7 +82,6 @@ def nx_from_age(g):
     return G_nx
     
 manually_constructing()
-G_nx = nx_from_age(g)
-plt_graph(G_nx)
+plt_graph(g)
 
 g.delete_graph()
