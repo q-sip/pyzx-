@@ -281,3 +281,101 @@ class TestRemoveVerticesE2E(Neo4jUnitTestCase):
         self.assertEqual(sorted(neo4j.vertices()), sorted(simple.vertices()))
         self.assertEqual(neo4j.num_edges(), simple.num_edges())
 
+class TestInputsOutputsE2E(Neo4jUnitTestCase):
+    """Varmistetaan inputtien ja outputtien luku ja luominen"""
+
+    def create_graphs(self):
+        neo4j = self.g
+        neo4j.create_graph(
+            vertices_data=[
+                {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+                {"ty": VertexType.Z, "qubit": 0, "row": 1},
+                {"ty": VertexType.X, "qubit": 1, "row": 1},
+                {"ty": VertexType.BOUNDARY, "qubit": 1, "row": 2},
+            ],
+            edges_data=[
+                ((0, 1), EdgeType.SIMPLE),
+                ((1, 2), EdgeType.HADAMARD),
+                ((2, 3), EdgeType.SIMPLE),
+            ],
+        )
+
+        simple = GraphS()
+        vs = list(simple.add_vertices(4))
+        simple.set_type(vs[0], VertexType.BOUNDARY)
+        simple.set_qubit(vs[0], 0)
+        simple.set_row(vs[0], 0)
+
+        simple.set_type(vs[1], VertexType.Z)
+        simple.set_qubit(vs[1], 0)
+        simple.set_row(vs[1], 1)
+
+        simple.set_type(vs[2], VertexType.X)
+        simple.set_qubit(vs[2], 1)
+        simple.set_row(vs[2], 1)
+
+        simple.set_type(vs[3], VertexType.BOUNDARY)
+        simple.set_qubit(vs[3], 1)
+        simple.set_row(vs[3], 2)
+
+        simple.add_edge((0, 1), EdgeType.SIMPLE)
+        simple.add_edge((1, 2), EdgeType.HADAMARD)
+        simple.add_edge((2, 3), EdgeType.SIMPLE)
+
+        return neo4j, simple
+
+    def test_set_inputs(self):
+        neo4j, simple = self.create_graphs()
+
+        neo4j.set_inputs((0,))
+        simple.set_inputs((0,))
+
+
+        self.assertEqual(sorted(neo4j.inputs()), sorted(simple.inputs()))
+
+    def test_set_outputs(self):
+        neo4j, simple = self.create_graphs()
+
+        neo4j.set_outputs((3,))
+        simple.set_outputs((3,))
+
+        self.assertEqual(sorted(neo4j.outputs()), sorted(simple.outputs()))
+
+    def test_inputs_outputs_after_create_graph(self):
+        neo4j = self.g
+        neo4j.create_graph(
+            vertices_data=[
+                {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+                {"ty": VertexType.Z, "qubit": 0, "row": 1},
+                {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 2},
+            ],
+            edges_data=[
+                ((0, 1), EdgeType.SIMPLE),
+                ((1, 2), EdgeType.SIMPLE),
+            ],
+            inputs=[0],
+            outputs=[2],
+        )
+
+        simple = GraphS()
+        vs = list(simple.add_vertices(3))
+        simple.set_type(vs[0], VertexType.BOUNDARY)
+        simple.set_qubit(vs[0], 0)
+        simple.set_row(vs[0], 0)
+
+        simple.set_type(vs[1], VertexType.Z)
+        simple.set_qubit(vs[1], 0)
+        simple.set_row(vs[1], 1)
+
+        simple.set_type(vs[2], VertexType.BOUNDARY)
+        simple.set_qubit(vs[2], 0)
+        simple.set_row(vs[2], 2)
+
+        simple.add_edge((0, 1), EdgeType.SIMPLE)
+        simple.add_edge((1, 2), EdgeType.SIMPLE)
+        simple.set_inputs((0,))
+        simple.set_outputs((2,))
+
+        self.assertEqual(sorted(neo4j.inputs()), sorted(simple.inputs()))
+        self.assertEqual(sorted(neo4j.outputs()), sorted(simple.outputs()))
+
