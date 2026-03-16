@@ -236,4 +236,48 @@ class TestEdgeOperationsE2E(Neo4jUnitTestCase):
         self.assertEqual(_sorted_edge_set(neo4j), _sorted_edge_set(simple))
 
 
+class TestRemoveVerticesE2E(Neo4jUnitTestCase):
+    """Varmistetaan, että nodejen poistaminen toimii loogisesti ja samalla tavalla molemmilla backendeillä"""
+
+    def test_remove_middle_vertex(self):
+        neo4j = self.g
+        neo4j.create_graph(
+            vertices_data=[
+                {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 0},
+                {"ty": VertexType.Z, "qubit": 0, "row": 1},
+                {"ty": VertexType.BOUNDARY, "qubit": 0, "row": 2},
+            ],
+            edges_data=[
+                ((0, 1), EdgeType.SIMPLE),
+                ((1, 2), EdgeType.SIMPLE),
+            ],
+            inputs=[0],
+            outputs=[2],
+        )
+
+        simple = GraphS()
+        vs = list(simple.add_vertices(3))
+        simple.set_type(vs[0], VertexType.BOUNDARY)
+        simple.set_qubit(vs[0], 0)
+        simple.set_row(vs[0], 0)
+
+        simple.set_type(vs[1], VertexType.Z)
+        simple.set_qubit(vs[1], 0)
+        simple.set_row(vs[1], 1)
+
+        simple.set_type(vs[2], VertexType.BOUNDARY)
+        simple.set_qubit(vs[2], 0)
+        simple.set_row(vs[2], 2)
+
+        simple.add_edge((0, 1), EdgeType.SIMPLE)
+        simple.add_edge((1, 2), EdgeType.SIMPLE)
+        simple.set_inputs((0,))
+        simple.set_outputs((2,))
+
+        neo4j.remove_vertices([1])
+        simple.remove_vertices([1])
+
+        self.assertEqual(neo4j.num_vertices(), simple.num_vertices())
+        self.assertEqual(sorted(neo4j.vertices()), sorted(simple.vertices()))
+        self.assertEqual(neo4j.num_edges(), simple.num_edges())
 
