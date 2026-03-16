@@ -57,7 +57,7 @@ def manually_constructing():
     v = g.add_vertex(1,0,1, Fraction(1,2))
     w = g.add_vertex(2,0,2, Fraction(-1,2))
     o = g.add_vertex(0,0,3)
-    g.add_edges([(i,v),(v,w),(w,o)])
+    g.add_edges([(i,v), (v,w),(w,o)])
 
 def simplify():
     g = zx.generate.cliffordT(3,20)
@@ -73,7 +73,12 @@ def draw_graph(g):
     G = nx.Graph()
     G.add_nodes_from(vertices)
     G.add_edges_from(edges)
-    return G
+    print(G)
+    plt.figure()
+    pos = nx.spring_layout(G)
+    nx.draw(G, pos, with_labels=True, node_color='skyblue', node_size=600, font_size=12, edge_color='gray')
+    plt.savefig(os.path.abspath("graphs/graph.png"))
+    plt.show()
 
 def show_graph():
     G = nx.Graph()
@@ -85,8 +90,8 @@ def show_graph():
     nx.draw(G, pos, with_labels=True)
     plt.show()
     
-manually_constructing()
+#manually_constructing()
 #graph=simplify()
-draw_graph(g)
+show_graph()
 
-#g.delete_graph()
+g.delete_graph()
