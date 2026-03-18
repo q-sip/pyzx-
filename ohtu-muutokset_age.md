@@ -248,6 +248,97 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
+## GraphAGE.get_vertices() -> List[VT]
+
+Returns all vertex ids currently in the graph.
+
+This is a backend-specific convenience getter that queries AGE directly and returns integer ids.
+
+### Behaviour
+
+- Executes a Cypher query returning `n.id` for all nodes
+- Parses AGType values to Python `int`
+- Returns a list of vertex ids
+
+### Parameters
+
+- None
+
+### Returns
+
+- `List[VT]`  
+  List of vertex ids in the graph.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_get_vertices")
+
+vs = g.add_vertices(3)
+print(g.get_vertices())  # [0, 1, 2]
+
+g.close()
+```
+
+### Notes
+
+- In practice this overlaps with `vertices()` in this backend.
+- Output values are always parsed as integers.
+- Empty graph returns an empty list.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.get_edges() -> List[ET]
+
+Returns all edges currently in the graph as endpoint tuples.
+
+This is a backend-specific convenience getter that queries AGE directly for relationship endpoints.
+
+### Behaviour
+
+- Executes a Cypher query matching `(a:Node)-[e]->(b:Node)`
+- Parses endpoint ids from AGType to Python `int`
+- Returns a list of `(source, target)` tuples
+
+### Parameters
+
+- None
+
+### Returns
+
+- `List[ET]`  
+  List of edge endpoint tuples.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+
+g = GraphAGE(graph_id="example_get_edges")
+
+v0, v1, v2 = g.add_vertices(3)
+g.add_edge((v0, v1))
+g.add_edge((v1, v2))
+
+print(g.get_edges())  # e.g. [(0, 1), (1, 2)]
+
+g.close()
+```
+
+### Notes
+
+- Output is returned as raw endpoint tuples parsed from the query result.
+- For higher-level filtering by endpoints, use `edges(s, t)`.
+- Empty graph returns an empty list.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
 ## GraphAGE.remove_vertices(vertices) -> None
 
 Removes multiple vertices from the graph in a single database operation.
