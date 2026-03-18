@@ -51,6 +51,11 @@ from ..utils import (
     FloatInt,
     FractionLike,
     VertexType,
+    get_h_box_label,
+    get_z_box_label,
+    hbox_has_complex_label,
+    set_h_box_label,
+    set_z_box_label,
     toggle_edge,
     vertex_is_zx,
 )

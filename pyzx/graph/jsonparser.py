@@ -201,7 +201,19 @@ def graph_to_dict(g: BaseGraph[VT,ET], include_scalar: bool=True) -> Dict[str, A
         if isinstance(k, tuple) and len(k) == 3 and hasattr(k[2], 'value'):
             return str((k[0], k[1], k[2].value))
         return str(k)
-    d['edata'] = {edata_key_to_str(k): v for k, v in g._edata.items()}  # type: ignore[attr-defined]
+    
+    # Handle backends that don't have _edata attribute (like GraphAGE)
+    if hasattr(g, '_edata'):
+        d['edata'] = {edata_key_to_str(k): v for k, v in g._edata.items()}  # type: ignore[attr-defined]
+    else:
+        # Build edata from edges for backends that store data differently
+        edata_dict = {}
+        for edge in g.edges():
+            edge_data = g.edata_dict(edge)
+            if edge_data:
+                edata_dict[edata_key_to_str(edge)] = edge_data
+        d['edata'] = edata_dict
+    
     if g.backend == 'multigraph':
         d['auto_simplify'] = g.get_auto_simplify()
 

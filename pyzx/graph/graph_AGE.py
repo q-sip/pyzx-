@@ -24,6 +24,7 @@ import psycopg
 from .base import BaseGraph
 
 from ..utils import (
+    assert_phase_real,
     EdgeType,
     FloatInt,
     FractionLike,
@@ -48,7 +49,7 @@ class GraphAGE(BaseGraph[VT, ET]):
     def __init__(self, graph_id: Optional[str] = None):
         BaseGraph.__init__(self)
 
-        self.graph_id = graph_id if graph_id is not None else "test_graph"
+        self.graph_id = graph_id if graph_id is not None else f"g_{uuid.uuid4().hex[:12]}"
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
@@ -261,6 +262,8 @@ class GraphAGE(BaseGraph[VT, ET]):
                 phase = 1
             else:
                 phase = 0
+        
+        assert_phase_real(phase)
         try:
             phase = phase % 2
         except Exception:
@@ -841,6 +844,9 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def set_type(self, vertex: VT, t: VertexType) -> None:
         """Sets the type of the given vertex to t."""
+        # Convert int to VertexType if necessary (e.g., from JSON deserialization)
+        if isinstance(t, int):
+            t = VertexType(t)
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node {{id: {vertex}}})
@@ -899,6 +905,7 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def set_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Sets the phase of the given vertex."""
+        assert_phase_real(phase)
         try:
             phase = phase % 2
         except Exception:
@@ -1043,10 +1050,13 @@ class GraphAGE(BaseGraph[VT, ET]):
         if keys_raw in ("", "null", "None"):
             return []
 
+        # Exclude base properties that are handled separately
+        base_vprops = {"id", "t", "ty", "phase", "qubit", "row", "ground"}
+        
         try:
             parsed = json.loads(keys_raw)
             if isinstance(parsed, list):
-                return [str(k) for k in parsed]
+                return [str(k) for k in parsed if str(k) not in base_vprops]
         except json.JSONDecodeError:
             pass
         return []
@@ -1075,11 +1085,22 @@ class GraphAGE(BaseGraph[VT, ET]):
         if value_raw in ("", "null", "None"):
             return default
 
+        # Strip outer quotes if present
+        value_raw = value_raw.strip('"')
+        # Unescape the string (remove escaped backslashes)
+        value_raw = value_raw.replace('\\"', '"')
+        
         try:
             parsed = json.loads(value_raw)
-            return default if parsed is None else parsed
+            if parsed is None:
+                return default
+            # Handle complex numbers stored as {"__complex__": [real, imag]}
+            if isinstance(parsed, dict) and "__complex__" in parsed:
+                real, imag = parsed["__complex__"]
+                return complex(real, imag)
+            return parsed
         except json.JSONDecodeError:
-            return value_raw.strip('"')
+            return value_raw
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
@@ -1089,6 +1110,11 @@ class GraphAGE(BaseGraph[VT, ET]):
             value_expr = "null"
         elif isinstance(val, bool):
             value_expr = "true" if val else "false"
+        elif isinstance(val, complex):
+            # Store complex numbers as JSON {"__complex__": [real, imag]}
+            json_val = json.dumps({"__complex__": [val.real, val.imag]})
+            value_escaped = json_val.replace("\\", "\\\\").replace("'", "\\'")
+            value_expr = f"'{value_escaped}'"
         elif isinstance(val, (int, float)):
             value_expr = str(val)
         else:
@@ -1212,6 +1238,31 @@ class GraphAGE(BaseGraph[VT, ET]):
     def close(self) -> None:
         """Close the database connection."""
         self.conn.close()
+
+    def __del__(self) -> None:
+        """Ensure the database connection is closed when the object is garbage collected."""
+        try:
+            if hasattr(self, 'conn') and self.conn is not None:
+                self.conn.close()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
+    def is_ground(self, vertex: VT) -> bool:
+        """Check if a vertex is marked as ground."""
+        return self.vdata(vertex, "ground", False) is True
+
+    def grounds(self) -> Iterable[VT]:
+        """Returns an iterable of all ground vertices."""
+        result = []
+        for v in self.vertices():
+            if self.is_ground(v):
+                result.append(v)
+        return result
+
+    def set_ground(self, vertex: VT, flag: bool = True) -> None:
+        """Mark a vertex as ground or remove the ground marking."""
+        self.set_vdata(vertex, "ground", flag)
 
     def clone(self) -> "GraphAGE":
         """Return an identical copy of the graph without relabeling vertices/edges."""
