@@ -1135,7 +1135,14 @@ class GraphAGE(BaseGraph[VT, ET]):
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node {{id: {vertex}}})
-            SET n = {{id: n.id, t: n.t}}
+            SET n = {{
+                id: n.id,
+                t: n.t,
+                phase: n.phase,
+                qubit: n.qubit,
+                row: n.row,
+                ground: n.ground
+            }}
             RETURN count(n)
         $$) AS (count agtype);
         """
