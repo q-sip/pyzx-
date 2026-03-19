@@ -2016,6 +2016,7 @@ If the vertex is missing or keys cannot be parsed, this method returns an empty 
 - Returns `[]` if returned value is empty/null
 - Tries to parse the key list as JSON
 - Returns a string list when parsing succeeds
+- Filters out base node properties: `id`, `t`, `ty`, `phase`, `qubit`, `row`, `ground`
 - Returns `[]` if parsing fails
 
 ### Parameters
@@ -2039,14 +2040,14 @@ v0, = g.add_vertices(1)
 g.set_vdata(v0, "label", "hello")
 g.set_vdata(v0, "weight", 3)
 
-print(g.vdata_keys(v0))  # e.g. ['id', 't', 'phase', 'qubit', 'row', 'label', 'weight']
+print(g.vdata_keys(v0))  # e.g. ['label', 'weight']
 
 g.close()
 ```
 
 ### Notes
 
-- Returned keys include both base graph fields and custom vdata fields.
+- Returned keys include only custom vdata fields.
 - Order is backend-dependent.
 - Missing vertex does not raise; it returns an empty list.
 
@@ -2067,8 +2068,10 @@ If the key is missing, null, or the vertex does not exist, this method returns `
 - Reads `n[key]` from AGE
 - Returns `default` if no row is returned
 - Returns `default` if value is empty/null
+- Strips outer quotes and unescapes serialized JSON text when needed
 - Tries to parse the value as JSON
 - Returns parsed JSON value when successful
+- Decodes complex marker objects of the form `{"__complex__": [real, imag]}` into Python `complex`
 - Returns unquoted raw string when JSON parsing fails
 
 ### Parameters
@@ -2106,6 +2109,7 @@ g.close()
 ### Notes
 
 - JSON-like stored values are parsed into Python values when possible.
+- Complex values written by `set_vdata` are returned as Python `complex`.
 - Explicit `null` values are treated as missing and return `default`.
 - Missing vertex does not raise; it returns `default`.
 
@@ -2126,6 +2130,7 @@ This method writes a property on the matched node and converts Python values to 
 - Converts values as follows:
   - `None` -> `null`
   - `bool` -> `true`/`false`
+  - `complex` -> JSON payload `{"__complex__": [real, imag]}` stored as escaped string
   - `int`/`float` -> numeric literal
   - other values -> escaped string literal
 - Executes an update query and returns no value
@@ -2165,6 +2170,7 @@ g.close()
 ### Notes
 
 - String values are escaped for quotes and backslashes before writing.
+- Complex values are serialized with a dedicated JSON marker for safe round-trip through AGE.
 - If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
 - Use `clear_vdata(vertex)` to remove custom vertex data fields in bulk.
 
@@ -2174,15 +2180,14 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ## GraphAGE.clear_vdata(vertex: VT) -> None
 
-Removes vertex data associated with a vertex.
-
-In this AGE backend implementation, the node is reset to a minimal property map containing only `id` and `t`.
+Removes custom vertex data associated with a vertex while preserving core graph fields.
 
 ### Behaviour
 
 - Matches one node by `id`
-- Replaces the full node property map with `{id: n.id, t: n.t}`
-- Removes all other properties (including layout fields and custom vdata)
+- Replaces the full node property map with `{id, t, phase, qubit, row, ground}` from current node values
+- Removes custom vdata properties
+- Preserves core fields required for graph semantics and tensor/compose correctness
 - Executes update query and returns no value
 
 ### Parameters
@@ -2216,8 +2221,8 @@ g.close()
 
 ### Notes
 
-- This operation is broader than removing only custom keys in this backend.
-- After clear, properties like `phase`, `qubit`, and `row` are also removed from the stored node map.
+- This operation is intended to clear only custom vertex metadata.
+- Core properties (`phase`, `qubit`, `row`, `ground`) remain available after clear.
 - If no matching vertex exists, AGE updates zero rows; this method does not raise by itself.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
@@ -2540,6 +2545,34 @@ g.close()
 - Call `close()` when finished with a graph instance to release DB resources.
 - Closing does not drop the AGE graph; use `delete_graph()` for that.
 - This is intentionally the final lifecycle method to call for an instance.
+- A best-effort fallback cleanup also exists in `__del__` for cases where explicit close is missed.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.__del__() -> None
+
+Best-effort lifecycle safeguard that closes the DB connection during object finalization.
+
+### Behaviour
+
+- Checks whether `self.conn` exists and is non-null
+- Attempts to close the connection
+- Silently ignores cleanup exceptions
+
+### Parameters
+
+- None
+
+### Returns
+
+- `None`
+
+### Notes
+
+- This method is a fallback, not a replacement for explicit `close()`.
+- Explicit `close()` is still recommended for deterministic resource cleanup.
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
 
