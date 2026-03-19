@@ -24,7 +24,9 @@ jobs:
       neo4j:
         image: neo4j:latest
         ports:
-          - "7687:7687"
+          - 7687:7687
+        env:
+          NEO4J_AUTH: neo4j/testkala
 
     steps:
       - uses: actions/checkout@v4
