@@ -1,14 +1,23 @@
 import os
 from dotenv import load_dotenv
 import pyzx as zx
+import random
 from pyzx.graph.zxdb.zxdb import ZXdb
 from pyzx.graph.graph_memgraph import GraphMemgraph
 
 load_dotenv()
 URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
-c = zx.generate.CNOT_HAD_PHASE_circuit(6, 40, seed=50)
+c = zx.generate.CNOT_HAD_PHASE_circuit(10, 200, seed=50)
 g = c.to_graph(backend='memgraph')
+
+#copy_simp candidates
+# vs = list(g.vertices())
+# for idx in range(50):
+#     x_spider = g.add_vertex(zx.VertexType.X, qubit=0, row=idx, phase=0.25)
+#     z_state = g.add_vertex(zx.VertexType.Z, qubit=1, row=idx, phase=float(random.randint(0, 1)))
+#     g.add_edge((z_state, x_spider))
+
 i = input('')
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
