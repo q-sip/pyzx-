@@ -72,7 +72,7 @@
       "description": "",
       "query": {
         "code": {
-          "value": "MATCH (n1:Node {t: 1})-[r1]-(n2:Node {t: 2})\r\nWHERE n1.phase % pi() = 0\r\nWITH n1, n2, r1\r\n\r\n// Find all neighbors of n2 except n1\r\nMATCH (n2)-[r2]-(n3)\r\nWHERE n3 <> n1\r\n\r\n// Create a copy of n1 for each neighbor, connect to neighbor\r\nCREATE (n1copy:Node {t: n1.t, phase: n1.phase, id: randomUUID()})\r\nMERGE (n1copy)-[:Wire]->(n3)\r\n\r\n// After all connections, remove n2 and all its relationships\r\nWITH n2\r\nDETACH DELETE n2"
+          "value": "MATCH (n1:Node {t: 1})-[r1]-(n2:Node {t: 2})\r\nWHERE n1.graph_id = $graph_id AND n2.graph_id = $graph_id\r\n  AND toFloat(n1.phase) % 1 = 0\r\nWITH n1, n2, r1\r\n\r\nMATCH (n1)-[r_n1]-()\r\nWITH n1, n2, r1, count(r_n1) AS n1_degree\r\nWHERE n1_degree = 1\r\n\r\nOPTIONAL MATCH (n2)-[r2:Wire]-(n3)\r\nWHERE n3 <> n1\r\n\r\nWITH n1, n2, n3, r2\r\nFOREACH (_ IN CASE WHEN n3 IS NOT NULL THEN [1] ELSE [] END |\r\n    CREATE (n1copy:Node {t: n1.t, phase: n1.phase, id: randomUUID(), graph_id: $graph_id})\r\n    CREATE (n1copy)-[:Wire {t: coalesce(r2.t, 1), graph_id: $graph_id}]->(n3)\r\n)\r\n\r\nWITH n1, n2\r\nDETACH DELETE n1, n2"
         },
         "params": {}
       },

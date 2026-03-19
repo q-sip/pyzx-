@@ -860,7 +860,7 @@ class ZXdb:
         with self.driver.session() as session:
             def apply_copy_simp(tx):
                 query = str(self.basic_rewrite_rule_queries["State copy"]["query"]["code"]["value"])
-                tx.run(query)
+                tx.run(query, graph_id=self.graph_id)
 
             session.execute_write(apply_copy_simp)
 
@@ -990,9 +990,10 @@ class ZXdb:
         while True:
             # i1 = self.remove_identities()
             # i2 = self.spider_fusion()
-            i3 = self.pivot_rule()
-            return
+            #i3 = self.pivot_rule()
+            
             i4 = self.local_complementation_rule()
+            return
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
             # print(f'i3 = {i3}')
@@ -1010,7 +1011,7 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.pivot_rule()
+        self.copy_simp()
         return
         self.pivot_gadget_rule()
         while True:
