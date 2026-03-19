@@ -26,7 +26,7 @@ jobs:
         ports:
           - 7687:7687
         env:
-          NEO4J_AUTH: neo4j/testkala
+          NEO4J_AUTH: none
 
     steps:
       - uses: actions/checkout@v4
