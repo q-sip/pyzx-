@@ -4,8 +4,8 @@ Docstring for pyzx.graph.graph_AGE
 
 # pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments
 
-import os
 import json
+import os
 import uuid
 from fractions import Fraction
 from typing import (
@@ -18,10 +18,8 @@ from typing import (
     Tuple,
 )
 
-from dotenv import load_dotenv
 import psycopg
-
-from .base import BaseGraph
+from dotenv import load_dotenv
 
 from ..utils import (
     EdgeType,
@@ -33,6 +31,7 @@ from ..utils import (
     vertex_is_z_like,
     vertex_is_zx_like,
 )
+from .base import BaseGraph
 
 load_dotenv()
 
@@ -41,7 +40,6 @@ ET = Tuple[int, int]
 
 
 class GraphAGE(BaseGraph[VT, ET]):
-
     """Apache AGE-backed graph implementation."""
 
     backend = "age"
@@ -55,15 +53,6 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
 
-<<<<<<< HEAD
-        self.conn = psycopg.connect(
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT"),
-            dbname=os.getenv("POSTGRES_DB"),
-            user=os.getenv("POSTGRES_USER"),
-            password=os.getenv("POSTGRES_PASSWORD"),
-        )
-=======
         db_uri = os.getenv("DB_URI")
         connect_kwargs = {
             "host": os.getenv("DB_HOST"),
@@ -81,7 +70,6 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
         self._read_cache: dict[str, Any] = {}
         self._prepare_session()
->>>>>>> dev
 
         with self.conn.cursor() as cur:
             try:
@@ -90,18 +78,13 @@ class GraphAGE(BaseGraph[VT, ET]):
             except Exception as e:
                 print(f"Error: {e}")
                 self.conn.rollback()
-<<<<<<< HEAD
 
-    def db_execute(self, query):
-=======
-                
     def _prepare_session(self) -> None:
         """Prepare AGE session once per DB connection."""
         if self._session_prepared:
             return
->>>>>>> dev
         with self.conn.cursor() as cur:
-            cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
+            cur.execute("CREATE EXTENSION IF NOT EXISTS age;")
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
         self.conn.commit()
@@ -168,10 +151,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._read_cache.clear()
         with self.conn.cursor() as cur:
             try:
-                cur.execute(
-                    "SELECT drop_graph(%s, %s);",
-                    (self.graph_id, True)
-                )
+                cur.execute("SELECT drop_graph(%s, %s);", (self.graph_id, True))
             except Exception:
                 self.conn.rollback()
                 return
@@ -224,13 +204,11 @@ class GraphAGE(BaseGraph[VT, ET]):
             items = []
             for obj in data:
                 items.append(
-                    "{" +
-                    f"id: {obj['id']}, "
+                    "{" + f"id: {obj['id']}, "
                     f"t: {obj['t']}, "
                     f"phase: '{obj['phase']}', "
                     f"qubit: {obj['qubit']}, "
-                    f"row: {obj['row']}"
-                    + "}"
+                    f"row: {obj['row']}" + "}"
                 )
             return "[" + ", ".join(items) + "]"
 
@@ -253,28 +231,6 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         self._vindex += amount
         return vertex_ids
-<<<<<<< HEAD
-    def add_vertex(self, ty: VertexType, qubit: int = 0, row: int = 0, phase: Fraction = None):
-        """Add a vertex to the AGE graph"""
-        props = f"ty:'{ty.name}', qubit:{qubit}, row:{row}"
-        if phase is not None:
-            props += f", phase:{float(phase)}"
-        props += "}"
-        query = (
-            f"SELECT * FROM cypher('{self.graph_id}', $$ "
-            f"CREATE (n:{ty.name} {props}) "
-            "RETURN id(n) $$) AS (id agtype)"
-        )
-        with self.conn.cursor() as cur:
-            cur.execute(query)
-            row = cur.fetchone()
-            self.conn.commit()
-        if row is None:
-            raise RuntimeError("Failed to create vertex; no id returned")
-        vertex_id = str(row[0]).split("::", 1)[0].strip('"')
-        return int(vertex_id)
-=======
->>>>>>> dev
 
     def add_vertex(
         self,
@@ -427,9 +383,7 @@ class GraphAGE(BaseGraph[VT, ET]):
                     # one of each → keep fuse edge, add π to src, scalar ×½
                     self.set_edge_type((src, dst), fuse)
                     if t1 == VertexType.Z_BOX:
-                        set_z_box_label(
-                            self, src, get_z_box_label(self, src) * -1
-                        )
+                        set_z_box_label(self, src, get_z_box_label(self, src) * -1)
                     else:
                         self.add_to_phase(src, 1)
                     self.scalar.add_power(-1)
@@ -444,9 +398,7 @@ class GraphAGE(BaseGraph[VT, ET]):
                     )
             else:
                 # H-box / non-ZX-like boundary — simple parallel just reduces
-                if (
-                    vertex_is_z_like(t1) and t2 == VertexType.H_BOX
-                ) or (
+                if (vertex_is_z_like(t1) and t2 == VertexType.H_BOX) or (
                     vertex_is_z_like(t2) and t1 == VertexType.H_BOX
                 ):
                     if edgetype == EdgeType.SIMPLE:
@@ -661,8 +613,13 @@ class GraphAGE(BaseGraph[VT, ET]):
             $$) AS (src agtype, tgt agtype);
             """
             rows = self._fetchall(query)
-            return [(int(str(row[0]).split("::", 1)[0].strip('"')),
-                     int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
+            return [
+                (
+                    int(str(row[0]).split("::", 1)[0].strip('"')),
+                    int(str(row[1]).split("::", 1)[0].strip('"')),
+                )
+                for row in rows
+            ]
 
         # Return all edges, canonicalized by ID to avoid duplicates
         query = f"""
@@ -673,8 +630,13 @@ class GraphAGE(BaseGraph[VT, ET]):
         $$) AS (s agtype, t agtype);
         """
         rows = self._fetchall(query)
-        return [(int(str(row[0]).split("::", 1)[0].strip('"')),
-                 int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
+        return [
+            (
+                int(str(row[0]).split("::", 1)[0].strip('"')),
+                int(str(row[1]).split("::", 1)[0].strip('"')),
+            )
+            for row in rows
+        ]
 
     def edge(self, s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET:
         """Returns the edge between vertices s and t (canonicalized as tuple)."""
@@ -718,10 +680,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         rows = self._fetchall(query)
 
-        neighbors = {
-            int(str(row[0]).split("::", 1)[0].strip('"'))
-            for row in rows
-        }
+        neighbors = {int(str(row[0]).split("::", 1)[0].strip('"')) for row in rows}
         return list(neighbors)
 
     def vertex_degree(self, vertex: VT) -> int:
@@ -751,8 +710,10 @@ class GraphAGE(BaseGraph[VT, ET]):
         rows = self._fetchall(query)
 
         return [
-            (int(str(row[0]).split("::", 1)[0].strip('"')),
-             int(str(row[1]).split("::", 1)[0].strip('"')))
+            (
+                int(str(row[0]).split("::", 1)[0].strip('"')),
+                int(str(row[1]).split("::", 1)[0].strip('"')),
+            )
             for row in rows
         ]
 
@@ -1036,25 +997,6 @@ class GraphAGE(BaseGraph[VT, ET]):
             row = cur.fetchone()
             self.conn.commit()
 
-<<<<<<< HEAD
-    def close(self):
-        self.conn.close()
-=======
-        if not row:
-            return []
-
-        keys_raw = str(row[0]).split("::", 1)[0]
-        if keys_raw in ("", "null", "None"):
-            return []
-
-        try:
-            parsed = json.loads(keys_raw)
-            if isinstance(parsed, list):
-                return [str(k) for k in parsed]
-        except json.JSONDecodeError:
-            pass
-        return []
-
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
         If this key has no value associated with it, returns the default value."""
@@ -1257,4 +1199,3 @@ class GraphAGE(BaseGraph[VT, ET]):
         cpy.set_inputs(self.inputs())
         cpy.set_outputs(self.outputs())
         return cpy
->>>>>>> dev
