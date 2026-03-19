@@ -12,7 +12,7 @@ jobs:
       memgraph:
         image: memgraph/memgraph-mage:latest
         ports:
-          - 7445:7687
+          - 7445:7445
 
       age:
         image: apache/age:latest
