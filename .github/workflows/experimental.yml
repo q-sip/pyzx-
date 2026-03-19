@@ -24,7 +24,7 @@ jobs:
       neo4j:
         image: neo4j:latest
         ports:
-          - "7474:7474"
+          - "7687:7687"
 
     steps:
       - uses: actions/checkout@v4
@@ -54,8 +54,8 @@ jobs:
       - name: Wait for Neo4j
         run: |
           for i in {1..60}; do
-            if (echo > /dev/tcp/127.0.0.1/7474) >/dev/null 2>&1; then
-              echo "AGE is up"
+            if (echo > /dev/tcp/127.0.0.1/7687) >/dev/null 2>&1; then
+              echo "neo4 is up"
               exit 0
             fi
             sleep 2
@@ -84,3 +84,6 @@ jobs:
           BACKEND_NAME: memgraph
           POSTGRES_PASSWORD: postgres
           DB_URI: bolt://localhost:7687
+        run: |
+          python3 -m unittest discover -s "tests" -t "."
+
