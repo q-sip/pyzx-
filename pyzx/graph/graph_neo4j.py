@@ -53,7 +53,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def __init__(
         self,
-        uri: str = os.getenv("DB_URI", "bolt://neo4j:7687"),
+        uri: str = os.getenv("DB_URI", "bolt://localhost:7687"),
         # If we ahd the pro versio we could use any, but for now only neo4j is valid.
         user: str = "neo4j", # os.getenv("DB_USER", ""),
         password: str = os.getenv("DB_PASSWORD", "password"),
@@ -67,7 +67,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
         self.database = database
         self._driver = None
 
-        self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
+        self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
         # Clear any existing data for this ID to be safe (id reuse)
         if graph_id is None:
             self.remove_all_data()

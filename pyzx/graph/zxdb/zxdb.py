@@ -61,8 +61,8 @@ class ZXdb:
             self.basic_rewrite_rule_queries[e["title"]] = e
 
         # Execute the following query first: STORAGE MODE IN_MEMORY_ANALYTICAL or STORAGE MODE IN_MEMORY_TRANSACTIONAL;
-        with self.driver.session() as analyze_session:
-            analyze_session.run("STORAGE MODE IN_MEMORY_ANALYTICAL;")
+        # with self.driver.session() as analyze_session:
+        #     analyze_session.run("STORAGE MODE IN_MEMORY_ANALYTICAL;")
 
     @property
     def driver(self):
@@ -597,30 +597,41 @@ class ZXdb:
 
         with self.driver.session() as session:
             #start_time = time.time()
+            total_processed = 0
 
-            #while True:
-            #    processed = 0
+            while True:
+                processed = 0
                 
-            def apply_pivot_rule_single_interior_spider(tx):
-                pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
-                result = tx.run(pivot_query, graph_id=self.graph_id)
-                return result.single()["interior_pauli_removed"]
+                def apply_pivot_rule_single_interior_spider(tx):
+                    pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
+                    result = tx.run(pivot_query, graph_id=self.graph_id)
+                    return result.single()["interior_pauli_removed"]
 
-            processed = session.execute_write(apply_pivot_rule_single_interior_spider)
+                processed += session.execute_write(apply_pivot_rule_single_interior_spider)
 
-            def apply_pivot_rule_two_interior_spiders(tx):
-                pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
-                result = tx.run(pivot_query, graph_id=self.graph_id)
-                return result.single()["pivot_operations_performed"]
-            
-            processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
+                def apply_pivot_rule_two_interior_spiders(tx):
+                    pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
+                    # Inject missing boundary checks!
+                    pivot_query = pivot_query.replace(
+                        '  AND b.phase = round(b.phase)',
+                        '  AND b.phase = round(b.phase)\n' +
+                        '  AND size([(a)-[ea:Wire]-() WHERE ea.t <> 2 | 1]) = 0\n' +
+                        '  AND size([(b)-[eb:Wire]-() WHERE eb.t <> 2 | 1]) = 0\n' +
+                        '  AND size([(a)-[:Wire]-(na) WHERE coalesce(na.t, -1) <> 1 | 1]) = 0\n' +
+                        '  AND size([(b)-[:Wire]-(nb) WHERE coalesce(nb.t, -1) <> 1 | 1]) = 0'
+                    )
+                    result = tx.run(pivot_query, graph_id=self.graph_id)
+                    return result.single()["pivot_operations_performed"]
+                
+                processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
 
-            #if processed == 0:
-            #        break
+                if processed == 0:
+                        break
+                total_processed += processed
 
             #end_time = time.time()
-            #logging.info(f"Pivot rule applied for graph ID '{graph_id}' with {processed} patterns processed in {end_time - start_time} seconds")
-            return processed
+            #logging.info(f"Pivot rule applied for graph ID '{graph_id}' with {total_processed} patterns processed in {end_time - start_time} seconds")
+            return total_processed
         
         
     def local_complementation_rule(self) -> int:
@@ -973,13 +984,14 @@ class ZXdb:
         return count
 
     def interior_clifford_simp(self):
-        self.spider_fusion()
-        self.to_gh()
+        # self.spider_fusion()
+        # self.to_gh()
         i = 0
         while True:
-            i1 = self.remove_identities()
-            i2 = self.spider_fusion()
+            # i1 = self.remove_identities()
+            # i2 = self.spider_fusion()
             i3 = self.pivot_rule()
+            return
             i4 = self.local_complementation_rule()
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
@@ -998,7 +1010,8 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.interior_clifford_simp()
+        self.pivot_rule()
+        return
         self.pivot_gadget_rule()
         while True:
             self.clifford_simp()

@@ -7,12 +7,14 @@ from pyzx.graph.graph_memgraph import GraphMemgraph
 load_dotenv()
 URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
-c = zx.generate.CNOT_HAD_PHASE_circuit(8, 50, seed=50)
+c = zx.generate.CNOT_HAD_PHASE_circuit(6, 40, seed=50)
 g = c.to_graph(backend='memgraph')
+i = input('')
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
-
 zxdb.full_reduce()
+# zx.full_reduce(s)
+# s.normalize()
 
 # 2. Now PyZX can safely read it
 g.normalize()
@@ -24,4 +26,4 @@ g_local = g.copy(backend='simple')
 
 # 4. Compare the reduced graph directly to the original circuit!
 print(f'Comparing: {zx.compare_tensors(g_local, c, preserve_scalar=False)}')
-g.clear_clones()
+# g.clear_clones()
