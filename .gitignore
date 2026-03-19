@@ -27,7 +27,7 @@ test_output.txt
 pyzx/graph/zxdb/.gitignore.swp
 pyzx/graph/zxdb/.gitigone.swo
 pyzx/graph/zxdb/.gitigone.swp
-
+*metadata.json
 
 mutants
 true

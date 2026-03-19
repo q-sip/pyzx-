@@ -134,6 +134,13 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 lambda tx: tx.run(query)
             )
 
+    def clear_graph(self):
+        query = """MATCH(n) DETACH DELETE N"""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query)
+            )
+
     def create_graph(
         self,
         vertices_data: List[dict],

@@ -86,6 +86,19 @@ class ZXdb:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def clear_all_data(self) -> None:
+        """Clear all data from db"""
+        with self.driver.session() as session:
+
+            def clear_graph(tx):
+                tx.run("""
+                    MATCH (n) DETACH DELETE n
+                """, graph_id=self.graph_id)
+                
+                return True
+
+            session.execute_write(clear_graph)
+
 
     def empty_graphdb(self) -> None:
         """
@@ -301,104 +314,104 @@ class ZXdb:
                 
                 logging.info(f"Cleared existing graph with ID '{self.graph_id}'")
         
-            with self.driver.session() as session:
-                def create_vertices(tx):
-                    # Prepare and process vertices in batches
-                    vertices = graph_data.get("vertices", [])
-                    for i in range(0, len(vertices), batch_size):
-                        batch = vertices[i:i+batch_size]
-                        vertices_batch = []
-                        
-                        for vertex in batch:
-                            # Create vertex properties dictionary
-                            vertex_props = {
-                                "graph_id": self.graph_id,
-                                "id": vertex["id"],
-                                "t": vertex.get("t")
-                            }
+        with self.driver.session() as session:
+            def create_vertices(tx):
+                # Prepare and process vertices in batches
+                vertices = graph_data.get("vertices", [])
+                for i in range(0, len(vertices), batch_size):
+                    batch = vertices[i:i+batch_size]
+                    vertices_batch = []
+                    
+                    for vertex in batch:
+                        # Create vertex properties dictionary
+                        vertex_props = {
+                            "graph_id": self.graph_id,
+                            "id": vertex["id"],
+                            "t": vertex.get("t")
+                        }
 
-                            if "phase" in vertex:
-                                vertex_props["phase"] = float(pi_string_to_fraction(vertex["phase"]))
-                            else:
-                                if vertex.get("t") != 0:
-                                    # Default to 0 if phase is not a valid number or string
-                                    vertex_props["phase"] = 0
-                            
-                            # Add any additional properties
-                            for k, v in vertex.items():
-                                if k not in ["id", "t", "pos", "phase"]:
-                                    vertex_props[k] = v
-                            
-                            vertices_batch.append(vertex_props)
+                        if "phase" in vertex:
+                            vertex_props["phase"] = float(pi_string_to_fraction(vertex["phase"]))
+                        else:
+                            if vertex.get("t") != 0:
+                                # Default to 0 if phase is not a valid number or string
+                                vertex_props["phase"] = 0
                         
-                        # Batch create vertices
-                        if vertices_batch:
-                            tx.run("""
-                                UNWIND $vertices AS vertex
-                                CREATE (v:Node)
-                                SET v = vertex
-                            """, vertices=vertices_batch)
-                            
-                        logging.info(f"Vertex batch {i} of {np.ceil(len(vertices) / batch_size)} stored.")
+                        # Add any additional properties
+                        for k, v in vertex.items():
+                            if k not in ["id", "t", "pos", "phase"]:
+                                vertex_props[k] = v
+                        
+                        vertices_batch.append(vertex_props)
                     
-                    # Batch mark input vertices with Input label in batches
-                    if "inputs" in graph_data and graph_data["inputs"]:
-                        inputs = graph_data["inputs"]
-                        for i in range(0, len(inputs), batch_size):
-                            batch = inputs[i:i+batch_size]
-                            tx.run("""
-                                UNWIND $input_ids AS input_id
-                                MATCH (v:Node {graph_id: $graph_id, id: input_id})
-                                SET v:Input
-                            """, graph_id=self.graph_id, input_ids=batch)
-                    
-                    # Batch mark output vertices with Output label in batches
-                    if "outputs" in graph_data and graph_data["outputs"]:
-                        outputs = graph_data["outputs"]
-                        for i in range(0, len(outputs), batch_size):
-                            batch = outputs[i:i+batch_size]
-                            tx.run("""
-                                UNWIND $output_ids AS output_id
-                                MATCH (v:Node {graph_id: $graph_id, id: output_id})
-                                SET v:Output
-                            """, graph_id=self.graph_id, output_ids=batch)
-                            
-                session.execute_write(create_vertices)
+                    # Batch create vertices
+                    if vertices_batch:
+                        tx.run("""
+                            UNWIND $vertices AS vertex
+                            CREATE (v:Node)
+                            SET v = vertex
+                        """, vertices=vertices_batch)
+                        
+                    logging.info(f"Vertex batch {i} of {np.ceil(len(vertices) / batch_size)} stored.")
                 
+                # Batch mark input vertices with Input label in batches
+                if "inputs" in graph_data and graph_data["inputs"]:
+                    inputs = graph_data["inputs"]
+                    for i in range(0, len(inputs), batch_size):
+                        batch = inputs[i:i+batch_size]
+                        tx.run("""
+                            UNWIND $input_ids AS input_id
+                            MATCH (v:Node {graph_id: $graph_id, id: input_id})
+                            SET v:Input
+                        """, graph_id=self.graph_id, input_ids=batch)
+                
+                # Batch mark output vertices with Output label in batches
+                if "outputs" in graph_data and graph_data["outputs"]:
+                    outputs = graph_data["outputs"]
+                    for i in range(0, len(outputs), batch_size):
+                        batch = outputs[i:i+batch_size]
+                        tx.run("""
+                            UNWIND $output_ids AS output_id
+                            MATCH (v:Node {graph_id: $graph_id, id: output_id})
+                            SET v:Output
+                        """, graph_id=self.graph_id, output_ids=batch)
                         
-            with self.driver.session() as session:
-                def create_edges(tx):
-                    # Prepare and process edges in batches
-                    edges = graph_data.get("edges", [])
-                    for i in range(0, len(edges), batch_size):
-                        batch = edges[i:i+batch_size]
-                        edges_batch = []
-                        
-                        for edge in batch:
-                            # Edge format is [source_id, target_id, type]
-                            if len(edge) >= 3:
-                                edges_batch.append({
-                                    "source_id": edge[0],
-                                    "target_id": edge[1],
-                                    "t": edge[2],
-                                    "graph_id": self.graph_id
-                                })
-                        
-                        # Batch create edges
-                        if edges_batch:
-                            tx.run("""
-                                UNWIND $edges AS edge
-                                MATCH (source:Node {graph_id: $graph_id, id: edge.source_id})
-                                MATCH (target:Node {graph_id: $graph_id, id: edge.target_id})
-                                CREATE (source)-[r:Wire {
-                                    t: edge.t,
-                                    graph_id: edge.graph_id
-                                }]->(target)
-                            """, edges=edges_batch, graph_id=self.graph_id)
+            session.execute_write(create_vertices)
+            
+                    
+        with self.driver.session() as session:
+            def create_edges(tx):
+                # Prepare and process edges in batches
+                edges = graph_data.get("edges", [])
+                for i in range(0, len(edges), batch_size):
+                    batch = edges[i:i+batch_size]
+                    edges_batch = []
+                    
+                    for edge in batch:
+                        # Edge format is [source_id, target_id, type]
+                        if len(edge) >= 3:
+                            edges_batch.append({
+                                "source_id": edge[0],
+                                "target_id": edge[1],
+                                "t": edge[2],
+                                "graph_id": self.graph_id
+                            })
+                    
+                    # Batch create edges
+                    if edges_batch:
+                        tx.run("""
+                            UNWIND $edges AS edge
+                            MATCH (source:Node {graph_id: $graph_id, id: edge.source_id})
+                            MATCH (target:Node {graph_id: $graph_id, id: edge.target_id})
+                            CREATE (source)-[r:Wire {
+                                t: edge.t,
+                                graph_id: edge.graph_id
+                            }]->(target)
+                        """, edges=edges_batch, graph_id=self.graph_id)
 
-                        logging.info(f"Edge batch {i} of {np.ceil(len(edges) / batch_size)} stored.")
-                        
-                session.execute_write(create_edges)
+                    logging.info(f"Edge batch {i} of {np.ceil(len(edges) / batch_size)} stored.")
+                    
+            session.execute_write(create_edges)
         
         if hadamard_edges:
             self.turn_hadamard_gates_into_edges(graph_id=self.graph_id)
@@ -984,16 +997,14 @@ class ZXdb:
         return count
 
     def interior_clifford_simp(self):
-        # self.spider_fusion()
-        # self.to_gh()
+        self.spider_fusion()
+        self.to_gh()
         i = 0
         while True:
-            # i1 = self.remove_identities()
-            # i2 = self.spider_fusion()
-            #i3 = self.pivot_rule()
-            
+            i1 = self.remove_identities()
+            i2 = self.spider_fusion()
+            i3 = self.pivot_rule()
             i4 = self.local_complementation_rule()
-            return
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
             # print(f'i3 = {i3}')
@@ -1011,7 +1022,8 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.copy_simp()
+        self.interior_clifford_simp()
+        self.remove_isolated_vertices()
         return
         self.pivot_gadget_rule()
         while True:
