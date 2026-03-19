@@ -2992,6 +2992,174 @@ g.close()
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
 
+---
+
+## GraphAGE.set_ground(self, vertex: VT, flag: bool = True) -> None
+
+Sets the `ground` property on a vertex.
+
+### Behaviour
+
+- Calls `set_vdata(vertex, "ground", flag)`
+- If `flag=True`, marks the vertex as ground
+- If `flag=False`, unmarks the vertex (stores `False`)
+- Uses vertex vdata storage (same path as other custom vertex metadata)
+- Does not return a value
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id to update.
+- `flag`: `bool`  
+  Ground-state marker to store on the vertex (`True` = grounded, `False` = not grounded).
+
+### Returns
+
+- `None`
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_set_ground")
+
+v = g.add_vertex(VertexType.Z, qubit=0, row=1)
+
+g.set_ground(v, True) # Mark as ground
+
+print(g.is_ground(v)) # True
+print(list(g.grounds())) # Contains v
+
+g.set_ground(v, False) # Unmark
+
+print(g.is_ground(v)) # False
+
+g.delete_graph()
+g.close()
+``` 
+
+### Notes
+
+- Calling `set_ground(vertex)` is equivalent to `set_ground(vertex, True)`.
+- `is_ground(vertex)` reads this same `ground` value and returns a boolean check result.
+- `grounds()` returns all vertices for which `is_ground(v)` is `True`.
+- If the vertex does not exist, AGE updates zero rows; this method does not raise by itself.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.is_ground(vertex: VT) -> bool
+
+Checks whether a vertex is currently marked as ground.
+
+### Behaviour
+
+- Reads vertex metadata via `vdata(vertex, "ground", False)`
+- Returns `True` only when the stored value is boolean `True`
+- Returns `False` when the key is missing, `False`, or non-boolean
+
+### Parameters
+
+- `vertex`: `VT`  
+  Vertex id to check.
+
+### Returns
+
+- `bool`  
+  `True` if the vertex is grounded, otherwise `False`.
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_is_ground")
+
+v = g.add_vertex(VertexType.Z, qubit=0, row=1)
+
+g.set_ground(v, True) # Mark as ground
+
+print(g.is_ground(v)) # True
+
+g.set_ground(v, False) # Unmark
+
+print(g.is_ground(v)) # False
+
+g.delete_graph()
+g.close()
+``` 
+
+### Notes
+
+- This method is the read counterpart of `set_ground(vertex, flag)`.
+- `grounds()` internally uses `is_ground(v)` while iterating all vertices.
+- If the vertex does not exist, the default path returns `False`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+---
+
+## GraphAGE.grounds() -> Iterable[VT]
+
+Returns all currently grounded vertex ids.
+
+### Behaviour
+
+- Iterates through all vertices of the graph
+- Uses `is_ground()` to check every vertex
+- Stores vertex ids in a list when `is_ground(v)` returns `True`
+- Returns that list (typed as `Iterable[VT]` in the API signature)
+
+### Parameters
+
+- None
+
+### Returns
+
+- `Iterable[VT]`  
+  Iterable of grounded vertex ids (current implementation returns a list).
+
+### Example
+
+```python
+from pyzx.graph.graph_AGE import GraphAGE
+from pyzx.utils import VertexType
+
+g = GraphAGE(graph_id="example_grounds")
+
+v = g.add_vertex(VertexType.Z, qubit=0, row=1)
+v1 = g.add_vertex(VertexType.Z, qubit=0, row=1)
+
+g.set_ground(v, True) # Mark v as ground
+
+print(list(g.grounds())) # Contains v
+
+g.set_ground(v1, True) # Mark v1 as ground
+
+print(list(g.grounds())) # Contains v, v1
+
+g.set_ground(v, False) # Unmark
+g.set_ground(v1, False) # Unmark
+
+print(list(g.grounds())) # [] empty list
+
+g.delete_graph()
+g.close()
+``` 
+
+### Notes
+
+- This method reflects current vertex metadata at call time.
+- It is equivalent to filtering `vertices()` by `is_ground(v)`.
+- Grounded state is set by `set_ground(vertex, flag)`.
+
+See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
+
+
 # GraphAGE Functionality test
 
 Selected functionalities of the GraphAGE can be run with the age functionality test. 
