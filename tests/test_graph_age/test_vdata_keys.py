@@ -29,11 +29,11 @@ class TestGraphAGEVDataKeys(unittest.TestCase):
 		except Exception:
 			pass
 
-	def test_vdata_keys_contains_default_fields(self):
-		"""vdata_keys should include built-in node properties."""
+	def test_vdata_keys_excludes_default_fields(self):
+		"""vdata_keys should only expose custom fields, not built-in node properties."""
 		(v0,) = self.g.add_vertices(1)
 		keys = set(self.g.vdata_keys(v0))
-		self.assertTrue({'id', 't', 'phase', 'qubit', 'row'}.issubset(keys))
+		self.assertFalse({'id', 't', 'phase', 'qubit', 'row'}.intersection(keys))
 
 	def test_vdata_keys_contains_custom_field(self):
 		"""vdata_keys should include custom fields set via set_vdata."""
