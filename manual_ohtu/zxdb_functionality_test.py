@@ -18,6 +18,22 @@ g = c.to_graph(backend='memgraph')
 #     z_state = g.add_vertex(zx.VertexType.Z, qubit=1, row=idx, phase=float(random.randint(0, 1)))
 #     g.add_edge((z_state, x_spider))
 
+
+#local_complementation_rule candidates, leaves some isolated parts but should be correct (tensors match)
+# vs = list(g.vertices())
+# for idx in range(10):
+#     # Create the central Z-spider with +/- 0.5 phase
+#     center_phase = 0.5 if random.random() > 0.5 else -0.5
+#     center = g.add_vertex(zx.VertexType.Z, qubit=0, row=idx+100, phase=center_phase)
+    
+#     # Create a random number of Z-spider neighbors (between 3 and 5)
+#     num_neighbors = random.randint(3, 5)
+#     for n in range(num_neighbors):
+#         # The neighbors can have any phase, keep them as Z-spiders
+#         neighbor = g.add_vertex(zx.VertexType.Z, qubit=n+1, row=idx+100, phase=0.25)
+#         # They MUST be connected by HADAMARD edges for the rule to trigger
+#         g.add_edge((center, neighbor), edgetype=zx.EdgeType.HADAMARD)
+
 i = input('')
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
