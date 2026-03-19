@@ -53,7 +53,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def __init__(
         self,
-        uri: str = os.getenv("DB_URI", "bolt://localhost:7687"),
+        uri: str = os.getenv("DB_URI_NEO4J", "bolt://localhost:7687"),
         # If we ahd the pro versio we could use any, but for now only neo4j is valid.
         user: str = "neo4j", # os.getenv("DB_USER", ""),
         password: str = os.getenv("DB_PASSWORD", "password"),
@@ -150,7 +150,7 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             # src --> tgt ja vielä uusi edge, joka tgt --> src.
             all_edges = [
                 {"s": min(vertices[x[0][0]], vertices[x[0][1]]),
-                 "t": max(vertices[x[0][0]], vertices[x[0][1]]), 
+                 "t": max(vertices[x[0][0]], vertices[x[0][1]]),
                  "et": x[1].value}
                 for x in edges_data
             ]

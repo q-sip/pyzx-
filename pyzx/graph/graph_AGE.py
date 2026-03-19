@@ -53,7 +53,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
 
-        db_uri = os.getenv("DB_URI")
+        db_uri = os.getenv("DB_URI_POSTGRES")
         connect_kwargs = {
             "host": os.getenv("DB_HOST"),
             "port": os.getenv("DB_PORT"),
