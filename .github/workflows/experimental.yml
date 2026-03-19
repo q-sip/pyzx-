@@ -81,8 +81,6 @@ jobs:
         env:
           MEMGRAPH_URI: bolt://localhost:7445
           MEMGRAPH_AUTH: 1
-          DB_USER: customer
-          DB_PASSWORD: testkala
           BACKEND_NAME: memgraph
           POSTGRES_PASSWORD: postgres
           DB_URI: bolt://localhost:7687
