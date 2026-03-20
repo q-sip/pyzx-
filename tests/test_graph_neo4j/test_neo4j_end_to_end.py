@@ -379,3 +379,66 @@ class TestInputsOutputsE2E(Neo4jUnitTestCase):
         self.assertEqual(sorted(neo4j.inputs()), sorted(simple.inputs()))
         self.assertEqual(sorted(neo4j.outputs()), sorted(simple.outputs()))
 
+class TestVertexPropertiesE2E(Neo4jUnitTestCase):
+    """Varmistetaan, että vertexien ominaisuudet luetaan ja asetetaan oikein"""
+
+    def make_graphs(self):
+        neo4j = self.g
+        neo4j.create_graph(
+            vertices_data=[
+                {"ty": VertexType.Z, "qubit": 0, "row": 0, "phase": 0},
+                {"ty": VertexType.X, "qubit": 1, "row": 1, "phase": 0},
+            ],
+            edges_data=[((0, 1), EdgeType.SIMPLE)],
+        )
+
+        simple = GraphS()
+        vs = list(simple.add_vertices(2))
+        simple.set_type(vs[0], VertexType.Z)
+        simple.set_qubit(vs[0], 0)
+        simple.set_row(vs[0], 0)
+        simple.set_phase(vs[0], 0)
+
+        simple.set_type(vs[1], VertexType.X)
+        simple.set_qubit(vs[1], 1)
+        simple.set_row(vs[1], 1)
+        simple.set_phase(vs[1], 0)
+
+        simple.add_edge((0, 1), EdgeType.SIMPLE)
+
+        return neo4j, simple
+
+    def test_set_type(self):
+        neo4j, simple = self.make_graphs()
+
+        neo4j.set_type(0, VertexType.X)
+        simple.set_type(0, VertexType.X)
+
+        self.assertEqual(neo4j.type(0), simple.type(0))
+        self.assertEqual(neo4j.type(0), VertexType.X)
+
+    def test_set_phase(self):
+        neo4j, simple = self.make_graphs()
+
+        neo4j.set_phase(0, Fraction(3, 4))
+        simple.set_phase(0, Fraction(3, 4))
+
+        self.assertEqual(neo4j.phase(0), simple.phase(0))
+
+    def test_set_qubit(self):
+        neo4j, simple = self.make_graphs()
+
+        neo4j.set_qubit(0, 5)
+        simple.set_qubit(0, 5)
+
+        self.assertEqual(neo4j.qubit(0), simple.qubit(0))
+
+    def test_set_row(self):
+        neo4j, simple = self.make_graphs()
+
+        neo4j.set_row(0, 10)
+        simple.set_row(0, 10)
+
+        self.assertEqual(neo4j.row(0), simple.row(0))
+
+#class TestEdataVdataE2E(Neo4jUnitTestCase):

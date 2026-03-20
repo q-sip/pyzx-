@@ -5,7 +5,7 @@ from unittest.mock import patch
 from pyzx.graph.graph_neo4j import GraphNeo4j
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
-if "mem" in os.getenv("BACKEND_NAME", ""):
+if "mem" in os.getenv("neo4j", "") or True:
     class TestGraphBasicMethodsNeo4j(TestGraphBasicMethods):
         def setUp(self):
             self.patcher = patch('tests.test_graph.Graph', GraphNeo4j)
