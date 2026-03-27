@@ -10,7 +10,7 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-c = zx.generate.CNOT_HAD_PHASE_circuit(7, 50, seed=50)
+c = zx.generate.CNOT_HAD_PHASE_circuit(10, 150, seed=50)
 g = c.to_graph(backend='memgraph')
 
 #copy_simp candidates
@@ -39,8 +39,10 @@ g = c.to_graph(backend='memgraph')
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
 print('starting full reduce...')
+print(f"Node count: {g.num_vertices()}")
 zxdb.full_reduce()
 print('full reduce done!')
+print(f"Node count: {g.num_vertices()}")
 # zx.full_reduce(s)
 # s.normalize()
 
