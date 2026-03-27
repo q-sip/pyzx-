@@ -10,7 +10,7 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-c = zx.generate.CNOT_HAD_PHASE_circuit(10, 150, seed=50)
+c = zx.generate.CNOT_HAD_PHASE_circuit(10, 75, seed=50)
 g = c.to_graph(backend='memgraph')
 
 #copy_simp candidates
