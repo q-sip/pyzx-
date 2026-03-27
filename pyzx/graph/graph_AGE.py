@@ -235,7 +235,6 @@ class GraphAGE(BaseGraph[VT, ET]):
         }})
         RETURN count(n) $$) AS (result agtype);
         """
-
         self.db_execute(query)
 
         self._vindex += amount
