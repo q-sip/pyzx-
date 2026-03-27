@@ -211,7 +211,7 @@ def age_zxdb_to_simple_graph(db: ZXdbAge) -> zx.Graph:
 			   coalesce(n.phase, 0.0) AS phase,
 			   coalesce(n.qubit, -1) AS qubit,
 			   coalesce(n.row, -1) AS row
-		ORDER BY nid
+		ORDER BY coalesce(n.id, -1)
 		""",
 		return_signature="dbid agtype, nid agtype, t agtype, phase agtype, qubit agtype, row agtype",
 	)
