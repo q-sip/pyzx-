@@ -667,28 +667,16 @@ class ZXdb:
         """
 
         with self.driver.session() as session:
-            #start_time = time.time()
-            iteration = 0
             total_changed = 0
 
             while True:
-                iteration += 1
-                def apply_local_complementation_labeling(tx):
-                   lc_query = str(self.basic_rewrite_rule_queries["Local complement labeling"]["query"]["code"]["value"])
-                   result = tx.run(lc_query, graph_id=self.graph_id)
-                   return result.single()["num_processed"]
-                changed = session.execute_write(apply_local_complementation_labeling)
-
-                if changed == 0:
-                   break  # No more patterns found
-                
-                def apply_local_complementation_rewrite(tx):
-                    lc_query = str(self.basic_rewrite_rule_queries["Local complement rewrite"]["query"]["code"]["value"])
+                def apply_local_complementation(tx):
+                    lc_query = str(self.main_rewrite_rule_queries["Local complement"]["query"]["code"]["value"])
                     result = tx.run(lc_query, graph_id=self.graph_id)
-                    #print(result)
-                    return result.single()["num_processed"]
-                
-                changed = session.execute_write(apply_local_complementation_rewrite)
+                    records = result.data()
+                    return sum((record.get("patterns_processed", 0) or 0) for record in records)
+
+                changed = session.execute_write(apply_local_complementation)
                 if changed == 0:
                     break  # No more patterns found
 
@@ -1030,7 +1018,9 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.pivot_rule()
+        self.spider_fusion()
+        self.to_gh()
+        #self.local_complementation_rule()
         return
         self.pivot_gadget_rule()
         while True:
