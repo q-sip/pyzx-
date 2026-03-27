@@ -164,11 +164,27 @@ class ZXdbAge:
         total_patterns = 0
 
         while True:
-            query = self._get_named_query("Spider fusion age")
-
-            rows = self._execute_cypher(query, return_signature="merged agtype")
+            # Step 1: Find and create merged node
+            prepare_query = self._get_named_query("Spider fusion age - find and merge")
+            rows = self._execute_cypher(prepare_query, return_signature="merged agtype")
             merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
 
+            if merged == 0:
+                break
+
+            # Step 2: Relocate edges from old nodes to merged
+            self._execute_cypher(
+                self._get_named_query("Spider fusion age - relocate edges"),
+                return_signature="edges_relocated agtype"
+            )
+
+            # Step 3: Delete old nodes and cleanup
+            self._execute_cypher(
+                self._get_named_query("Spider fusion age - finalize"),
+                return_signature="merged agtype"
+            )
+
+            # Clean up self-loops after each fusion
             self._execute_cypher(
                 self._get_named_query("Spider fusion age - self loop cleanup"),
                 return_signature="vertices_processed agtype",
@@ -176,8 +192,6 @@ class ZXdbAge:
 
             total_patterns += merged
             print(f"Spider fusion: Processed {merged} patterns.")
-            if merged == 0:
-                break
 
         return total_patterns
 

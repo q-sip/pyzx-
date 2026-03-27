@@ -4,11 +4,31 @@
     "title": "AGE specific rewrites",
     "items": [
         {
-            "title": "Spider fusion age",
-            "description": "AGE-compatible spider fusion without reduce/collections.contains",
+            "title": "Spider fusion age - find and merge",
+            "description": "Find spiders, create merged node, mark old ones",
             "query": {
                 "code": {
-                    "value": "MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)\nWHERE ((u.t = 1 AND v.t = 1) OR (u.t = 2 AND v.t = 2))\n  AND id(u) < id(v)\nWITH u, v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row)\n})\nDETACH DELETE u, v\nRETURN count(merged) AS merged"
+                    "value": "MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)\nWHERE ((u.t = 1 AND v.t = 1) OR (u.t = 2 AND v.t = 2))\n  AND id(u) < id(v)\nWITH u, v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row)\n})\nSET u._old_fusion_node = true, v._old_fusion_node = true, merged._new_merged_node = true\nRETURN count(merged) AS merged"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Spider fusion age - relocate edges",
+            "description": "Move all edges from old nodes to merged node",
+            "query": {
+                "code": {
+                    "value": "MATCH (merged:Node {_new_merged_node: true})\nMATCH (old:Node {_old_fusion_node: true})-[edge:Wire]-(neighbor)\nWHERE NOT exists(neighbor._old_fusion_node)\nCREATE (merged)-[new_edge:Wire]->(neighbor)\nSET new_edge.t = edge.t\nRETURN count(new_edge) AS edges_relocated"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Spider fusion age - finalize",
+            "description": "Delete old nodes and cleanup markers",
+            "query": {
+                "code": {
+                    "value": "MATCH (old:Node {_old_fusion_node: true})\nDETACH DELETE old\nWITH 1 AS dummy\nMATCH (merged:Node {_new_merged_node: true})\nREMOVE merged._new_merged_node\nRETURN count(merged) AS merged"
                 },
                 "params": {}
             }

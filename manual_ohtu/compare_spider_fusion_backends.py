@@ -1,7 +1,7 @@
 """Manual cross-backend spider-fusion comparison.
 
 Run from project root:
-	python manual_ohtu/compare_backends.py
+	python manual_ohtu/compare_spider_fusion_backends.py
 
 Compares spider fusion behavior across:
 - SimpleGraph (PyZX reference)
@@ -30,6 +30,7 @@ load_dotenv()
 
 
 def build_simple_fixture() -> zx.Graph:
+	"""Two Z-spiders connected by simple edge."""
 	g = zx.Graph(backend="simple")
 
 	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
@@ -40,6 +41,98 @@ def build_simple_fixture() -> zx.Graph:
 	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
 	g.add_edge((z1, z2), edgetype=EdgeType.SIMPLE)
 	g.add_edge((z2, o), edgetype=EdgeType.SIMPLE)
+
+	g.set_inputs((i,))
+	g.set_outputs((o,))
+	return g
+
+
+def build_x_spider_fixture() -> zx.Graph:
+	"""Two X-spiders connected by simple edge."""
+	g = zx.Graph(backend="simple")
+
+	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+	x1 = g.add_vertex(VertexType.X, qubit=0, row=1, phase=Fraction(1, 4))
+	x2 = g.add_vertex(VertexType.X, qubit=0, row=2, phase=Fraction(1, 4))
+	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+
+	g.add_edge((i, x1), edgetype=EdgeType.SIMPLE)
+	g.add_edge((x1, x2), edgetype=EdgeType.SIMPLE)
+	g.add_edge((x2, o), edgetype=EdgeType.SIMPLE)
+
+	g.set_inputs((i,))
+	g.set_outputs((o,))
+	return g
+
+
+def build_three_spider_chain() -> zx.Graph:
+	"""Three Z-spiders in chain - all should fuse to one."""
+	g = zx.Graph(backend="simple")
+
+	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=Fraction(1, 6))
+	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2, phase=Fraction(1, 3))
+	z3 = g.add_vertex(VertexType.Z, qubit=0, row=3, phase=Fraction(1, 2))
+	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=4)
+
+	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z1, z2), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z2, z3), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z3, o), edgetype=EdgeType.SIMPLE)
+
+	g.set_inputs((i,))
+	g.set_outputs((o,))
+	return g
+
+
+def build_mixed_phases() -> zx.Graph:
+	"""Two Z-spiders with different phases to verify phase sum."""
+	g = zx.Graph(backend="simple")
+
+	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=Fraction(1, 3))
+	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2, phase=Fraction(1, 6))
+	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+
+	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z1, z2), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z2, o), edgetype=EdgeType.SIMPLE)
+
+	g.set_inputs((i,))
+	g.set_outputs((o,))
+	return g
+
+
+def build_no_fusion_hadamard() -> zx.Graph:
+	"""Two Z-spiders connected by hadamard - should NOT fuse."""
+	g = zx.Graph(backend="simple")
+
+	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1)
+	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2)
+	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+
+	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z1, z2), edgetype=EdgeType.HADAMARD)  # Hadamard edge - no fusion
+	g.add_edge((z2, o), edgetype=EdgeType.SIMPLE)
+
+	g.set_inputs((i,))
+	g.set_outputs((o,))
+	return g
+
+
+def build_red_green_no_fusion() -> zx.Graph:
+	"""Red and green spiders - should NOT fuse."""
+	g = zx.Graph(backend="simple")
+
+	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
+	z = g.add_vertex(VertexType.Z, qubit=0, row=1)  # Green
+	x = g.add_vertex(VertexType.X, qubit=0, row=2)  # Red
+	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
+
+	g.add_edge((i, z), edgetype=EdgeType.SIMPLE)
+	g.add_edge((z, x), edgetype=EdgeType.SIMPLE)  # Simple edge with mixed colors
+	g.add_edge((x, o), edgetype=EdgeType.SIMPLE)
 
 	g.set_inputs((i,))
 	g.set_outputs((o,))
@@ -184,9 +277,22 @@ def _graph_diag(name: str, g: zx.Graph) -> None:
 		print(f"  output {v} degree={g.vertex_degree(v)}")
 
 
-def main() -> int:
+def test_fixture(name: str, builder) -> bool:
+	"""Test a single fixture across all backends.
+	
+	Args:
+		name: Test case name
+		builder: Callable that returns a fixture graph
+	
+	Returns:
+		True if all backends agree, False otherwise
+	"""
+	print(f"\n{'='*60}")
+	print(f"Test: {name}")
+	print(f"{'='*60}")
+	
 	print("Building fixture...")
-	original = build_simple_fixture()
+	original = builder()
 
 	print("Running SimpleGraph reference (zx.spider_simp)...")
 	simple_after = original.copy()
@@ -243,11 +349,11 @@ def main() -> int:
 			_graph_diag("age_after", age_after)
 
 		all_ok = all([simple_ok, mem_ok, age_ok, mem_vs_simple, age_vs_simple, age_vs_mem])
-		print("PASS" if all_ok else "FAIL")
-		return 0 if all_ok else 1
+		print(f"Result: {'PASS' if all_ok else 'FAIL'}")
+		return all_ok
 	except Exception as exc:
 		print(f"ERROR: {type(exc).__name__}: {exc}")
-		return 1
+		return False
 	finally:
 		if g_mem is not None:
 			try:
@@ -270,6 +376,40 @@ def main() -> int:
 				age_db.close()
 			except Exception:
 				pass
+
+
+def main() -> int:
+	"""Test spider fusion across multiple fixtures."""
+	fixtures = [
+		("Two Z-spiders (same phases)", build_simple_fixture),
+		("Two X-spiders (same phases)", build_x_spider_fixture),
+		("Three Z-spiders chain", build_three_spider_chain),
+		("Two Z-spiders (mixed phases)", build_mixed_phases),
+		("Hadamard edge (no fusion)", build_no_fusion_hadamard),
+		("Red+Green (no fusion)", build_red_green_no_fusion),
+	]
+	
+	results = {}
+	for name, builder in fixtures:
+		try:
+			passed = test_fixture(name, builder)
+			results[name] = passed
+		except Exception as e:
+			print(f"EXCEPTION in {name}: {type(e).__name__}: {e}")
+			results[name] = False
+	
+	print(f"\n\n{'='*60}")
+	print("SUMMARY")
+	print(f"{'='*60}")
+	for name, passed in results.items():
+		status = "✓ PASS" if passed else "✗ FAIL"
+		print(f"{status}: {name}")
+	
+	total = len(results)
+	passed = sum(1 for p in results.values() if p)
+	print(f"\nTotal: {passed}/{total} passed")
+	
+	return 0 if all(results.values()) else 1
 
 
 if __name__ == "__main__":
