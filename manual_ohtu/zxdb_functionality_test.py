@@ -10,7 +10,8 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-c = zx.generate.CNOT_HAD_PHASE_circuit(10, 75, seed=50)
+print("Here")
+c = zx.generate.CNOT_HAD_PHASE_circuit(5, 50, seed=50)
 g = c.to_graph(backend='memgraph')
 
 #copy_simp candidates
@@ -22,24 +23,26 @@ g = c.to_graph(backend='memgraph')
 
 
 #local_complementation_rule candidates, leaves some isolated parts but should be correct (tensors match)
-# vs = list(g.vertices())
-# for idx in range(10):
-#     # Create the central Z-spider with +/- 0.5 phase
-#     center_phase = 0.5 if random.random() > 0.5 else -0.5
-#     center = g.add_vertex(zx.VertexType.Z, qubit=0, row=idx+100, phase=center_phase)
+vs = list(g.vertices())
+random.seed(420)
+for idx in range(10):
+    # Create the central Z-spider with +/- 0.5 phase
+    center_phase = 0.5 if random.random() > 0.5 else -0.5
+    center = g.add_vertex(zx.VertexType.Z, qubit=0, row=idx+100, phase=center_phase)
 
-#     # Create a random number of Z-spider neighbors (between 3 and 5)
-#     num_neighbors = random.randint(3, 5)
-#     for n in range(num_neighbors):
-#         # The neighbors can have any phase, keep them as Z-spiders
-#         neighbor = g.add_vertex(zx.VertexType.Z, qubit=n+1, row=idx+100, phase=0.25)
-#         # They MUST be connected by HADAMARD edges for the rule to trigger
-#         g.add_edge((center, neighbor), edgetype=zx.EdgeType.HADAMARD)
+    # Create a random number of Z-spider neighbors (between 3 and 5)
+    num_neighbors = random.randint(3, 5)
+    for n in range(num_neighbors):
+        # The neighbors can have any phase, keep them as Z-spiders
+        neighbor = g.add_vertex(zx.VertexType.Z, qubit=n+1, row=idx+100, phase=0.25)
+        # They MUST be connected by HADAMARD edges for the rule to trigger
+        g.add_edge((center, neighbor), edgetype=zx.EdgeType.HADAMARD)
 
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
 print('starting full reduce...')
 print(f"Node count: {g.num_vertices()}")
+input()
 zxdb.full_reduce()
 print('full reduce done!')
 print(f"Node count: {g.num_vertices()}")
@@ -63,5 +66,5 @@ print(f'Comparing: {compare}')
 # if False == False:
 #     print(f'False with seed {x}')
 #     break
-zxdb.clear_all_data()
+#zxdb.clear_all_data()
 # g.clear_clones()

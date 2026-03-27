@@ -43,29 +43,31 @@ class ZXdb:
         self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
         self.current_path = os.path.dirname(os.path.abspath(__file__))
 
-        # with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
-        #     query_collection = json.load(f)
+        with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
+            query_collection = json.load(f)
 
-        # for e in query_collection["items"]:
-        #     self.basic_rewrite_rule_queries[e["title"]] = e
+        for e in query_collection["items"]:
+            self.basic_rewrite_rule_queries[e["title"]] = e
 
-        # with open(f"{self.current_path}/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
-        #     query_collection = json.load(f)
+        with open(f"{self.current_path}/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
+            query_collection = json.load(f)
 
-        # for e in query_collection["items"]:
-        #     self.basic_rewrite_rule_queries[e["title"]] = e
+        for e in query_collection["items"]:
+            self.basic_rewrite_rule_queries[e["title"]] = e
         
-        # with open(f"{self.current_path}/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
-        #     query_collection = json.load(f)
+        with open(f"{self.current_path}/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
+            query_collection = json.load(f)
 
-        # for e in query_collection["items"]:
-        #     self.basic_rewrite_rule_queries[e["title"]] = e
+        for e in query_collection["items"]:
+            self.basic_rewrite_rule_queries[e["title"]] = e
 
         with open(f"{self.current_path}/query_collections/main_queries.json", "r") as f:
             query_collection = json.load(f)
 
         for e in query_collection["items"]:
-            self.basic_rewrite_rule_queries[e["title"]] = e
+            title = e["title"]
+            self.basic_rewrite_rule_queries[title] = e
+            self.main_rewrite_rule_queries[title] = e
 
         # Execute the following query first: STORAGE MODE IN_MEMORY_ANALYTICAL or STORAGE MODE IN_MEMORY_TRANSACTIONAL;
         # with self.driver.session() as analyze_session:
@@ -1011,7 +1013,11 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.interior_clifford_simp()
+        self.spider_fusion()
+        input()
+        self.to_gh()
+        input("end")
+        self.local_complementation_rule()
         return
         self.pivot_gadget_rule()
         while True:
