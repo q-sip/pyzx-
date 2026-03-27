@@ -43,25 +43,25 @@ class ZXdb:
         self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
         self.current_path = os.path.dirname(os.path.abspath(__file__))
 
-        with open(f"{self.current_path}/query_collections/main_queries.json", "r") as f:
-            query_collection = json.load(f)
+        # with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
+        #     query_collection = json.load(f)
 
-        for e in query_collection["items"]:
-            self.main_rewrite_rule_queries[e["title"]] = e
+        # for e in query_collection["items"]:
+        #     self.basic_rewrite_rule_queries[e["title"]] = e
 
-        with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
-            query_collection = json.load(f)
+        # with open(f"{self.current_path}/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
+        #     query_collection = json.load(f)
 
-        for e in query_collection["items"]:
-            self.basic_rewrite_rule_queries[e["title"]] = e
-
-        with open(f"{self.current_path}/query_collections/collection-Rewrite-queries-ZXdb.json", "r") as f:
-            query_collection = json.load(f)
-
-        for e in query_collection["items"]:
-            self.basic_rewrite_rule_queries[e["title"]] = e
+        # for e in query_collection["items"]:
+        #     self.basic_rewrite_rule_queries[e["title"]] = e
         
-        with open(f"{self.current_path}/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
+        # with open(f"{self.current_path}/query_collections/collection-Labeling-queries-ZXdb.json", "r") as f:
+        #     query_collection = json.load(f)
+
+        # for e in query_collection["items"]:
+        #     self.basic_rewrite_rule_queries[e["title"]] = e
+
+        with open(f"{self.current_path}/query_collections/main_queries.json", "r") as f:
             query_collection = json.load(f)
 
         for e in query_collection["items"]:
@@ -547,19 +547,7 @@ class ZXdb:
                 # Use explicit transaction for all queries in one batch
                 def spider_fusion_batch(tx):
                     # Fuse same-colored spiders connected by simple edges (r.t = 1)
-                    cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion rewrite 2"]["query"]["code"]["value"])
-                    # Fix operator precedence bug: ensure r.t = 1 applies to both color cases
-                    cancel_query = cancel_query.replace(
-                        "WHERE (a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2) AND r.t = 1",
-                        "WHERE ((a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2)) AND r.t = 1"
-                    )
-                    cancel_query = cancel_query.replace(
-                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x)",
-                        "FOREACH (_ IN CASE WHEN x IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x))"
-                    ).replace(
-                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y)",
-                        "FOREACH (_ IN CASE WHEN y IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y))"
-                    )
+                    cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion"]["query"]["code"]["value"])
                     result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
                     merged = result_fuse_green.single()["merged"]
 
@@ -569,7 +557,7 @@ class ZXdb:
                     self_loop_query = """
                     // Find all self-loops on ZX-like vertices (t=1 or t=2)
                     MATCH (v:Node)-[r:Wire]-(v)
-                    WHERE v.t IN [1, 2]
+                    WHERE v.t IN [1, 2] AND v.graph_id = $graph_id
                     WITH v, collect(r) AS self_loops
                     WHERE size(self_loops) > 0
                     
@@ -589,7 +577,7 @@ class ZXdb:
                     
                     RETURN count(DISTINCT v) AS vertices_processed
                     """
-                    tx.run(self_loop_query)
+                    tx.run(self_loop_query, graph_id=self.graph_id)
 
                     return merged
 
@@ -1006,13 +994,17 @@ class ZXdb:
 
     def interior_clifford_simp(self):
         self.spider_fusion()
-        self.to_gh()
+        return
+        # self.to_gh()
         i = 0
         while True:
-            i1 = self.remove_identities()
-            i2 = self.spider_fusion()
+            # i1 = self.remove_identities()
+            # i2 = self.spider_fusion()
             i3 = self.pivot_rule()
-            i4 = self.local_complementation_rule()
+            # i4 = self.local_complementation_rule()
+            i1 = 0
+            i2 = 0
+            i4 = 0
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
             # print(f'i3 = {i3}')
@@ -1030,8 +1022,7 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.pivot_rule()
-        return
+        self.interior_clifford_simp()
         self.pivot_gadget_rule()
         while True:
             self.clifford_simp()
@@ -1042,4 +1033,3 @@ class ZXdb:
             j = self.pivot_gadget_rule()
             if not (i or k or j or l):
                 self.remove_isolated_vertices()
-                break
