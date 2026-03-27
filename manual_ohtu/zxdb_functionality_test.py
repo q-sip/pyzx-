@@ -10,9 +10,9 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-print("Here")
-c = zx.generate.CNOT_HAD_PHASE_circuit(5, 50, seed=50)
+c = zx.generate.CNOT_HAD_PHASE_circuit(6, 50, seed=50)
 g = c.to_graph(backend='memgraph')
+i = input('')
 
 #copy_simp candidates
 # vs = list(g.vertices())
@@ -66,5 +66,5 @@ print(f'Comparing: {compare}')
 # if False == False:
 #     print(f'False with seed {x}')
 #     break
-#zxdb.clear_all_data()
+# zxdb.clear_all_data()
 # g.clear_clones()
