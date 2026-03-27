@@ -1,0 +1,67 @@
+{
+    "version": 1,
+    "type": "collection",
+    "title": "AGE specific rewrites",
+    "items": [
+        {
+            "title": "Spider fusion age",
+            "description": "AGE-compatible spider fusion without reduce/collections.contains",
+            "query": {
+                "code": {
+                    "value": "MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)\nWHERE ((u.t = 1 AND v.t = 1) OR (u.t = 2 AND v.t = 2))\n  AND id(u) < id(v)\nWITH u, v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row)\n})\nDETACH DELETE u, v\nRETURN count(merged) AS merged"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Change color age - mark",
+            "description": "Mark red spiders for AGE-safe to_gh rewrite",
+            "query": {
+                "code": {
+                    "value": "MATCH (n:Node)\nWHERE n.t = 2\nSET n._to_gh_mark = true\nRETURN count(n) AS marked"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Change color age - recolor",
+            "description": "Recolor marked red spiders to green",
+            "query": {
+                "code": {
+                    "value": "MATCH (n:Node {_to_gh_mark: true})\nSET n.t = 1\nRETURN count(n) AS recolored"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Change color age - toggle wires",
+            "description": "Toggle edge types around marked spiders (1 <-> 2)",
+            "query": {
+                "code": {
+                    "value": "MATCH (n:Node {_to_gh_mark: true})-[w:Wire]-()\nWHERE w.t IN [1, 2]\nWITH DISTINCT w\nSET w.t = CASE w.t WHEN 1 THEN 2 ELSE 1 END\nRETURN count(w) AS toggled"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Change color age - cleanup",
+            "description": "Remove temporary to_gh marker",
+            "query": {
+                "code": {
+                    "value": "MATCH (n:Node {_to_gh_mark: true})\nREMOVE n._to_gh_mark\nRETURN count(n) AS cleaned"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Spider fusion age - self loop cleanup",
+            "description": "Remove ZX self-loops and add pi phase for odd hadamard self-loops",
+            "query": {
+                "code": {
+                    "value": "MATCH (v:Node)-[r:Wire]-(v)\nWHERE v.t IN [1, 2]\nWITH v,\n     count(r) AS self_loop_count,\n     sum(CASE WHEN r.t = 2 THEN 1 ELSE 0 END) AS hadamard_count\nWHERE self_loop_count > 0\nSET v.phase = coalesce(v.phase, 0) + CASE WHEN hadamard_count % 2 = 1 THEN 1 ELSE 0 END\nWITH v\nMATCH (v)-[loop_edge:Wire]-(v)\nDELETE loop_edge\nRETURN count(DISTINCT v) AS vertices_processed"
+                },
+                "params": {}
+            }
+        }
+    ]
+}

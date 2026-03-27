@@ -101,9 +101,12 @@ class ZXdbAge:
     def _load_default_query_collections(self) -> None:
         """Load query collection JSON files from query_collections directory."""
         for file_name in (
+            "main_queries.json",
+            "memgraph-collection-zxdb-age.json",
             "collection-Rewrite-queries-ZXdb-age.json",
             "collection-Labeling-queries-ZXdb-age.json",
             "collection-circuit-extraction-age.json",
+            "age-specific-queries.json",
         ):
             self._load_collection_file(file_name)
 
@@ -118,11 +121,15 @@ class ZXdbAge:
     def _execute_cypher(self, cypher_query: str, return_signature: str = "result agtype") -> list:
         """Execute raw Cypher wrapped for AGE and return fetched rows."""
         sql = self._wrap_cypher(cypher_query, return_signature=return_signature)
-        with self.conn.cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall() if cur.description else []
-        self.conn.commit()
-        return rows
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql)
+                rows = cur.fetchall() if cur.description else []
+            self.conn.commit()
+            return rows
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def _get_named_query(self, title: str) -> str:
         """Get query body from loaded collection by title."""
@@ -153,8 +160,26 @@ class ZXdbAge:
         return 0
 
     def spider_fusion(self) -> int:
-        """TODO: implement AGE spider fusion rewrite."""
-        return 0
+        """Apply spider-fusion rewrites until no more patterns are found."""
+        total_patterns = 0
+
+        while True:
+            query = self._get_named_query("Spider fusion age")
+
+            rows = self._execute_cypher(query, return_signature="merged agtype")
+            merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+
+            self._execute_cypher(
+                self._get_named_query("Spider fusion age - self loop cleanup"),
+                return_signature="vertices_processed agtype",
+            )
+
+            total_patterns += merged
+            print(f"Spider fusion: Processed {merged} patterns.")
+            if merged == 0:
+                break
+
+        return total_patterns
 
     def pivot_rule(self) -> int:
         """TODO: implement AGE pivot rewrite."""
@@ -194,12 +219,22 @@ class ZXdbAge:
 
     def to_gh(self) -> None:
         """Change color of all red vertices to green."""
-        try:
-            query = self._get_named_query("Change color")
-            self._execute_cypher(query)
-        except KeyError:
-            # Fallback: if query not in collection, use inline Cypher
-            self._execute_cypher("MATCH (n:Node) WHERE n.t = 2 SET n.t = 1")
+        self._execute_cypher(
+            self._get_named_query("Change color age - mark"),
+            return_signature="marked agtype",
+        )
+        self._execute_cypher(
+            self._get_named_query("Change color age - recolor"),
+            return_signature="recolored agtype",
+        )
+        self._execute_cypher(
+            self._get_named_query("Change color age - toggle wires"),
+            return_signature="toggled agtype",
+        )
+        self._execute_cypher(
+            self._get_named_query("Change color age - cleanup"),
+            return_signature="cleaned agtype",
+        )
 
     def remove_isolated_vertices(self) -> None:
         """TODO: implement isolated-vertex cleanup."""
