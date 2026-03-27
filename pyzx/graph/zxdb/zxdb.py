@@ -549,7 +549,8 @@ class ZXdb:
                     # Fuse same-colored spiders connected by simple edges (r.t = 1)
                     cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion"]["query"]["code"]["value"])
                     result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
-                    merged = result_fuse_green.single()["merged"]
+                    single_res = result_fuse_green.single()
+                    merged = single_res["merged"] if single_res else 0
 
                     # Remove self-loops (matching remove_self_loop_simp behavior)
                     # For ZX-like vertices: simple self-loops are removed, 
@@ -1011,6 +1012,7 @@ class ZXdb:
 
     def full_reduce(self):
         self.interior_clifford_simp()
+        return
         self.pivot_gadget_rule()
         while True:
             self.clifford_simp()
