@@ -935,3 +935,27 @@ DETACH DELETE u, v
 
 RETURN COUNT(*) AS merged;"
                 },
+
+//"identity removal new",
+
+"MATCH (b:Node) 
+WHERE b.phase % 2 = 0 AND b.t = 1 AND degree(b) = 2 
+MATCH (v1)-[e1:Wire]-(b)-[e2:Wire]-(v2) 
+WHERE id(v1) < id(v2) 
+  AND NOT (v1.t = 0 AND v2.t = 0) // Prevent boundary-to-boundary direct wiring
+  
+  // THE FIX: Tie-breaker for adjacent identity spiders
+  AND NOT (v1.t = 1 AND v1.phase % 2 = 0 AND degree(v1) = 2 AND id(v1) < id(b))
+  AND NOT (v2.t = 1 AND v2.phase % 2 = 0 AND degree(v2) = 2 AND id(v2) < id(b))
+
+// Calculate the new edge type
+WITH b, v1, v2, e1, e2, 
+     CASE WHEN (e1.t + e2.t) % 2 = 0 THEN 1 ELSE 2 END AS new_type
+
+// Create the new connection preserving the graph properties
+CREATE (v1)-[:Wire {t: new_type}]->(v2)
+
+WITH DISTINCT b 
+WITH collect(b) AS deleted 
+FOREACH(node IN deleted | DETACH DELETE node) 
+RETURN CASE WHEN size(deleted) > 0 THEN true ELSE null END AS removed_identities;

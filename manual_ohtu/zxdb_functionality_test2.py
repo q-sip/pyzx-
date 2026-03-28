@@ -32,13 +32,9 @@ edges_data = [
     ((6, 7), EdgeType.SIMPLE),
 ]
 g.create_graph(vertices_data=vertices_data, edges_data=edges_data, inputs=[0], outputs=[7])
-
-
-g_1 = g.copy(backend='simple')
-g_2 = g.copy(backend='simple')
-print(f'Comparing: {zx.compare_tensors(g_1, g_2)}')
-
 i = input('')
+
+c = g.copy(backend='simple')
 #copy_simp candidates
 # vs = list(g.vertices())
 # for idx in range(50):

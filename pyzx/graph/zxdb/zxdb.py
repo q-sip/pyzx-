@@ -501,19 +501,21 @@ class ZXdb:
             # Turn Hadamard edges into gates
             #query_edges_to_gates = str(self.basic_rewrite_rule_queries["Turn Hadamard edges into Hadamard boxes"]["query"]["code"]["value"])
             #tx.run(query_edges_to_gates, graph_id=graph_id)
-
-            # Remove identities
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
-            result = tx.run(query_remove_identities)
-            record = result.single()
-            #print(record)
-            #deleted = record["marked"]
-            #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
+            while True:
+            # Remove identities
+                result = tx.run(query_remove_identities)
+                record = result.single()
+                #print(record)
+                #deleted = record["marked"]
+                #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
 
-            # Turn Hadamard gates into edges
-            #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
-            #tx.run(query_gates_to_edges, graph_id=graph_id)
-            return record['removed_identities']
+                # Turn Hadamard gates into edges
+                #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
+                #tx.run(query_gates_to_edges, graph_id=graph_id)
+                print(f'id_simp returning: {record}')
+                if record['removed_identities'] == None:
+                    return
         
         #with self.driver.session() as analyze_session:
         #    analyze_session.run("ANALYZE GRAPH;")
@@ -985,12 +987,12 @@ class ZXdb:
 
     def interior_clifford_simp(self):
         self.spider_fusion()
-        return
-        # self.to_gh()
+        self.to_gh()
         i = 0
         while True:
-            # i1 = self.remove_identities()
-            # i2 = self.spider_fusion()
+            i1 = self.remove_identities()
+            i2 = self.spider_fusion()
+            return
             i3 = self.pivot_rule()
             # i4 = self.local_complementation_rule()
             i1 = 0
@@ -1013,11 +1015,7 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.spider_fusion()
-        input()
-        self.to_gh()
-        input("end")
-        self.local_complementation_rule()
+        self.interior_clifford_simp()
         return
         self.pivot_gadget_rule()
         while True:
