@@ -40,16 +40,17 @@ class ZXdbAge:
         """Create AGE connection lazily."""
         if self._conn is None:
             db_uri = os.getenv("DB_URI_POSTGRES")
-            connect_kwargs = {
-                "host": os.getenv("DB_HOST"),
-                "port": os.getenv("DB_PORT"),
-                "dbname": os.getenv("POSTGRES_DB"),
-                "user": os.getenv("POSTGRES_USER"),
-                "password": os.getenv("POSTGRES_PASSWORD"),
-            }
             if db_uri:
-                connect_kwargs["conninfo"] = db_uri
-            self._conn = psycopg.connect(**connect_kwargs)
+                self._conn = psycopg.connect(db_uri)
+            else:
+                connect_kwargs = {
+                    "host": os.getenv("DB_HOST"),
+                    "port": os.getenv("DB_PORT"),
+                    "dbname": os.getenv("POSTGRES_DB"),
+                    "user": os.getenv("POSTGRES_USER"),
+                    "password": os.getenv("POSTGRES_PASSWORD"),
+                }
+                self._conn = psycopg.connect(**connect_kwargs)
             self._prepare_session()
         return self._conn
 
@@ -61,10 +62,9 @@ class ZXdbAge:
             cur.execute("CREATE EXTENSION IF NOT EXISTS age;")
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
-            try:
+            cur.execute("SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s;", (self.graph_id,))
+            if cur.fetchone() is None:
                 cur.execute("SELECT create_graph(%s);", (self.graph_id,))
-            except Exception:
-                self.conn.rollback()
         self.conn.commit()
         self._session_prepared = True
 
