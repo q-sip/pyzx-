@@ -82,6 +82,16 @@
                 },
                 "params": {}
             }
+        },
+        {
+            "title": "Local complementation age",
+            "description": "TODO scaffold for AGE local complementation rewrite (returns 0 until implemented)",
+            "query": {
+                "code": {
+                    "value": "RETURN 0 AS rewritten"
+                },
+                "params": {}
+            }
         }
     ]
 }

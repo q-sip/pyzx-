@@ -200,8 +200,18 @@ class ZXdbAge:
         return 0
 
     def local_complementation_rule(self) -> int:
-        """TODO: implement AGE local complementation rewrite."""
-        return 0
+        """Apply local complementation rewrites until no more patterns are found."""
+        total_patterns = 0
+        while True:
+            rows = self._execute_cypher(
+                self._get_named_query("Local complementation age"),
+                return_signature="rewritten agtype",
+            )
+            rewritten = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+            if rewritten == 0:
+                break
+            total_patterns += rewritten
+        return total_patterns
 
     def phase_gadget_fusion_rule(self) -> int:
         """TODO: implement AGE phase gadget fusion rewrite."""
@@ -209,6 +219,10 @@ class ZXdbAge:
 
     def pivot_gadget_rule(self) -> int:
         """TODO: implement AGE pivot gadget rewrite."""
+        return 0
+
+    def gadget_simp(self) -> int:
+        """TODO: implement AGE gadget simplification rewrite."""
         return 0
 
     def pivot_boundary_rule(self) -> int:
@@ -259,7 +273,7 @@ class ZXdbAge:
         return 0
 
     def interior_clifford_simp(self) -> bool:
-        """Skeleton interior Clifford simplification loop."""
+        """Skeleton interior Clifford simplification loop mirroring PyZX."""
         changed_any = False
         self.spider_fusion()
         self.to_gh()
@@ -284,9 +298,19 @@ class ZXdbAge:
         return changed
 
     def full_reduce(self) -> None:
-        """Skeleton full-reduction pipeline for AGE backend."""
+        """Skeleton full-reduction pipeline for AGE backend, mirroring PyZX order."""
         self.interior_clifford_simp()
-        self.remove_isolated_vertices()
+        self.pivot_gadget_rule()
+        while True:
+            self.clifford_simp()
+            i = self.gadget_simp()
+            self.interior_clifford_simp()
+            k = self.copy_simp()
+            l = self.supplementarity_simp()
+            j = self.pivot_gadget_rule()
+            if not (i or j or k or l):
+                self.remove_isolated_vertices()
+                break
 
 
 ZXdb = ZXdbAge
