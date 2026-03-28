@@ -40,16 +40,17 @@ class ZXdbAge:
         """Create AGE connection lazily."""
         if self._conn is None:
             db_uri = os.getenv("DB_URI_POSTGRES")
-            connect_kwargs = {
-                "host": os.getenv("DB_HOST"),
-                "port": os.getenv("DB_PORT"),
-                "dbname": os.getenv("POSTGRES_DB"),
-                "user": os.getenv("POSTGRES_USER"),
-                "password": os.getenv("POSTGRES_PASSWORD"),
-            }
             if db_uri:
-                connect_kwargs["conninfo"] = db_uri
-            self._conn = psycopg.connect(**connect_kwargs)
+                self._conn = psycopg.connect(db_uri)
+            else:
+                connect_kwargs = {
+                    "host": os.getenv("DB_HOST"),
+                    "port": os.getenv("DB_PORT"),
+                    "dbname": os.getenv("POSTGRES_DB"),
+                    "user": os.getenv("POSTGRES_USER"),
+                    "password": os.getenv("POSTGRES_PASSWORD"),
+                }
+                self._conn = psycopg.connect(**connect_kwargs)
             self._prepare_session()
         return self._conn
 
@@ -61,10 +62,9 @@ class ZXdbAge:
             cur.execute("CREATE EXTENSION IF NOT EXISTS age;")
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
-            try:
+            cur.execute("SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s;", (self.graph_id,))
+            if cur.fetchone() is None:
                 cur.execute("SELECT create_graph(%s);", (self.graph_id,))
-            except Exception:
-                self.conn.rollback()
         self.conn.commit()
         self._session_prepared = True
 
@@ -101,9 +101,12 @@ class ZXdbAge:
     def _load_default_query_collections(self) -> None:
         """Load query collection JSON files from query_collections directory."""
         for file_name in (
+            "main_queries.json",
+            "memgraph-collection-zxdb-age.json",
             "collection-Rewrite-queries-ZXdb-age.json",
             "collection-Labeling-queries-ZXdb-age.json",
             "collection-circuit-extraction-age.json",
+            "age-specific-queries.json",
         ):
             self._load_collection_file(file_name)
 
@@ -118,11 +121,15 @@ class ZXdbAge:
     def _execute_cypher(self, cypher_query: str, return_signature: str = "result agtype") -> list:
         """Execute raw Cypher wrapped for AGE and return fetched rows."""
         sql = self._wrap_cypher(cypher_query, return_signature=return_signature)
-        with self.conn.cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall() if cur.description else []
-        self.conn.commit()
-        return rows
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql)
+                rows = cur.fetchall() if cur.description else []
+            self.conn.commit()
+            return rows
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def _get_named_query(self, title: str) -> str:
         """Get query body from loaded collection by title."""
@@ -153,16 +160,58 @@ class ZXdbAge:
         return 0
 
     def spider_fusion(self) -> int:
-        """TODO: implement AGE spider fusion rewrite."""
-        return 0
+        """Apply spider-fusion rewrites until no more patterns are found."""
+        total_patterns = 0
+
+        while True:
+            # Step 1: Find and create merged node
+            prepare_query = self._get_named_query("Spider fusion age - find and merge")
+            rows = self._execute_cypher(prepare_query, return_signature="merged agtype")
+            merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+
+            if merged == 0:
+                break
+
+            # Step 2: Relocate edges from old nodes to merged
+            self._execute_cypher(
+                self._get_named_query("Spider fusion age - relocate edges"),
+                return_signature="edges_relocated agtype"
+            )
+
+            # Step 3: Delete old nodes and cleanup
+            self._execute_cypher(
+                self._get_named_query("Spider fusion age - finalize"),
+                return_signature="merged agtype"
+            )
+
+            # Clean up self-loops after each fusion
+            self._execute_cypher(
+                self._get_named_query("Spider fusion age - self loop cleanup"),
+                return_signature="vertices_processed agtype",
+            )
+
+            total_patterns += merged
+            print(f"Spider fusion: Processed {merged} patterns.")
+
+        return total_patterns
 
     def pivot_rule(self) -> int:
         """TODO: implement AGE pivot rewrite."""
         return 0
 
     def local_complementation_rule(self) -> int:
-        """TODO: implement AGE local complementation rewrite."""
-        return 0
+        """Apply local complementation rewrites until no more patterns are found."""
+        total_patterns = 0
+        while True:
+            rows = self._execute_cypher(
+                self._get_named_query("Local complementation age"),
+                return_signature="rewritten agtype",
+            )
+            rewritten = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+            if rewritten == 0:
+                break
+            total_patterns += rewritten
+        return total_patterns
 
     def phase_gadget_fusion_rule(self) -> int:
         """TODO: implement AGE phase gadget fusion rewrite."""
@@ -170,6 +219,10 @@ class ZXdbAge:
 
     def pivot_gadget_rule(self) -> int:
         """TODO: implement AGE pivot gadget rewrite."""
+        return 0
+
+    def gadget_simp(self) -> int:
+        """TODO: implement AGE gadget simplification rewrite."""
         return 0
 
     def pivot_boundary_rule(self) -> int:
@@ -194,12 +247,22 @@ class ZXdbAge:
 
     def to_gh(self) -> None:
         """Change color of all red vertices to green."""
-        try:
-            query = self._get_named_query("Change color")
-            self._execute_cypher(query)
-        except KeyError:
-            # Fallback: if query not in collection, use inline Cypher
-            self._execute_cypher("MATCH (n:Node) WHERE n.t = 2 SET n.t = 1")
+        self._execute_cypher(
+            self._get_named_query("Change color age - mark"),
+            return_signature="marked agtype",
+        )
+        self._execute_cypher(
+            self._get_named_query("Change color age - recolor"),
+            return_signature="recolored agtype",
+        )
+        self._execute_cypher(
+            self._get_named_query("Change color age - toggle wires"),
+            return_signature="toggled agtype",
+        )
+        self._execute_cypher(
+            self._get_named_query("Change color age - cleanup"),
+            return_signature="cleaned agtype",
+        )
 
     def remove_isolated_vertices(self) -> None:
         """TODO: implement isolated-vertex cleanup."""
@@ -210,7 +273,7 @@ class ZXdbAge:
         return 0
 
     def interior_clifford_simp(self) -> bool:
-        """Skeleton interior Clifford simplification loop."""
+        """Skeleton interior Clifford simplification loop mirroring PyZX."""
         changed_any = False
         self.spider_fusion()
         self.to_gh()
@@ -235,9 +298,19 @@ class ZXdbAge:
         return changed
 
     def full_reduce(self) -> None:
-        """Skeleton full-reduction pipeline for AGE backend."""
+        """Skeleton full-reduction pipeline for AGE backend, mirroring PyZX order."""
         self.interior_clifford_simp()
-        self.remove_isolated_vertices()
+        self.pivot_gadget_rule()
+        while True:
+            self.clifford_simp()
+            i = self.gadget_simp()
+            self.interior_clifford_simp()
+            k = self.copy_simp()
+            l = self.supplementarity_simp()
+            j = self.pivot_gadget_rule()
+            if not (i or j or k or l):
+                self.remove_isolated_vertices()
+                break
 
 
 ZXdb = ZXdbAge
