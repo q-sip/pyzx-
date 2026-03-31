@@ -613,35 +613,31 @@ class ZXdb:
             active_graph_id = graph_id if graph_id is not None else self.graph_id
             #start_time = time.time()
 
-            #while True:
-            #    processed = 0
+            while True:
+                processed = 0
                 
-            def apply_pivot_rule_single_interior_spider(tx):
-                pivot_query = str(self.main_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
-                result = tx.run(pivot_query, graph_id=active_graph_id)
-                return result.single()["interior_pauli_removed"]
+                # def apply_pivot_rule_single_interior_spider(tx):
+                #     pivot_query = str(self.main_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
+                #     result = tx.run(pivot_query, graph_id=active_graph_id)
+                #     return result.single()["interior_pauli_removed"]
 
-            processed = session.execute_write(apply_pivot_rule_single_interior_spider)
+                # processed = session.execute_write(apply_pivot_rule_single_interior_spider)
 
-            def apply_pivot_rule_two_interior_spiders(tx):
-                pivot_query = str(self.main_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
-                # Keep the main query as source-of-truth, but enforce interior-only pivots
-                # to avoid deleting boundary-adjacent spiders and disconnecting I/O nodes.
-                pivot_query = pivot_query.replace(
-                    '  AND b.phase = round(b.phase)',
-                    '  AND b.phase = round(b.phase)\n'
-                    '  AND size([(a)-[ea:Wire]-() WHERE ea.t <> 2 | 1]) = 0\n'
-                    '  AND size([(b)-[eb:Wire]-() WHERE eb.t <> 2 | 1]) = 0\n'
-                    '  AND size([(a)-[:Wire]-(na) WHERE coalesce(na.t, -1) <> 1 | 1]) = 0\n'
-                    '  AND size([(b)-[:Wire]-(nb) WHERE coalesce(nb.t, -1) <> 1 | 1]) = 0'
-                )
-                result = tx.run(pivot_query, graph_id=active_graph_id)
-                return result.single()["pivot_operations_performed"]
-            
-            processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
+                def apply_pivot_rule_two_interior_spiders(tx):
+                    pivot_query = str(self.main_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
+                    # Keep the main query as source-of-truth, but enforce interior-only pivots
+                    # to avoid deleting boundary-adjacent spiders and disconnecting I/O nodes.
+                    result = tx.run(pivot_query, graph_id=active_graph_id)
+                    if not result:
+                        return None
+                    return result.single()["pivot_operations_performed"]
+                
+                processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
 
-            #if processed == 0:
-            #        break
+                print(f'pivot rule processed: {processed}')
+
+                if processed == 0:
+                       break
 
             #end_time = time.time()
             #logging.info(f"Pivot rule applied for graph ID '{graph_id}' with {processed} patterns processed in {end_time - start_time} seconds")
@@ -992,11 +988,12 @@ class ZXdb:
         while True:
             i1 = self.remove_identities()
             i2 = self.spider_fusion()
-            return
             i3 = self.pivot_rule()
+            return
+            # print(f'pivot result: {i3}')
             # i4 = self.local_complementation_rule()
-            i1 = 0
-            i2 = 0
+            # i1 = 0
+            # i2 = 0
             i4 = 0
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')

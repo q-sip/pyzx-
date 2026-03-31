@@ -10,43 +10,24 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-c = zx.generate.CNOT_HAD_PHASE_circuit(6, 50, seed=50)
-# g = zx.generate.cliffordT(3, 50, seed=38, backend='memgraph')
-# c = g.copy(backend='simple')
-g = c.to_graph(backend='memgraph')
-i = input('Paused (hit enter)')
-
-#copy_simp candidates
-# vs = list(g.vertices())
-# for idx in range(50):
-#     x_spider = g.add_vertex(zx.VertexType.X, qubit=0, row=idx, phase=0.25)
-#     z_state = g.add_vertex(zx.VertexType.Z, qubit=1, row=idx, phase=float(random.randint(0, 1)))
-#     g.add_edge((z_state, x_spider))
+# c = zx.generate.CNOT_HAD_PHASE_circuit(6, 50, seed=seed)
+g = zx.generate.cliffordT(6, 50, seed=50, backend='memgraph')
+c = g.copy(backend='simple')
+c_local = g.copy(backend='simple')
+# g = c.to_graph(backend='memgraph')
 
 
-#local_complementation_rule candidates, leaves some isolated parts but should be correct (tensors match)
-# vs = list(g.vertices())
-# random.seed(420)
-# for idx in range(10):
-#     # Create the central Z-spider with +/- 0.5 phase
-#     center_phase = 0.5 if random.random() > 0.5 else -0.5
-#     center = g.add_vertex(zx.VertexType.Z, qubit=0, row=idx+100, phase=center_phase)
-
-#     # Create a random number of Z-spider neighbors (between 3 and 5)
-#     num_neighbors = random.randint(3, 5)
-#     for n in range(num_neighbors):
-#         # The neighbors can have any phase, keep them as Z-spiders
-#         neighbor = g.add_vertex(zx.VertexType.Z, qubit=n+1, row=idx+100, phase=0.25)
-#         # They MUST be connected by HADAMARD edges for the rule to trigger
-#         g.add_edge((center, neighbor), edgetype=zx.EdgeType.HADAMARD)
 
 zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 path = zxdb.current_path
 print('starting full reduce...')
 print(f"Node count: {g.num_vertices()}")
 zxdb.full_reduce()
+zx.full_reduce(c_local)
 print('full reduce done!')
-print(f"Node count: {g.num_vertices()}")
+print(f"Node count zxdb: {g.num_vertices()}")
+print(f'node count pyzx: {c_local.num_vertices()}')
+
 # zx.full_reduce(s)
 # s.normalize()
 # 2. Now PyZX can safely read it

@@ -169,66 +169,72 @@ RETURN patterns_processed;
 //Pivot rule - two interior Pauli 
 "// Find pivot candidates: two t=1 nodes with integer phases connected by t=2 edge
 MATCH (a {t: 1})-[pivot_edge:Wire {t: 2}]-(b {t: 1})
-WHERE id(a) < id(b)  // Process each pair once
+WHERE id(a) < id(b)  
   AND a.phase IS NOT NULL 
   AND b.phase IS NOT NULL
   AND a.phase = round(a.phase) 
   AND b.phase = round(b.phase)
+  AND size([(a)-[ea:Wire]-() WHERE ea.t <> 2 | 1]) = 0
+  AND size([(b)-[eb:Wire]-() WHERE eb.t <> 2 | 1]) = 0
+  AND size([(a)-[:Wire]-(na) WHERE coalesce(na.t, -1) <> 1 | 1]) = 0
+  AND size([(b)-[:Wire]-(nb) WHERE coalesce(nb.t, -1) <> 1 | 1]) = 0
 WITH a, b, pivot_edge LIMIT 1
-OPTIONAL MATCH (a)-[edge_a:Wire {t: 2}]-(neighbor_a {t: 1})
+OPTIONAL MATCH (a)-[:Wire {t: 2}]-(neighbor_a {t: 1})
 WHERE neighbor_a <> b
-  AND size([(neighbor_a)-[:Wire]-(b) | 1]) = 0  // Not connected to b
+  AND size([(neighbor_a)-[:Wire]-(b) | 1]) = 0  
 WITH a, b, pivot_edge, COLLECT(DISTINCT neighbor_a) as neighbors_a
-OPTIONAL MATCH (b)-[edge_b:Wire {t: 2}]-(neighbor_b {t: 1})
+OPTIONAL MATCH (b)-[:Wire {t: 2}]-(neighbor_b {t: 1})
 WHERE neighbor_b <> a
-  AND size([(neighbor_b)-[:Wire]-(a) | 1]) = 0  // Not connected to a
-  AND NOT neighbor_b IN neighbors_a  // Extra safety check
+  AND size([(neighbor_b)-[:Wire]-(a) | 1]) = 0  
+  AND NOT neighbor_b IN neighbors_a  
 WITH a, b, pivot_edge, neighbors_a, COLLECT(DISTINCT neighbor_b) as neighbors_b
-OPTIONAL MATCH (a)-[edge_shared_a:Wire {t: 2}]-(shared {t: 1})-[edge_shared_b:Wire {t: 2}]-(b)
+OPTIONAL MATCH (a)-[:Wire {t: 2}]-(shared {t: 1})-[:Wire {t: 2}]-(b)
 WITH a, b, pivot_edge, neighbors_a, neighbors_b, COLLECT(DISTINCT shared) as shared_neighbors
 CALL {
   WITH neighbors_a, neighbors_b
   UNWIND neighbors_a AS node_a
   UNWIND neighbors_b AS node_b
   OPTIONAL MATCH (node_a)-[existing:Wire]-(node_b) 
-  FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END | 
-    DELETE existing ) 
-  FOREACH (_ IN CASE WHEN existing IS NULL THEN [1] ELSE [] END | 
-    CREATE (node_a)-[nw:Wire {t: 2, graph_id: node_a.graph_id}]->(node_b) )
+  WITH node_a, node_b, collect(existing) AS edges
+  FOREACH (e IN edges | DELETE e)
+  FOREACH (_ IN CASE WHEN size(edges) % 2 = 0 THEN [1] ELSE [] END | 
+    CREATE (node_a)-[:Wire {t: 2, graph_id: coalesce(node_a.graph_id, node_b.graph_id)}]->(node_b) 
+  )
 }
 CALL {
   WITH neighbors_a, shared_neighbors
   UNWIND neighbors_a AS node_a
   UNWIND shared_neighbors AS shared_node
   OPTIONAL MATCH (node_a)-[existing:Wire]-(shared_node) 
-  FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END | 
-    DELETE existing ) 
-  FOREACH (_ IN CASE WHEN existing IS NULL THEN [1] ELSE [] END | 
-    CREATE (node_a)-[nw:Wire {t: 2, graph_id: node_a.graph_id}]->(shared_node) )
+  WITH node_a, shared_node, collect(existing) AS edges
+  FOREACH (e IN edges | DELETE e)
+  FOREACH (_ IN CASE WHEN size(edges) % 2 = 0 THEN [1] ELSE [] END | 
+    CREATE (node_a)-[:Wire {t: 2, graph_id: coalesce(node_a.graph_id, shared_node.graph_id)}]->(shared_node) 
+  )
 }
 CALL {
   WITH neighbors_b, shared_neighbors
   UNWIND neighbors_b AS node_b
   UNWIND shared_neighbors AS shared_node
   OPTIONAL MATCH (node_b)-[existing:Wire]-(shared_node) 
-  FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END | 
-    DELETE existing ) 
-  FOREACH (_ IN CASE WHEN existing IS NULL THEN [1] ELSE [] END | 
-    CREATE (node_b)-[nw:Wire {t: 2, graph_id: node_b.graph_id}]->(shared_node) )
+  WITH node_b, shared_node, collect(existing) AS edges
+  FOREACH (e IN edges | DELETE e)
+  FOREACH (_ IN CASE WHEN size(edges) % 2 = 0 THEN [1] ELSE [] END | 
+    CREATE (node_b)-[:Wire {t: 2, graph_id: coalesce(node_b.graph_id, shared_node.graph_id)}]->(shared_node) 
+  )
 }
 FOREACH (n IN neighbors_a |
-  SET n.phase = coalesce(n.phase, 0.0) + b.phase
+  SET n.phase = ((coalesce(n.phase, 0.0) + coalesce(b.phase, 0.0)) % 2.0 + 2.0) % 2.0
 ) 
 FOREACH (n IN neighbors_b |
-  SET n.phase = coalesce(n.phase, 0.0) + a.phase
+  SET n.phase = ((coalesce(n.phase, 0.0) + coalesce(a.phase, 0.0)) % 2.0 + 2.0) % 2.0
 ) 
-  
 FOREACH (shared_neighbor IN shared_neighbors | 
-  SET shared_neighbor.phase = coalesce(shared_neighbor.phase, 0.0) + a.phase + b.phase + 1.0
+  SET shared_neighbor.phase = ((coalesce(shared_neighbor.phase, 0.0) + coalesce(a.phase, 0.0) + coalesce(b.phase, 0.0) + 1.0) % 2.0 + 2.0) % 2.0
 )
 WITH a, b
 DETACH DELETE a, b
-RETURN COUNT(*) AS pivot_operations_performed;"
+RETURN 1 AS pivot_operations_performed;"
                 },
 
 
@@ -259,10 +265,7 @@ WITH a, b, boundary_vertex, boundary_edge
 OPTIONAL MATCH (a)-[:Wire]-(a_neighbor)
 WHERE a_neighbor <> b AND coalesce(a_neighbor.graph_id, a.graph_id) = a.graph_id
 // Use FOREACH to update phases (handles empty collections automatically)
-WITH a, b, boundary_vertex, boundary_edge, COLLECT(a_neighbor) as a_neighbors
-FOREACH (neighbor IN a_neighbors |
-  SET neighbor.phase = coalesce(neighbor.phase, 0.0) + b.phase
-)
+SET a.phase = (coalesce(a.phase, 0.0) + coalesce(b.phase, 0.0)) % 2
 // Connect a to boundary with opposite edge type
 WITH a, b, boundary_vertex, boundary_edge,
      CASE boundary_edge.t WHEN 1 THEN 2 ELSE 1 END as new_edge_type
@@ -942,17 +945,14 @@ RETURN COUNT(*) AS merged;"
 WHERE b.phase % 2 = 0 AND b.t = 1 AND degree(b) = 2 
 MATCH (v1)-[e1:Wire]-(b)-[e2:Wire]-(v2) 
 WHERE id(v1) < id(v2) 
-  AND NOT (v1.t = 0 AND v2.t = 0) // Prevent boundary-to-boundary direct wiring
+  AND NOT (v1.t = 0 AND v2.t = 0)
   
-  // THE FIX: Tie-breaker for adjacent identity spiders
   AND NOT (v1.t = 1 AND v1.phase % 2 = 0 AND degree(v1) = 2 AND id(v1) < id(b))
   AND NOT (v2.t = 1 AND v2.phase % 2 = 0 AND degree(v2) = 2 AND id(v2) < id(b))
 
-// Calculate the new edge type
 WITH b, v1, v2, e1, e2, 
      CASE WHEN (e1.t + e2.t) % 2 = 0 THEN 1 ELSE 2 END AS new_type
 
-// Create the new connection preserving the graph properties
 CREATE (v1)-[:Wire {t: new_type}]->(v2)
 
 WITH DISTINCT b 
