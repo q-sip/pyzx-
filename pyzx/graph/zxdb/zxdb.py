@@ -432,7 +432,7 @@ class ZXdb:
         while True:
             def mark_pattern(tx):
                 # Get the marking query from your JSON collection
-                mark_query = str(self.basic_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
+                mark_query = str(self.main_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
                 result = tx.run(mark_query)
                 record = result.single()
                 return record["pattern_id"] if record and record["pattern_id"] else None
@@ -445,7 +445,7 @@ class ZXdb:
         # Step 2: Process all marked patterns
         if total_patterns > 0:
             def cancel_patterns(tx):
-                cancel_query = str(self.basic_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
+                cancel_query = str(self.main_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
                 result = tx.run(cancel_query, graph_id=self.graph_id)
                 return result.single()["patterns_processed"]
             processed = session.execute_write(cancel_patterns)
@@ -464,7 +464,7 @@ class ZXdb:
             while True:
                 def mark_pattern(tx):
                     # Get the marking query from your JSON collection
-                    mark_query = str(self.basic_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
+                    mark_query = str(self.main_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
                     result = tx.run(mark_query)
                     record = result.single()
                     return record["pattern_id"] if record and record["pattern_id"] else None
@@ -478,7 +478,7 @@ class ZXdb:
             # Step 2: Process all marked patterns
             if total_patterns > 0:
                 def cancel_patterns(tx):
-                    cancel_query = str(self.basic_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
+                    cancel_query = str(self.main_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
                     result = tx.run(cancel_query, graph_id=self.graph_id)
                     return result.single()["patterns_processed"]
                 
@@ -1012,7 +1012,7 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.interior_clifford_simp()
+        self.hadamard_cancel()
         return
         self.pivot_gadget_rule()
         while True:
