@@ -160,40 +160,76 @@ class ZXdbAge:
         return 0
 
     def spider_fusion(self) -> int:
-        """Apply spider-fusion rewrites until no more patterns are found."""
+        """Apply spider-fusion."""
+
         total_patterns = 0
+        query = self._get_named_query("Spider fusion age")
+        self_loop_query = f"""
+        MATCH (v:Node)-[r:Wire]-(v)
+        WHERE v.t IN [1, 2] AND coalesce(v.graph_id, '{self.graph_id}') = '{self.graph_id}'
+        WITH v, collect(r) AS self_loops
+        WHERE size(self_loops) > 0
+
+        WITH v, self_loops
+        UNWIND self_loops AS sr
+        WITH v, self_loops,
+            sum(CASE WHEN coalesce(sr.t, 1) = 2 THEN 1 ELSE 0 END) AS hadamard_count
+        SET v.phase = coalesce(v.phase, 0) + CASE WHEN hadamard_count % 2 = 1 THEN 1 ELSE 0 END
+        
+        WITH self_loops
+        UNWIND self_loops AS loop_edge
+        DELETE loop_edge
+        RETURN count(loop_edge) AS loops_deleted
+        """
 
         while True:
-            # Step 1: Find and create merged node
-            prepare_query = self._get_named_query("Spider fusion age - find and merge")
-            rows = self._execute_cypher(prepare_query, return_signature="merged agtype")
+            rows = self._execute_cypher(query, return_signature="rewrites_applied agtype")
             merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
-
             if merged == 0:
                 break
-
-            # Step 2: Relocate edges from old nodes to merged
-            self._execute_cypher(
-                self._get_named_query("Spider fusion age - relocate edges"),
-                return_signature="edges_relocated agtype"
-            )
-
-            # Step 3: Delete old nodes and cleanup
-            self._execute_cypher(
-                self._get_named_query("Spider fusion age - finalize"),
-                return_signature="merged agtype"
-            )
-
-            # Clean up self-loops after each fusion
-            self._execute_cypher(
-                self._get_named_query("Spider fusion age - self loop cleanup"),
-                return_signature="vertices_processed agtype",
-            )
-
+            self._execute_cypher(self_loop_query, return_signature="loops_deleted agtype")
             total_patterns += merged
-            print(f"Spider fusion: Processed {merged} patterns.")
 
+        print(f"Spider fusion(age): Processed {total_patterns} patterns.")
         return total_patterns
+    
+    """
+    This is the spider fusion age query in a more readable form
+
+"MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)
+WHERE u.t IN [1, 2]
+    AND v.t IN [1, 2]
+    AND u.t = v.t
+    AND id(u) < id(v)
+WITH u, v
+LIMIT 1
+CREATE (merged:Node {
+    phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),
+    t: u.t,
+    graph_id: coalesce(u.graph_id, v.graph_id),
+    id: coalesce(u.id, v.id),
+    qubit: coalesce(u.qubit, v.qubit),
+    row: coalesce(u.row, v.row)
+})
+WITH u, v, merged
+OPTIONAL MATCH (u)-[ru:Wire]-(nu:Node)
+WHERE nu <> v
+CREATE (merged)-[:Wire {
+    t: coalesce(ru.t, 1),
+    graph_id: coalesce(ru.graph_id, merged.graph_id, nu.graph_id)
+}]->(nu)
+WITH DISTINCT u, v, merged
+OPTIONAL MATCH (v)-[rv:Wire]-(nv:Node)
+WHERE nv <> u
+CREATE (merged)-[:Wire {
+    t: coalesce(rv.t, 1),
+    graph_id: coalesce(rv.graph_id, merged.graph_id, nv.graph_id)
+}]->(nv)
+WITH DISTINCT u, v
+DETACH DELETE u, v
+RETURN 1 AS rewrites_applied"
+
+"""
 
     def pivot_rule(self) -> int:
         """TODO: implement AGE pivot rewrite."""
@@ -211,6 +247,7 @@ class ZXdbAge:
             if rewritten == 0:
                 break
             total_patterns += rewritten
+        print(f"Local Complementation")
         return total_patterns
 
     def phase_gadget_fusion_rule(self) -> int:

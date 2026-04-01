@@ -71,9 +71,18 @@ class TestToGh(unittest.TestCase):
         )
 
         vmap = {}
+            def _parse_phase(value):
+                if isinstance(value, (int, float)):
+                    return Fraction(float(value)).limit_denominator()
+                text = str(value).strip().strip('"')
+                try:
+                    return Fraction(text)
+                except Exception:
+                    return Fraction(float(text)).limit_denominator()
+
         for dbid, _nid, t, phase, qubit, row in rows:
             ty = VertexType(int(t))
-            ph = Fraction(float(phase)).limit_denominator() if ty != VertexType.BOUNDARY else None
+                ph = _parse_phase(phase) if ty != VertexType.BOUNDARY else None
             v_new = out.add_vertex(ty=ty, qubit=int(qubit), row=int(row), phase=ph)
             vmap[int(dbid)] = v_new
 

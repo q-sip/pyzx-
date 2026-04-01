@@ -4,36 +4,6 @@
     "title": "AGE specific rewrites",
     "items": [
         {
-            "title": "Spider fusion age - find and merge",
-            "description": "Find spiders, create merged node, mark old ones",
-            "query": {
-                "code": {
-                    "value": "MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)\nWHERE ((u.t = 1 AND v.t = 1) OR (u.t = 2 AND v.t = 2))\n  AND id(u) < id(v)\nWITH u, v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row)\n})\nSET u._old_fusion_node = true, v._old_fusion_node = true, merged._new_merged_node = true\nRETURN count(merged) AS merged"
-                },
-                "params": {}
-            }
-        },
-        {
-            "title": "Spider fusion age - relocate edges",
-            "description": "Move all edges from old nodes to merged node",
-            "query": {
-                "code": {
-                    "value": "MATCH (merged:Node {_new_merged_node: true})\nMATCH (old:Node {_old_fusion_node: true})-[edge:Wire]-(neighbor)\nWHERE NOT exists(neighbor._old_fusion_node)\nCREATE (merged)-[new_edge:Wire]->(neighbor)\nSET new_edge.t = edge.t\nRETURN count(new_edge) AS edges_relocated"
-                },
-                "params": {}
-            }
-        },
-        {
-            "title": "Spider fusion age - finalize",
-            "description": "Delete old nodes and cleanup markers",
-            "query": {
-                "code": {
-                    "value": "MATCH (old:Node {_old_fusion_node: true})\nDETACH DELETE old\nWITH 1 AS dummy\nMATCH (merged:Node {_new_merged_node: true})\nREMOVE merged._new_merged_node\nRETURN count(merged) AS merged"
-                },
-                "params": {}
-            }
-        },
-        {
             "title": "Change color age - mark",
             "description": "Mark red spiders for AGE-safe to_gh rewrite",
             "query": {
@@ -74,21 +44,21 @@
             }
         },
         {
-            "title": "Spider fusion age - self loop cleanup",
-            "description": "Remove ZX self-loops and add pi phase for odd hadamard self-loops",
+            "title": "Spider fusion age",
+            "description": "AGE-compatible spider fusion without reduce/foreach",
             "query": {
                 "code": {
-                    "value": "MATCH (v:Node)-[r:Wire]-(v)\nWHERE v.t IN [1, 2]\nWITH v,\n     count(r) AS self_loop_count,\n     sum(CASE WHEN r.t = 2 THEN 1 ELSE 0 END) AS hadamard_count\nWHERE self_loop_count > 0\nSET v.phase = coalesce(v.phase, 0) + CASE WHEN hadamard_count % 2 = 1 THEN 1 ELSE 0 END\nWITH v\nMATCH (v)-[loop_edge:Wire]-(v)\nDELETE loop_edge\nRETURN count(DISTINCT v) AS vertices_processed"
+                    "value": "MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)\nWHERE u.t IN [1, 2]\n  AND v.t IN [1, 2]\n  AND u.t = v.t\n  AND id(u) < id(v)\nWITH u, v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row)\n})\nWITH u, v, merged\nOPTIONAL MATCH (u)-[ru:Wire]-(nu:Node)\nWHERE nu <> v\nCREATE (merged)-[:Wire {\n  t: coalesce(ru.t, 1),\n  graph_id: coalesce(ru.graph_id, merged.graph_id, nu.graph_id)\n}]->(nu)\nWITH DISTINCT u, v, merged\nOPTIONAL MATCH (v)-[rv:Wire]-(nv:Node)\nWHERE nv <> u\nCREATE (merged)-[:Wire {\n  t: coalesce(rv.t, 1),\n  graph_id: coalesce(rv.graph_id, merged.graph_id, nv.graph_id)\n}]->(nv)\nWITH DISTINCT u, v\nDETACH DELETE u, v\nRETURN 1 AS rewrites_applied"
                 },
                 "params": {}
             }
         },
         {
             "title": "Local complementation age",
-            "description": "TODO scaffold for AGE local complementation rewrite (returns 0 until implemented)",
+            "description": "AGE-compatible local complementation core case (center phase +/- 1/2 with two Z neighbors via hadamard edges)",
             "query": {
                 "code": {
-                    "value": "RETURN 0 AS rewritten"
+                    "value": "MATCH (center:Node)-[:Wire {t:2}]-(n1:Node),\n      (center)-[:Wire {t:2}]-(n2:Node)\nWHERE center.t = 1\n  AND n1.t = 1\n  AND n2.t = 1\n  AND id(n1) < id(n2)\n  AND coalesce(center.phase, 0) IN [0.5, -0.5]\nWITH center, n1, n2\nLIMIT 1\nCREATE (n1)-[:Wire {t: 2, graph_id: coalesce(center.graph_id, n1.graph_id, n2.graph_id)}]->(n2)\nSET n1.phase = coalesce(n1.phase, 0) - coalesce(center.phase, 0),\n    n2.phase = coalesce(n2.phase, 0) - coalesce(center.phase, 0)\nDETACH DELETE center\nRETURN 1 AS rewritten"
                 },
                 "params": {}
             }
