@@ -48,7 +48,17 @@
             "description": "AGE-compatible spider fusion without reduce/foreach",
             "query": {
                 "code": {
-                    "value": "MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)\nWHERE u.t IN [1, 2]\n  AND v.t IN [1, 2]\n  AND u.t = v.t\n  AND id(u) < id(v)\nWITH u, v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row)\n})\nWITH u, v, merged\nOPTIONAL MATCH (u)-[ru:Wire]-(nu:Node)\nWHERE nu <> v\nCREATE (merged)-[:Wire {\n  t: coalesce(ru.t, 1),\n  graph_id: coalesce(ru.graph_id, merged.graph_id, nu.graph_id)\n}]->(nu)\nWITH DISTINCT u, v, merged\nOPTIONAL MATCH (v)-[rv:Wire]-(nv:Node)\nWHERE nv <> u\nCREATE (merged)-[:Wire {\n  t: coalesce(rv.t, 1),\n  graph_id: coalesce(rv.graph_id, merged.graph_id, nv.graph_id)\n}]->(nv)\nWITH DISTINCT u, v\nDETACH DELETE u, v\nRETURN 1 AS rewrites_applied"
+                    "value": "MATCH (a:Node)-[:Wire {t: 1}]->(b:Node)\nWHERE a.t IN [1, 2]\n  AND b.t IN [1, 2]\n  AND a.t = b.t\nWITH CASE WHEN id(a) < id(b) THEN a ELSE b END AS u,\n     CASE WHEN id(a) < id(b) THEN b ELSE a END AS v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row),\n  _new_merged_node: true\n})\nWITH u, v, merged\nOPTIONAL MATCH (u)-[ru:Wire]-(nu:Node)\nWHERE nu <> v\nCREATE (merged)-[:Wire {\n  t: coalesce(ru.t, 1),\n  graph_id: coalesce(ru.graph_id, merged.graph_id, nu.graph_id)\n}]->(nu)\nWITH DISTINCT u, v, merged\nOPTIONAL MATCH (v)-[rv:Wire]-(nv:Node)\nWHERE nv <> u\nCREATE (merged)-[:Wire {\n  t: coalesce(rv.t, 1),\n  graph_id: coalesce(rv.graph_id, merged.graph_id, nv.graph_id)\n}]->(nv)\nWITH DISTINCT u, v\nDETACH DELETE u, v\nRETURN 1 AS rewrites_applied"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Spider fusion age reverse",
+            "description": "AGE-compatible spider fusion (reverse directed match) without reduce/foreach",
+            "query": {
+                "code": {
+                    "value": "MATCH (a:Node)<-[:Wire {t: 1}]-(b:Node)\nWHERE a.t IN [1, 2]\n  AND b.t IN [1, 2]\n  AND a.t = b.t\nWITH CASE WHEN id(a) < id(b) THEN a ELSE b END AS u,\n     CASE WHEN id(a) < id(b) THEN b ELSE a END AS v\nLIMIT 1\nCREATE (merged:Node {\n  phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),\n  t: u.t,\n  graph_id: coalesce(u.graph_id, v.graph_id),\n  id: coalesce(u.id, v.id),\n  qubit: coalesce(u.qubit, v.qubit),\n  row: coalesce(u.row, v.row),\n  _new_merged_node: true\n})\nWITH u, v, merged\nOPTIONAL MATCH (u)-[ru:Wire]-(nu:Node)\nWHERE nu <> v\nCREATE (merged)-[:Wire {\n  t: coalesce(ru.t, 1),\n  graph_id: coalesce(ru.graph_id, merged.graph_id, nu.graph_id)\n}]->(nu)\nWITH DISTINCT u, v, merged\nOPTIONAL MATCH (v)-[rv:Wire]-(nv:Node)\nWHERE nv <> u\nCREATE (merged)-[:Wire {\n  t: coalesce(rv.t, 1),\n  graph_id: coalesce(rv.graph_id, merged.graph_id, nv.graph_id)\n}]->(nv)\nWITH DISTINCT u, v\nDETACH DELETE u, v\nRETURN 1 AS rewrites_applied"
                 },
                 "params": {}
             }

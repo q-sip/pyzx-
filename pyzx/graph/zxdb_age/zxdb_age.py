@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -38,6 +39,9 @@ class ZXdbAge:
     @property
     def conn(self) -> psycopg.Connection:
         """Create AGE connection lazily."""
+        if self._conn is not None and bool(getattr(self._conn, "closed", False)):
+            self._conn = None
+            self._session_prepared = False
         if self._conn is None:
             db_uri = os.getenv("DB_URI_POSTGRES")
             if db_uri:
@@ -121,15 +125,64 @@ class ZXdbAge:
     def _execute_cypher(self, cypher_query: str, return_signature: str = "result agtype") -> list:
         """Execute raw Cypher wrapped for AGE and return fetched rows."""
         sql = self._wrap_cypher(cypher_query, return_signature=return_signature)
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute(sql)
-                rows = cur.fetchall() if cur.description else []
-            self.conn.commit()
-            return rows
-        except Exception:
-            self.conn.rollback()
-            raise
+        max_attempts = int(os.getenv("ZXDB_AGE_MAX_RETRIES", "3"))
+        base_sleep = float(os.getenv("ZXDB_AGE_RETRY_BASE_SLEEP", "0.25"))
+        max_sleep = float(os.getenv("ZXDB_AGE_RETRY_MAX_SLEEP", "1.5"))
+        last_error: Exception | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute(sql)
+                    rows = cur.fetchall() if cur.description else []
+                self.conn.commit()
+                return rows
+            except psycopg.OperationalError as exc:
+                last_error = exc
+                msg = str(exc).lower()
+                transient = (
+                    "connection is lost" in msg
+                    or "connection is closed" in msg
+                    or "recovery mode" in msg
+                    or "server closed the connection" in msg
+                    or "terminating connection" in msg
+                    or "consuming input failed" in msg
+                    or "could not receive data from server" in msg
+                    or "connection not open" in msg
+                )
+                try:
+                    if self._conn is not None:
+                        self._conn.rollback()
+                except Exception:
+                    pass
+                if not transient or attempt == max_attempts:
+                    raise
+                self.close()
+                time.sleep(min(base_sleep * attempt, max_sleep))
+            except psycopg.InterfaceError as exc:
+                last_error = exc
+                msg = str(exc).lower()
+                transient = (
+                    "connection" in msg
+                    or "closed" in msg
+                    or "not open" in msg
+                )
+                try:
+                    if self._conn is not None:
+                        self._conn.rollback()
+                except Exception:
+                    pass
+                if not transient or attempt == max_attempts:
+                    raise
+                self.close()
+                time.sleep(min(base_sleep * attempt, max_sleep))
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        if last_error is not None:
+            raise last_error
+        return []
 
     def _get_named_query(self, title: str) -> str:
         """Get query body from loaded collection by title."""
@@ -163,7 +216,57 @@ class ZXdbAge:
         """Apply spider-fusion."""
 
         total_patterns = 0
+        trace = os.getenv("ZXDB_AGE_TRACE_SPIDER", "0").strip().lower() in {"1", "true", "yes", "on"}
         query = self._get_named_query("Spider fusion age")
+        reverse_query = self._get_named_query("Spider fusion age reverse")
+        normalize_query = f"""
+                MATCH (m:Node {{_new_merged_node: true}})-[w:Wire]-(n:Node)
+                WHERE coalesce(m.graph_id, '{self.graph_id}') = '{self.graph_id}'
+                    AND coalesce(n.graph_id, '{self.graph_id}') = '{self.graph_id}'
+                    AND id(n) <> id(m)
+                WITH m, n, collect(DISTINCT w) AS ws
+                WHERE size(ws) > 1
+                UNWIND ws AS rel
+                WITH m, n, ws,
+                         sum(CASE WHEN coalesce(rel.t, 1) = 1 THEN 1 ELSE 0 END) AS c_simple,
+                         sum(CASE WHEN coalesce(rel.t, 1) = 2 THEN 1 ELSE 0 END) AS c_hadamard
+                UNWIND ws AS del
+                DELETE del
+                WITH m, n, c_simple, c_hadamard,
+                         CASE WHEN coalesce(m.t, -1) = coalesce(n.t, -1) THEN 1 ELSE 2 END AS fuse_type
+                WITH m, n,
+                         CASE
+                                 WHEN fuse_type = 1 THEN CASE WHEN c_simple > 0 THEN c_hadamard ELSE 0 END
+                                 ELSE CASE WHEN c_hadamard > 0 AND c_simple % 2 = 1 THEN 1 ELSE 0 END
+                         END AS phase_add,
+                         CASE
+                                 WHEN fuse_type = 1 THEN CASE
+                                         WHEN c_simple > 0 THEN 1
+                                         WHEN c_hadamard % 2 = 1 THEN 2
+                                         ELSE 0
+                                 END
+                                 ELSE CASE
+                                         WHEN c_hadamard > 0 THEN 2
+                                         WHEN c_simple % 2 = 1 THEN 1
+                                         ELSE 0
+                                 END
+                         END AS out_type
+                            WITH m, n, phase_add, out_type,
+                                 id(m) AS mid,
+                                 id(n) AS nid
+                            SET m.phase = coalesce(m.phase, 0) + CASE WHEN mid <= nid THEN phase_add ELSE 0 END,
+                                n.phase = coalesce(n.phase, 0) + CASE WHEN mid > nid THEN phase_add ELSE 0 END
+                            WITH m, n, out_type
+                WHERE out_type <> 0
+                CREATE (m)-[:Wire {{t: out_type, graph_id: coalesce(m.graph_id, n.graph_id)}}]->(n)
+                RETURN count(*) AS normalized
+        """
+        cleanup_merged_mark_query = f"""
+        MATCH (m:Node {{_new_merged_node: true}})
+        WHERE coalesce(m.graph_id, '{self.graph_id}') = '{self.graph_id}'
+        REMOVE m._new_merged_node
+        RETURN count(m) AS cleaned
+        """
         self_loop_query = f"""
         MATCH (v:Node)-[r:Wire]-(v)
         WHERE v.t IN [1, 2] AND coalesce(v.graph_id, '{self.graph_id}') = '{self.graph_id}'
@@ -183,11 +286,28 @@ class ZXdbAge:
         """
 
         while True:
-            rows = self._execute_cypher(query, return_signature="rewrites_applied agtype")
-            merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+            if trace:
+                print("[spider_fusion] stage=merge")
+            try:
+                rows = self._execute_cypher(query, return_signature="rewrites_applied agtype")
+                merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+            except psycopg.OperationalError:
+                rows = self._execute_cypher(reverse_query, return_signature="rewrites_applied agtype")
+                merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+            if merged == 0:
+                rows = self._execute_cypher(reverse_query, return_signature="rewrites_applied agtype")
+                merged = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
             if merged == 0:
                 break
+            if trace:
+                print(f"[spider_fusion] merged={merged} stage=normalize")
+            self._execute_cypher(normalize_query, return_signature="normalized agtype")
+            if trace:
+                print("[spider_fusion] stage=self_loops")
             self._execute_cypher(self_loop_query, return_signature="loops_deleted agtype")
+            if trace:
+                print("[spider_fusion] stage=cleanup_mark")
+            self._execute_cypher(cleanup_merged_mark_query, return_signature="cleaned agtype")
             total_patterns += merged
 
         print(f"Spider fusion(age): Processed {total_patterns} patterns.")
@@ -196,12 +316,12 @@ class ZXdbAge:
     """
     This is the spider fusion age query in a more readable form
 
-"MATCH (u:Node)-[:Wire {t: 1}]-(v:Node)
-WHERE u.t IN [1, 2]
-    AND v.t IN [1, 2]
-    AND u.t = v.t
-    AND id(u) < id(v)
-WITH u, v
+"MATCH (a:Node)-[:Wire {t: 1}]->(b:Node)
+WHERE a.t IN [1, 2]
+    AND b.t IN [1, 2]
+    AND a.t = b.t
+WITH CASE WHEN id(a) < id(b) THEN a ELSE b END AS u,
+     CASE WHEN id(a) < id(b) THEN b ELSE a END AS v
 LIMIT 1
 CREATE (merged:Node {
     phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),
