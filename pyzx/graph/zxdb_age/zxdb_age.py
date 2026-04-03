@@ -219,71 +219,9 @@ class ZXdbAge:
         trace = os.getenv("ZXDB_AGE_TRACE_SPIDER", "0").strip().lower() in {"1", "true", "yes", "on"}
         query = self._get_named_query("Spider fusion age")
         reverse_query = self._get_named_query("Spider fusion age reverse")
-        normalize_query = f"""
-                MATCH (m:Node {{_new_merged_node: true}})-[w:Wire]-(n:Node)
-                WHERE coalesce(m.graph_id, '{self.graph_id}') = '{self.graph_id}'
-                    AND coalesce(n.graph_id, '{self.graph_id}') = '{self.graph_id}'
-                    AND id(n) <> id(m)
-                WITH m, n, collect(DISTINCT w) AS ws
-                WHERE size(ws) > 1
-                UNWIND ws AS rel
-                WITH m, n, ws,
-                         sum(CASE WHEN coalesce(rel.t, 1) = 1 THEN 1 ELSE 0 END) AS c_simple,
-                         sum(CASE WHEN coalesce(rel.t, 1) = 2 THEN 1 ELSE 0 END) AS c_hadamard
-                UNWIND ws AS del
-                DELETE del
-                WITH m, n, c_simple, c_hadamard,
-                         CASE WHEN coalesce(m.t, -1) = coalesce(n.t, -1) THEN 1 ELSE 2 END AS fuse_type
-                WITH m, n,
-                         CASE
-                                 WHEN fuse_type = 1 THEN CASE WHEN c_simple > 0 THEN c_hadamard ELSE 0 END
-                                 ELSE CASE WHEN c_hadamard > 0 AND c_simple % 2 = 1 THEN 1 ELSE 0 END
-                         END AS phase_add,
-                         CASE
-                                 WHEN fuse_type = 1 THEN CASE
-                                         WHEN c_simple > 0 THEN 1
-                                         WHEN c_hadamard % 2 = 1 THEN 2
-                                         ELSE 0
-                                 END
-                                 ELSE CASE
-                                         WHEN c_hadamard > 0 THEN 2
-                                         WHEN c_simple % 2 = 1 THEN 1
-                                         ELSE 0
-                                 END
-                         END AS out_type
-                            WITH m, n, phase_add, out_type,
-                                 id(m) AS mid,
-                                 id(n) AS nid
-                            SET m.phase = coalesce(m.phase, 0) + CASE WHEN mid <= nid THEN phase_add ELSE 0 END,
-                                n.phase = coalesce(n.phase, 0) + CASE WHEN mid > nid THEN phase_add ELSE 0 END
-                            WITH m, n, out_type
-                WHERE out_type <> 0
-                CREATE (m)-[:Wire {{t: out_type, graph_id: coalesce(m.graph_id, n.graph_id)}}]->(n)
-                RETURN count(*) AS normalized
-        """
-        cleanup_merged_mark_query = f"""
-        MATCH (m:Node {{_new_merged_node: true}})
-        WHERE coalesce(m.graph_id, '{self.graph_id}') = '{self.graph_id}'
-        REMOVE m._new_merged_node
-        RETURN count(m) AS cleaned
-        """
-        self_loop_query = f"""
-        MATCH (v:Node)-[r:Wire]-(v)
-        WHERE v.t IN [1, 2] AND coalesce(v.graph_id, '{self.graph_id}') = '{self.graph_id}'
-        WITH v, collect(r) AS self_loops
-        WHERE size(self_loops) > 0
-
-        WITH v, self_loops
-        UNWIND self_loops AS sr
-        WITH v, self_loops,
-            sum(CASE WHEN coalesce(sr.t, 1) = 2 THEN 1 ELSE 0 END) AS hadamard_count
-        SET v.phase = coalesce(v.phase, 0) + CASE WHEN hadamard_count % 2 = 1 THEN 1 ELSE 0 END
-        
-        WITH self_loops
-        UNWIND self_loops AS loop_edge
-        DELETE loop_edge
-        RETURN count(loop_edge) AS loops_deleted
-        """
+        normalize_query = self._get_named_query("Spider fusion age - normalize").replace("__GRAPH_ID__", self.graph_id)
+        self_loop_query = self._get_named_query("Spider fusion age - self loops").replace("__GRAPH_ID__", self.graph_id)
+        cleanup_merged_mark_query = self._get_named_query("Spider fusion age - cleanup merged mark").replace("__GRAPH_ID__", self.graph_id)
 
         while True:
             if trace:
@@ -312,44 +250,6 @@ class ZXdbAge:
 
         print(f"Spider fusion(age): Processed {total_patterns} patterns.")
         return total_patterns
-    
-    """
-    This is the spider fusion age query in a more readable form
-
-"MATCH (a:Node)-[:Wire {t: 1}]->(b:Node)
-WHERE a.t IN [1, 2]
-    AND b.t IN [1, 2]
-    AND a.t = b.t
-WITH CASE WHEN id(a) < id(b) THEN a ELSE b END AS u,
-     CASE WHEN id(a) < id(b) THEN b ELSE a END AS v
-LIMIT 1
-CREATE (merged:Node {
-    phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),
-    t: u.t,
-    graph_id: coalesce(u.graph_id, v.graph_id),
-    id: coalesce(u.id, v.id),
-    qubit: coalesce(u.qubit, v.qubit),
-    row: coalesce(u.row, v.row)
-})
-WITH u, v, merged
-OPTIONAL MATCH (u)-[ru:Wire]-(nu:Node)
-WHERE nu <> v
-CREATE (merged)-[:Wire {
-    t: coalesce(ru.t, 1),
-    graph_id: coalesce(ru.graph_id, merged.graph_id, nu.graph_id)
-}]->(nu)
-WITH DISTINCT u, v, merged
-OPTIONAL MATCH (v)-[rv:Wire]-(nv:Node)
-WHERE nv <> u
-CREATE (merged)-[:Wire {
-    t: coalesce(rv.t, 1),
-    graph_id: coalesce(rv.graph_id, merged.graph_id, nv.graph_id)
-}]->(nv)
-WITH DISTINCT u, v
-DETACH DELETE u, v
-RETURN 1 AS rewrites_applied"
-
-"""
 
     def pivot_rule(self) -> int:
         """TODO: implement AGE pivot rewrite."""

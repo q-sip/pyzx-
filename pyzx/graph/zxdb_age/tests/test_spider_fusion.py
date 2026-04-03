@@ -30,13 +30,14 @@ class TestSpiderFusion(unittest.TestCase):
             [],
             [],
             [(0,)],
+            [(0,)],
         ]
         with patch.object(self.zxdb, "_get_named_query", side_effect=lambda t: t), patch.object(
             self.zxdb, "_execute_cypher", side_effect=execute_results
         ) as mock_exec:
             out = self.zxdb.spider_fusion()
             self.assertEqual(out, 1)
-            self.assertEqual(mock_exec.call_count, 5)
+            self.assertEqual(mock_exec.call_count, 6)
 
     def test_spider_fusion_stops_immediately_when_no_pattern(self):
         with patch.object(self.zxdb, "_get_named_query", side_effect=lambda t: t), patch.object(
@@ -44,7 +45,7 @@ class TestSpiderFusion(unittest.TestCase):
         ) as mock_exec:
             out = self.zxdb.spider_fusion()
             self.assertEqual(out, 0)
-            mock_exec.assert_called_once()
+            self.assertEqual(mock_exec.call_count, 2)
 
     def test_spider_fusion_tensor_equivalence(self):
         graph_id = self.zxdb.graph_id

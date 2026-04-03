@@ -64,6 +64,36 @@
             }
         },
         {
+            "title": "Spider fusion age - normalize",
+            "description": "Normalize parallel edges after merge and apply phase updates",
+            "query": {
+                "code": {
+                    "value": "MATCH (m:Node {_new_merged_node: true})-[w:Wire]-(n:Node)\nWHERE coalesce(m.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\n  AND coalesce(n.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\n  AND id(n) <> id(m)\nWITH m, n, collect(DISTINCT w) AS ws\nWHERE size(ws) > 1\nUNWIND ws AS rel\nWITH m, n, ws,\n     sum(CASE WHEN coalesce(rel.t, 1) = 1 THEN 1 ELSE 0 END) AS c_simple,\n     sum(CASE WHEN coalesce(rel.t, 1) = 2 THEN 1 ELSE 0 END) AS c_hadamard\nUNWIND ws AS del\nDELETE del\nWITH m, n, c_simple, c_hadamard,\n     CASE WHEN coalesce(m.t, -1) = coalesce(n.t, -1) THEN 1 ELSE 2 END AS fuse_type\nWITH m, n,\n     CASE\n         WHEN fuse_type = 1 THEN CASE WHEN c_simple > 0 THEN c_hadamard ELSE 0 END\n         ELSE CASE WHEN c_hadamard > 0 AND c_simple % 2 = 1 THEN 1 ELSE 0 END\n     END AS phase_add,\n     CASE\n         WHEN fuse_type = 1 THEN CASE\n             WHEN c_simple > 0 THEN 1\n             WHEN c_hadamard % 2 = 1 THEN 2\n             ELSE 0\n         END\n         ELSE CASE\n             WHEN c_hadamard > 0 THEN 2\n             WHEN c_simple % 2 = 1 THEN 1\n             ELSE 0\n         END\n     END AS out_type\nWITH m, n, phase_add, out_type,\n     id(m) AS mid,\n     id(n) AS nid\nSET m.phase = coalesce(m.phase, 0) + CASE WHEN mid <= nid THEN phase_add ELSE 0 END,\n    n.phase = coalesce(n.phase, 0) + CASE WHEN mid > nid THEN phase_add ELSE 0 END\nWITH m, n, out_type\nWHERE out_type <> 0\nCREATE (m)-[:Wire {t: out_type, graph_id: coalesce(m.graph_id, n.graph_id)}]->(n)\nRETURN count(*) AS normalized"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Spider fusion age - self loops",
+            "description": "Remove self-loops and add pi phase for odd hadamard loops",
+            "query": {
+                "code": {
+                    "value": "MATCH (v:Node)-[r:Wire]-(v)\nWHERE v.t IN [1, 2] AND coalesce(v.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\nWITH v, collect(r) AS self_loops\nWHERE size(self_loops) > 0\nWITH v, self_loops\nUNWIND self_loops AS sr\nWITH v, self_loops,\n     sum(CASE WHEN coalesce(sr.t, 1) = 2 THEN 1 ELSE 0 END) AS hadamard_count\nSET v.phase = coalesce(v.phase, 0) + CASE WHEN hadamard_count % 2 = 1 THEN 1 ELSE 0 END\nWITH self_loops\nUNWIND self_loops AS loop_edge\nDELETE loop_edge\nRETURN count(loop_edge) AS loops_deleted"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Spider fusion age - cleanup merged mark",
+            "description": "Remove temporary merge marker from merged nodes",
+            "query": {
+                "code": {
+                    "value": "MATCH (m:Node {_new_merged_node: true})\nWHERE coalesce(m.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\nREMOVE m._new_merged_node\nRETURN count(m) AS cleaned"
+                },
+                "params": {}
+            }
+        },
+        {
             "title": "Local complementation age",
             "description": "AGE-compatible local complementation core case (center phase +/- 1/2 with two Z neighbors via hadamard edges)",
             "query": {
