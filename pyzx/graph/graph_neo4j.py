@@ -93,6 +93,15 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             )
         return self._driver
 
+    def verify_db_connection(self)->bool:
+        """Verifies that the database connection is valid."""
+        try:
+            self.driver.verify_connectivity()
+        except Exception as e:
+            print(f"Connection failed, e:\n{e}", end='\n')
+            return False
+        return True
+
     def remove_all_data(self) -> None:
         """Removes ALL nodes and relationships for this graph_id."""
         query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""

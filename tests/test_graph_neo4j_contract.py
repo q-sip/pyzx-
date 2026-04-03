@@ -1,11 +1,10 @@
-import os
 import unittest
 from unittest.mock import patch
 
 from pyzx.graph.graph_neo4j import GraphNeo4j
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
-if "mem" in os.getenv("neo4j", "") or True:
+if GraphNeo4j().verify_db_connection():
     class TestGraphBasicMethodsNeo4j(TestGraphBasicMethods):
         def setUp(self):
             self.patcher = patch('tests.test_graph.Graph', GraphNeo4j)
@@ -49,6 +48,11 @@ if "mem" in os.getenv("neo4j", "") or True:
         def tearDown(self):
             super().tearDown()
             self.patcher.stop()
+else:
+    class TestSkipperNeo4j(unittest.TestCase):
+        @unittest.skip("Neo4j connection failed, skipping Neo4j tests")
+        def test_neo4j_skipped(self):
+            pass
 
 if __name__ == '__main__':
     unittest.main()

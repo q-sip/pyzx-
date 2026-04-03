@@ -5,7 +5,7 @@ from unittest.mock import patch
 from pyzx.graph.graph_AGE import GraphAGE
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
-if "age" in os.getenv("BACKEND_NAME", ""):
+if GraphAGE().verify_db_connection():
     import uuid
     
     class TestGraphBasicMethodsAge(TestGraphBasicMethods):
@@ -79,6 +79,13 @@ if "age" in os.getenv("BACKEND_NAME", ""):
                 except Exception:
                     pass
             self.patcher.stop()
+
+
+else:
+    class TestSkipperAge(unittest.TestCase):
+        @unittest.skip("Age connection failed, skipping Age tests")
+        def test_age_skipped(self):
+            pass
 
 if __name__ == '__main__':
     unittest.main()

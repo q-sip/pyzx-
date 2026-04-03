@@ -1,11 +1,11 @@
-import os
 import unittest
 from unittest.mock import patch
 
 from pyzx.graph.graph_memgraph import GraphMemgraph
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
-if "mem" in os.getenv("BACKEND_NAME", ""):
+
+if GraphMemgraph().verify_db_connection():
     class TestGraphBasicMethodsMemgraph(TestGraphBasicMethods):
         def setUp(self):
             self.patcher = patch('tests.test_graph.Graph', GraphMemgraph)
@@ -49,6 +49,11 @@ if "mem" in os.getenv("BACKEND_NAME", ""):
         def tearDown(self):
             super().tearDown()
             self.patcher.stop()
+else:
+    class TestSkipperMemgraph(unittest.TestCase):
+        @unittest.skip("Memgraph connection failed, skipping memgraph tests")
+        def test_memgraph_skipped(self):
+            pass
 
 if __name__ == '__main__':
     unittest.main()
