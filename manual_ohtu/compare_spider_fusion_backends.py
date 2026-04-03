@@ -16,6 +16,7 @@ import os
 import random
 import sys
 import uuid
+import time
 from fractions import Fraction
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -322,7 +323,7 @@ def _graph_diag(name: str, g: zx.Graph) -> None:
 		print(f"  output {v} degree={g.vertex_degree(v)}")
 
 
-def test_fixture(name: str, builder) -> bool:
+def test_fixture(name: str, builder) -> tuple[bool, dict[str, float]]:
 	"""Test a single fixture across all backends.
 	
 	Args:
@@ -330,18 +331,23 @@ def test_fixture(name: str, builder) -> bool:
 		builder: Callable that returns a fixture graph
 	
 	Returns:
-		True if all backends agree, False otherwise
+		Tuple of:
+		- True if all backends agree, False otherwise
+		- Dict with timing (seconds) for each backend
 	"""
 	print(f"\n{'='*60}")
 	print(f"Test: {name}")
 	print(f"{'='*60}")
+	timings: dict[str, float] = {}
 	
 	print("Building fixture...")
 	original = builder()
 
 	print("Running SimpleGraph reference (zx.spider_simp)...")
 	simple_after = original.copy()
+	t0 = time.perf_counter()
 	zx.spider_simp(simple_after)
+	timings["simple"] = time.perf_counter() - t0
 
 	graph_id_mem = f"manual_mem_spider_{uuid.uuid4().hex}"
 	graph_id_age = f"manual_age_spider_{uuid.uuid4().hex}"
@@ -351,13 +357,22 @@ def test_fixture(name: str, builder) -> bool:
 	try:
 		print("Running Memgraph backend...")
 		g_mem = load_fixture_to_memgraph(original, graph_id_mem)
+		t0 = time.perf_counter()
 		zx.spider_simp(g_mem)
+		timings["memgraph"] = time.perf_counter() - t0
 		mem_after = g_mem.copy(backend="simple")
 
 		print("Running AGE backend (ZXdbAge.spider_fusion)...")
 		age_db = load_fixture_to_age_zxdb(original, graph_id_age)
+		t0 = time.perf_counter()
 		age_db.spider_fusion()
+		timings["age"] = time.perf_counter() - t0
 		age_after = age_zxdb_to_simple_graph(age_db)
+
+		print("Timings (seconds):")
+		print(f"  simple:   {timings['simple']:.6f}")
+		print(f"  memgraph: {timings['memgraph']:.6f}")
+		print(f"  age:      {timings['age']:.6f}")
 
 		print("Comparing tensors...")
 		mem_vs_simple, mem_vs_simple_msg = _safe_compare_tensors("mem_vs_simple", mem_after, simple_after)
@@ -382,10 +397,10 @@ def test_fixture(name: str, builder) -> bool:
 
 		all_ok = all([mem_vs_simple, age_vs_simple, age_vs_mem])
 		print(f"Result: {'PASS' if all_ok else 'FAIL'}")
-		return all_ok
+		return all_ok, timings
 	except Exception as exc:
 		print(f"ERROR: {type(exc).__name__}: {exc}")
-		return False
+		return False, timings
 	finally:
 		if g_mem is not None:
 			try:
@@ -441,13 +456,16 @@ def main() -> int:
 		)
 	
 	results = {}
+	timing_results: dict[str, dict[str, float]] = {}
 	for name, builder in fixtures:
 		try:
-			passed = test_fixture(name, builder)
+			passed, timings = test_fixture(name, builder)
 			results[name] = passed
+			timing_results[name] = timings
 		except Exception as e:
 			print(f"EXCEPTION in {name}: {type(e).__name__}: {e}")
 			results[name] = False
+			timing_results[name] = {}
 	
 	print(f"\n\n{'='*60}")
 	print("SUMMARY")
@@ -459,6 +477,31 @@ def main() -> int:
 	total = len(results)
 	passed = sum(1 for p in results.values() if p)
 	print(f"\nTotal: {passed}/{total} passed")
+
+	print(f"\n{'='*60}")
+	print("SPEED SUMMARY (seconds)")
+	print(f"{'='*60}")
+	print(f"{'Fixture':45} {'Simple':>10} {'Memgraph':>10} {'AGE':>10}")
+	for name in results.keys():
+		t = timing_results.get(name, {})
+		s = t.get("simple")
+		m = t.get("memgraph")
+		a = t.get("age")
+		print(
+			f"{name[:45]:45} "
+			f"{(f'{s:.6f}' if s is not None else '-'):>10} "
+			f"{(f'{m:.6f}' if m is not None else '-'):>10} "
+			f"{(f'{a:.6f}' if a is not None else '-'):>10}"
+		)
+
+	valid_simple = [t["simple"] for t in timing_results.values() if "simple" in t]
+	valid_mem = [t["memgraph"] for t in timing_results.values() if "memgraph" in t]
+	valid_age = [t["age"] for t in timing_results.values() if "age" in t]
+	if valid_simple and valid_mem and valid_age:
+		print("\nAverages:")
+		print(f"  simple:   {sum(valid_simple)/len(valid_simple):.6f}")
+		print(f"  memgraph: {sum(valid_mem)/len(valid_mem):.6f}")
+		print(f"  age:      {sum(valid_age)/len(valid_age):.6f}")
 	
 	return 0 if all(results.values()) else 1
 

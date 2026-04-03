@@ -3,6 +3,7 @@
 Run from project root:
 	python manual_ohtu/test_age.py --method spider_fusion --graphs 5
 	python manual_ohtu/test_age.py --method local_complementation --graphs 10 --seed 42
+	python manual_ohtu/test_age.py --method to_gh --graphs 10 --seed 42
 	python manual_ohtu/test_age.py --method all --nodes 8 --extra-edge-prob 0.2
 """
 
@@ -247,6 +248,11 @@ def run_method_compare(
 		age_after = export_age_to_simple_graph(age_db)
 
 		same_tensor, reason = _safe_tensor_compare(simple_after, age_after)
+		if not same_tensor and method_name == "to_gh" and reason.startswith("MemoryError"):
+			same_vertices = _graph_vertices_signature(simple_after) == _graph_vertices_signature(age_after)
+			same_edges = _graph_edges_signature(simple_after) == _graph_edges_signature(age_after)
+			if same_vertices and same_edges:
+				return True, "match (structural fallback after tensor MemoryError)"
 		if not same_tensor:
 			if dump_on_fail:
 				diff = _dump_graph_diff(simple_after, age_after)
@@ -273,7 +279,7 @@ def main() -> int:
 	parser = argparse.ArgumentParser(description="Random Simple vs AGE rewrite comparison")
 	parser.add_argument(
 		"--method",
-		choices=["spider_fusion", "local_complementation", "all"],
+		choices=["spider_fusion", "local_complementation", "to_gh", "all"],
 		default="all",
 		help="Method to test",
 	)
@@ -289,6 +295,7 @@ def main() -> int:
 	methods: Dict[str, Tuple[Callable[[zx.Graph], object], Callable[[ZXdbAge], object]]] = {
 		"spider_fusion": (lambda g: zx.spider_simp(g), lambda db: db.spider_fusion()),
 		"local_complementation": (lambda g: zx.lcomp_simp(g), lambda db: db.local_complementation_rule()),
+		"to_gh": (lambda g: zx.to_gh(g), lambda db: db.to_gh()),
 	}
 
 	selected = list(methods.keys()) if args.method == "all" else [args.method]

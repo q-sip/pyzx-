@@ -28,7 +28,7 @@
             "description": "Toggle edge types around marked spiders (1 <-> 2)",
             "query": {
                 "code": {
-                    "value": "MATCH (n:Node {_to_gh_mark: true})-[w:Wire]-()\nWHERE w.t IN [1, 2]\nWITH DISTINCT w\nSET w.t = CASE w.t WHEN 1 THEN 2 ELSE 1 END\nRETURN count(w) AS toggled"
+                    "value": "MATCH (n:Node {_to_gh_mark: true})-[w:Wire]-()\nWHERE w.t IN [1, 2]\nWITH w, count(n) AS marked_endpoints\nWHERE marked_endpoints % 2 = 1\nSET w.t = CASE w.t WHEN 1 THEN 2 ELSE 1 END\nRETURN count(w) AS toggled"
                 },
                 "params": {}
             }
@@ -95,10 +95,50 @@
         },
         {
             "title": "Local complementation age",
-            "description": "AGE-compatible local complementation core case (center phase +/- 1/2 with two Z neighbors via hadamard edges)",
+            "description": "AGE-compatible local complementation candidate selection (center and neighbor ids)",
             "query": {
                 "code": {
-                    "value": "MATCH (center:Node)-[:Wire {t:2}]-(n1:Node),\n      (center)-[:Wire {t:2}]-(n2:Node)\nWHERE center.t = 1\n  AND n1.t = 1\n  AND n2.t = 1\n  AND id(n1) < id(n2)\n  AND coalesce(center.phase, 0) IN [0.5, -0.5]\nWITH center, n1, n2\nLIMIT 1\nCREATE (n1)-[:Wire {t: 2, graph_id: coalesce(center.graph_id, n1.graph_id, n2.graph_id)}]->(n2)\nSET n1.phase = coalesce(n1.phase, 0) - coalesce(center.phase, 0),\n    n2.phase = coalesce(n2.phase, 0) - coalesce(center.phase, 0)\nDETACH DELETE center\nRETURN 1 AS rewritten"
+                    "value": "MATCH (center:Node)\nWHERE center.t = 1\n  AND coalesce(center.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\n  AND coalesce(center.phase, 0) IN [0.5, -0.5, 1.5, -1.5]\nWITH center\nOPTIONAL MATCH (center)-[bad_edge]-(bad_neighbor:Node)\nWHERE NOT (bad_neighbor.t = 1 AND coalesce(bad_edge.t, 1) = 2)\nWITH center, count(bad_neighbor) AS bad_connections\nWHERE bad_connections = 0\nMATCH (center)-[:Wire {t: 2}]-(nbr:Node)\nWHERE nbr.t = 1\n  AND coalesce(nbr.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\nWITH center, collect(DISTINCT id(nbr)) AS neighbor_ids, coalesce(center.phase, 0) AS center_phase\nWHERE size(neighbor_ids) > 0\nRETURN id(center) AS center_id, center_phase, neighbor_ids"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Local complementation age - batch process pairs",
+            "description": "Process all neighbor pairs: create missing edges via UNWIND + MERGE",
+            "query": {
+                "code": {
+                    "value": "MATCH (left:Node {graph_id: '__GRAPH_ID__'}), (right:Node {graph_id: '__GRAPH_ID__'})\nWHERE left.id IN __LEFT_IDS__ AND right.id IN __RIGHT_IDS__ AND id(left) < id(right)\nMERGE (left)-[e:Wire]-(right)\nON CREATE SET e.t = 2, e.graph_id = '__GRAPH_ID__'\nRETURN count(e) AS processed"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Local complementation age - delete hadamard edges",
+            "description": "Delete edges between neighbor pairs that are pure Hadamard",
+            "query": {
+                "code": {
+                    "value": "MATCH (left:Node {graph_id: '__GRAPH_ID__'})-[e:Wire {t: 2}]-(right:Node {graph_id: '__GRAPH_ID__'})\nWHERE left.id IN __LEFT_IDS__ AND right.id IN __RIGHT_IDS__ AND id(left) < id(right)\nDELETE e\nRETURN count(e) AS deleted"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Local complementation age - toggle mixed edges",
+            "description": "Toggle mixed-type edges to simple (t=1) and add phase to lower-id neighbor",
+            "query": {
+                "code": {
+                    "value": "MATCH (left:Node {graph_id: '__GRAPH_ID__'})-[e:Wire]-(right:Node {graph_id: '__GRAPH_ID__'})\nWHERE left.id IN __LEFT_IDS__ AND right.id IN __RIGHT_IDS__ AND id(left) < id(right) AND coalesce(e.t, 1) <> 2\nSET e.t = 1\nWITH left, right\nWHERE id(left) < id(right)\nSET left.phase = coalesce(left.phase, 0) + 1\nWITH count(left) AS toggled\nRETURN toggled"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Local complementation age - batch apply center phase",
+            "description": "Batch apply center phase reduction to all neighbors",
+            "query": {
+                "code": {
+                    "value": "MATCH (nbr:Node {graph_id: '__GRAPH_ID__'})\nWHERE nbr.id IN __NEIGHBOR_IDS__\nSET nbr.phase = coalesce(nbr.phase, 0) - __CENTER_PHASE__\nRETURN count(nbr) AS updated"
                 },
                 "params": {}
             }

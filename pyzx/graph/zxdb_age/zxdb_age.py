@@ -256,17 +256,123 @@ class ZXdbAge:
         return 0
 
     def local_complementation_rule(self) -> int:
-        """Apply local complementation rewrites until no more patterns are found."""
+        """Apply local complementation rewrites until no more patterns are found.
+        
+        Uses efficient batched queries:
+        - Query 1: Find valid center + all neighbors
+        - Query 2: Batch MERGE all neighbor pairs (creates Hadamard edges)
+        - Query 3: Batch DELETE pure Hadamard pairs
+        - Query 4: Batch toggle mixed edges and apply phase
+        - Query 5: Apply center phase + delete center
+        """
+        
+        def _parse_neighbor_ids(value: object) -> list[int]:
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return [int(v) for v in value]
+            if isinstance(value, tuple):
+                return [int(v) for v in value]
+            text = str(value).strip()
+            if not text:
+                return []
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [int(v) for v in parsed]
+            except Exception:
+                pass
+            text = text.strip('[]')
+            if not text:
+                return []
+            return [int(part.strip()) for part in text.split(',') if part.strip()]
+
+        def _parse_scalar(value: object) -> float:
+            if isinstance(value, (int, float)):
+                return float(value)
+            text = str(value).strip().strip('"')
+            return float(text)
+
         total_patterns = 0
         while True:
+            # Query 1: Find valid center and neighbors
             rows = self._execute_cypher(
                 self._get_named_query("Local complementation age"),
-                return_signature="rewritten agtype",
+                return_signature="center_id agtype, center_phase agtype, neighbor_ids agtype",
             )
-            rewritten = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
-            if rewritten == 0:
+            if not rows or not rows[0]:
                 break
-            total_patterns += rewritten
+
+            center_id = int(rows[0][0])
+            center_phase = _parse_scalar(rows[0][1])
+            neighbor_ids = sorted(set(_parse_neighbor_ids(rows[0][2])))
+            if not neighbor_ids:
+                break
+
+            # Build all neighbor pairs
+            pairs = []
+            for idx, left_id in enumerate(neighbor_ids[:-1]):
+                for right_id in neighbor_ids[idx + 1 :]:
+                    pairs.append((left_id, right_id))
+
+            # Extract left and right IDs as separate lists for batch queries
+            left_ids = [p[0] for p in pairs]
+            right_ids = [p[1] for p in pairs]
+
+            if pairs:
+                # Query 2: Batch MERGE to create/ensure all Hadamard edges
+                query_merge = self._get_named_query(
+                    "Local complementation age - batch process pairs"
+                )
+                query_merge = query_merge.replace("__LEFT_IDS__", str(left_ids))
+                query_merge = query_merge.replace("__RIGHT_IDS__", str(right_ids))
+                self._execute_cypher(
+                    query_merge,
+                    return_signature="processed agtype",
+                )
+
+                # Query 3: Batch DELETE pure Hadamard edges
+                query_delete = self._get_named_query(
+                    "Local complementation age - delete hadamard edges"
+                )
+                query_delete = query_delete.replace("__LEFT_IDS__", str(left_ids))
+                query_delete = query_delete.replace("__RIGHT_IDS__", str(right_ids))
+                self._execute_cypher(
+                    query_delete,
+                    return_signature="deleted agtype",
+                )
+
+                # Query 4: Batch toggle mixed edges and apply phase
+                query_toggle = self._get_named_query(
+                    "Local complementation age - toggle mixed edges"
+                )
+                query_toggle = query_toggle.replace("__LEFT_IDS__", str(left_ids))
+                query_toggle = query_toggle.replace("__RIGHT_IDS__", str(right_ids))
+                self._execute_cypher(
+                    query_toggle,
+                    return_signature="toggled agtype",
+                )
+
+            # Query 5: Batch apply center phase to all neighbors (single query)
+            query_phase = self._get_named_query(
+                "Local complementation age - batch apply center phase"
+            )
+            query_phase = query_phase.replace("__NEIGHBOR_IDS__", str(neighbor_ids))
+            query_phase = query_phase.replace("__CENTER_PHASE__", str(center_phase))
+            self._execute_cypher(
+                query_phase,
+                return_signature="updated agtype",
+            )
+
+            # Delete center
+            self._execute_cypher(
+                f"""
+                MATCH (c:Node {{graph_id: '{self.graph_id}', id: {center_id}}})
+                DETACH DELETE c
+                """
+            )
+            total_patterns += 1
+
         print(f"Local Complementation")
         return total_patterns
 
