@@ -116,33 +116,48 @@ class TestLocalComplementation(unittest.TestCase):
         return out
 
     def test_local_complementation_runs_until_no_pattern(self):
-        execute_results = [
-            [(2,)],
-            [(1,)],
-            [(0,)],
+        query_rows = [
+            [(101, 0.5, "[11,12]")],
+            [(202, -0.5, "[21,22]")],
+            [],
         ]
+
+        def _mock_exec(query, return_signature=None):
+            if query == "Local complementation age":
+                return query_rows.pop(0)
+            if query in {
+                "Local complementation age - batch process pairs",
+                "Local complementation age - delete hadamard edges",
+                "Local complementation age - toggle mixed edges",
+                "Local complementation age - batch apply center phase",
+            }:
+                return [(1,)]
+            if isinstance(query, str) and "DETACH DELETE c" in query:
+                return []
+            raise AssertionError(f"Unexpected query: {query}")
+
         with patch.object(self.zxdb, "_get_named_query", side_effect=lambda t: t), patch.object(
-            self.zxdb, "_execute_cypher", side_effect=execute_results
+            self.zxdb, "_execute_cypher", side_effect=_mock_exec
         ) as mock_exec:
             out = self.zxdb.local_complementation_rule()
-            self.assertEqual(out, 3)
-            self.assertEqual(mock_exec.call_count, 3)
-            self.assertEqual(
-                [c.args[0] for c in mock_exec.call_args_list],
-                ["Local complementation age", "Local complementation age", "Local complementation age"],
-            )
-            self.assertEqual(
-                [c.kwargs.get("return_signature") for c in mock_exec.call_args_list],
-                ["rewritten agtype", "rewritten agtype", "rewritten agtype"],
+            self.assertEqual(out, 2)
+            self.assertEqual(mock_exec.call_count, 13)
+            lcomp_query_calls = [c for c in mock_exec.call_args_list if c.args and c.args[0] == "Local complementation age"]
+            self.assertEqual(len(lcomp_query_calls), 3)
+            self.assertTrue(
+                all(c.kwargs.get("return_signature") == "center_id agtype, center_phase agtype, neighbor_ids agtype" for c in lcomp_query_calls)
             )
 
     def test_local_complementation_stops_immediately_when_no_pattern(self):
         with patch.object(self.zxdb, "_get_named_query", side_effect=lambda t: t), patch.object(
-            self.zxdb, "_execute_cypher", return_value=[(0,)]
+            self.zxdb, "_execute_cypher", return_value=[]
         ) as mock_exec:
             out = self.zxdb.local_complementation_rule()
             self.assertEqual(out, 0)
-            mock_exec.assert_called_once_with("Local complementation age", return_signature="rewritten agtype")
+            mock_exec.assert_called_once_with(
+                "Local complementation age",
+                return_signature="center_id agtype, center_phase agtype, neighbor_ids agtype",
+            )
 
     def test_local_complementation_tensor_equivalence(self):
         original = zx.Graph(backend="simple")

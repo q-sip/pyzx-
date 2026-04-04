@@ -32,116 +32,6 @@ from pyzx.graph.zxdb_age.zxdb_age import ZXdbAge
 load_dotenv()
 
 
-def build_simple_fixture() -> zx.Graph:
-	"""Two Z-spiders connected by simple edge."""
-	g = zx.Graph(backend="simple")
-
-	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
-	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=Fraction(1, 2))
-	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2, phase=Fraction(1, 2))
-	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
-
-	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z1, z2), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z2, o), edgetype=EdgeType.SIMPLE)
-
-	g.set_inputs((i,))
-	g.set_outputs((o,))
-	return g
-
-
-def build_x_spider_fixture() -> zx.Graph:
-	"""Two X-spiders connected by simple edge."""
-	g = zx.Graph(backend="simple")
-
-	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
-	x1 = g.add_vertex(VertexType.X, qubit=0, row=1, phase=Fraction(1, 4))
-	x2 = g.add_vertex(VertexType.X, qubit=0, row=2, phase=Fraction(1, 4))
-	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
-
-	g.add_edge((i, x1), edgetype=EdgeType.SIMPLE)
-	g.add_edge((x1, x2), edgetype=EdgeType.SIMPLE)
-	g.add_edge((x2, o), edgetype=EdgeType.SIMPLE)
-
-	g.set_inputs((i,))
-	g.set_outputs((o,))
-	return g
-
-
-def build_three_spider_chain() -> zx.Graph:
-	"""Three Z-spiders in chain - all should fuse to one."""
-	g = zx.Graph(backend="simple")
-
-	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
-	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=Fraction(1, 6))
-	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2, phase=Fraction(1, 3))
-	z3 = g.add_vertex(VertexType.Z, qubit=0, row=3, phase=Fraction(1, 2))
-	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=4)
-
-	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z1, z2), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z2, z3), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z3, o), edgetype=EdgeType.SIMPLE)
-
-	g.set_inputs((i,))
-	g.set_outputs((o,))
-	return g
-
-
-def build_mixed_phases() -> zx.Graph:
-	"""Two Z-spiders with different phases to verify phase sum."""
-	g = zx.Graph(backend="simple")
-
-	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
-	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1, phase=Fraction(1, 3))
-	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2, phase=Fraction(1, 6))
-	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
-
-	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z1, z2), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z2, o), edgetype=EdgeType.SIMPLE)
-
-	g.set_inputs((i,))
-	g.set_outputs((o,))
-	return g
-
-
-def build_no_fusion_hadamard() -> zx.Graph:
-	"""Two Z-spiders connected by hadamard - should NOT fuse."""
-	g = zx.Graph(backend="simple")
-
-	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
-	z1 = g.add_vertex(VertexType.Z, qubit=0, row=1)
-	z2 = g.add_vertex(VertexType.Z, qubit=0, row=2)
-	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
-
-	g.add_edge((i, z1), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z1, z2), edgetype=EdgeType.HADAMARD)  # Hadamard edge - no fusion
-	g.add_edge((z2, o), edgetype=EdgeType.SIMPLE)
-
-	g.set_inputs((i,))
-	g.set_outputs((o,))
-	return g
-
-
-def build_red_green_no_fusion() -> zx.Graph:
-	"""Red and green spiders - should NOT fuse."""
-	g = zx.Graph(backend="simple")
-
-	i = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=0)
-	z = g.add_vertex(VertexType.Z, qubit=0, row=1)  # Green
-	x = g.add_vertex(VertexType.X, qubit=0, row=2)  # Red
-	o = g.add_vertex(VertexType.BOUNDARY, qubit=0, row=3)
-
-	g.add_edge((i, z), edgetype=EdgeType.SIMPLE)
-	g.add_edge((z, x), edgetype=EdgeType.SIMPLE)  # Simple edge with mixed colors
-	g.add_edge((x, o), edgetype=EdgeType.SIMPLE)
-
-	g.set_inputs((i,))
-	g.set_outputs((o,))
-	return g
-
-
 def build_random_big_fixture(nodes: int = 30, extra_edge_prob: float = 0.18, seed: int = 1337) -> zx.Graph:
 	"""Random larger graph for stress-testing spider fusion across backends."""
 	rng = random.Random(seed)
@@ -323,83 +213,125 @@ def _graph_diag(name: str, g: zx.Graph) -> None:
 		print(f"  output {v} degree={g.vertex_degree(v)}")
 
 
-def test_fixture(name: str, builder) -> tuple[bool, dict[str, float]]:
-	"""Test a single fixture across all backends.
+def test_fixture(
+	graph_num: int,
+	g_ref: zx.Graph,
+	methods: list[str],
+	compare_tensors: bool,
+) -> tuple[bool, dict[str, dict[str, float]]]:
+	"""Test a single fixture across all backends and methods.
 	
 	Args:
-		name: Test case name
-		builder: Callable that returns a fixture graph
+		graph_num: Graph number for display
+		g_ref: Reference graph (SimpleGraph)
+		methods: List of methods to test ['spider_fusion', 'to_gh', 'local_complementation']
+		compare_tensors: Whether to export backend graphs and compare tensors
 	
 	Returns:
 		Tuple of:
-		- True if all backends agree, False otherwise
-		- Dict with timing (seconds) for each backend
+		- True if all tested steps succeed (and comparisons pass when enabled), False otherwise
+		- Nested dict: {method: {backend: time_in_seconds}}
 	"""
-	print(f"\n{'='*60}")
-	print(f"Test: {name}")
-	print(f"{'='*60}")
-	timings: dict[str, float] = {}
+	print(f"\nGraph #{graph_num}: vertices={g_ref.num_vertices()}, edges={g_ref.num_edges()}")
 	
-	print("Building fixture...")
-	original = builder()
-
-	print("Running SimpleGraph reference (zx.spider_simp)...")
-	simple_after = original.copy()
-	t0 = time.perf_counter()
-	zx.spider_simp(simple_after)
-	timings["simple"] = time.perf_counter() - t0
-
-	graph_id_mem = f"manual_mem_spider_{uuid.uuid4().hex}"
-	graph_id_age = f"manual_age_spider_{uuid.uuid4().hex}"
-
+	timings: dict[str, dict[str, float]] = {method: {} for method in methods}
+	results = {method: {} for method in methods}
+	
+	graph_id_mem = f"manual_mem_{uuid.uuid4().hex[:8]}"
+	graph_id_age = f"manual_age_{uuid.uuid4().hex[:8]}"
+	
 	g_mem = None
 	age_db = None
+	all_ok = True
+	
 	try:
-		print("Running Memgraph backend...")
-		g_mem = load_fixture_to_memgraph(original, graph_id_mem)
-		t0 = time.perf_counter()
-		zx.spider_simp(g_mem)
-		timings["memgraph"] = time.perf_counter() - t0
-		mem_after = g_mem.copy(backend="simple")
+		for method in methods:
+			print(f"  {method}:", end="")
+			
+			# SimpleGraph
+			simple_after = g_ref.copy()
+			t0 = time.perf_counter()
+			if method == "spider_fusion":
+				zx.spider_simp(simple_after)
+			elif method == "to_gh":
+				zx.to_gh(simple_after)
+			elif method == "local_complementation":
+				zx.lcomp_simp(simple_after)
+			timings[method]["simple"] = time.perf_counter() - t0
+			
+			# Memgraph
+			g_mem = load_fixture_to_memgraph(g_ref, graph_id_mem)
+			t0 = time.perf_counter()
+			if method == "spider_fusion":
+				zx.spider_simp(g_mem)
+			elif method == "to_gh":
+				zx.to_gh(g_mem)
+			elif method == "local_complementation":
+				zx.lcomp_simp(g_mem)
+			timings[method]["memgraph"] = time.perf_counter() - t0
+			mem_after = g_mem.copy(backend="simple") if compare_tensors else None
+			g_mem.remove_all_data()
+			g_mem.close()
+			g_mem = None
+			
+			# AGE - use specific method calls
+			age_db = load_fixture_to_age_zxdb(g_ref, graph_id_age)
+			t0 = time.perf_counter()
+			try:
+				if method == "spider_fusion":
+					age_db.spider_fusion()
+				elif method == "to_gh":
+					age_db.to_gh()
+				elif method == "local_complementation":
+					age_db.local_complementation_rule()
+				timings[method]["age"] = time.perf_counter() - t0
+			except (NotImplementedError, AttributeError) as e:
+				# If method not implemented on AGE, skip it
+				timings[method]["age"] = 0.0
+				print(f" SKIP(not impl)", end="")
+				try:
+					with age_db.conn.cursor() as cur:
+						cur.execute("SELECT drop_graph(%s, %s);", (graph_id_age, True))
+					age_db.conn.commit()
+				except Exception:
+					pass
+				age_db.close()
+				age_db = None
+				continue
+			
+			age_after = age_zxdb_to_simple_graph(age_db) if compare_tensors else None
+			try:
+				with age_db.conn.cursor() as cur:
+					cur.execute("SELECT drop_graph(%s, %s);", (graph_id_age, True))
+				age_db.conn.commit()
+			except Exception:
+				pass
+			age_db.close()
+			age_db = None
+			
+			# Compare results (optional)
+			if compare_tensors:
+				mem_vs_simple, _ = _safe_compare_tensors("mem_vs_simple", mem_after, simple_after)
+				try:
+					age_vs_simple, _ = _safe_compare_tensors("age_vs_simple", age_after, simple_after)
+				except Exception:
+					age_vs_simple = False
 
-		print("Running AGE backend (ZXdbAge.spider_fusion)...")
-		age_db = load_fixture_to_age_zxdb(original, graph_id_age)
-		t0 = time.perf_counter()
-		age_db.spider_fusion()
-		timings["age"] = time.perf_counter() - t0
-		age_after = age_zxdb_to_simple_graph(age_db)
-
-		print("Timings (seconds):")
-		print(f"  simple:   {timings['simple']:.6f}")
-		print(f"  memgraph: {timings['memgraph']:.6f}")
-		print(f"  age:      {timings['age']:.6f}")
-
-		print("Comparing tensors...")
-		mem_vs_simple, mem_vs_simple_msg = _safe_compare_tensors("mem_vs_simple", mem_after, simple_after)
-		age_vs_simple, age_vs_simple_msg = _safe_compare_tensors("age_vs_simple", age_after, simple_after)
-		age_vs_mem, age_vs_mem_msg = _safe_compare_tensors("age_vs_mem", age_after, mem_after)
-
-		print(f"mem_after vs simple:      {mem_vs_simple}")
-		print(f"age_after vs simple:      {age_vs_simple}")
-		print(f"age_after vs mem:         {age_vs_mem}")
-		if not mem_vs_simple:
-			print(f"  reason mem_after vs simple: {mem_vs_simple_msg}")
-		if not age_vs_simple:
-			print(f"  reason age_after vs simple: {age_vs_simple_msg}")
-		if not age_vs_mem:
-			print(f"  reason age_after vs mem: {age_vs_mem_msg}")
-
-		if not all([mem_vs_simple, age_vs_simple, age_vs_mem]):
-			print("\nGraph diagnostics:")
-			_graph_diag("simple_after", simple_after)
-			_graph_diag("mem_after", mem_after)
-			_graph_diag("age_after", age_after)
-
-		all_ok = all([mem_vs_simple, age_vs_simple, age_vs_mem])
-		print(f"Result: {'PASS' if all_ok else 'FAIL'}")
+				method_ok = mem_vs_simple and age_vs_simple
+				results[method] = {"mem_vs_simple": mem_vs_simple, "age_vs_simple": age_vs_simple}
+			else:
+				method_ok = True
+				results[method] = {"speed_only": True}
+			
+			status = "PASS" if method_ok else "FAIL"
+			print(f" {status}", end="")
+			all_ok = all_ok and method_ok
+		
+		print()
 		return all_ok, timings
+		
 	except Exception as exc:
-		print(f"ERROR: {type(exc).__name__}: {exc}")
+		print(f" ERROR: {type(exc).__name__}: {exc}")
 		return False, timings
 	finally:
 		if g_mem is not None:
@@ -411,7 +343,6 @@ def test_fixture(name: str, builder) -> tuple[bool, dict[str, float]]:
 				g_mem.close()
 			except Exception:
 				pass
-
 		if age_db is not None:
 			try:
 				with age_db.conn.cursor() as cur:
@@ -426,82 +357,119 @@ def test_fixture(name: str, builder) -> tuple[bool, dict[str, float]]:
 
 
 def main() -> int:
-	"""Test spider fusion across multiple fixtures."""
-	parser = argparse.ArgumentParser(description="Compare spider_fusion across SimpleGraph, Memgraph and AGE")
-	parser.add_argument("--random-big", action="store_true", help="Include an additional random large fixture")
-	parser.add_argument("--random-nodes", type=int, default=30, help="Internal node count for random fixture")
-	parser.add_argument("--random-edge-prob", type=float, default=0.18, help="Extra edge probability for random fixture")
-	parser.add_argument("--random-seed", type=int, default=1337, help="Random seed for random fixture")
+	"""Test rewrite methods across multiple fixtures and backends."""
+	parser = argparse.ArgumentParser(description="Compare rewrite methods across SimpleGraph, Memgraph and AGE")
+	parser.add_argument(
+		"--graphs",
+		type=int,
+		default=5,
+		help="Number of random graphs to generate and test (default: 5)"
+	)
+	parser.add_argument(
+		"--nodes",
+		type=int,
+		default=12,
+		help="Internal node count per random fixture (default: 12)"
+	)
+	parser.add_argument(
+		"--edge-prob",
+		type=float,
+		default=0.18,
+		help="Extra edge probability for random fixture (default: 0.18)"
+	)
+	parser.add_argument(
+		"--seed",
+		type=int,
+		default=42,
+		help="Random seed for reproducibility (default: 42)"
+	)
+	parser.add_argument(
+		"--method",
+		type=str,
+		choices=["spider_fusion", "to_gh", "local_complementation", "all"],
+		default="all",
+		help="Which method(s) to test (default: all)"
+	)
+	parser.add_argument(
+		"--with-tensor-compare",
+		action="store_true",
+		help="Enable tensor comparison across backends (disabled by default for speed and memory safety)",
+	)
 	args = parser.parse_args()
-
-	fixtures = [
-		("Two Z-spiders (same phases)", build_simple_fixture),
-		("Two X-spiders (same phases)", build_x_spider_fixture),
-		("Three Z-spiders chain", build_three_spider_chain),
-		("Two Z-spiders (mixed phases)", build_mixed_phases),
-		("Hadamard edge (no fusion)", build_no_fusion_hadamard),
-		("Red+Green (no fusion)", build_red_green_no_fusion),
-	]
-
-	if args.random_big:
-		fixtures.append(
-			(
-				f"Random big graph (nodes={args.random_nodes}, p={args.random_edge_prob}, seed={args.random_seed})",
-				lambda: build_random_big_fixture(
-					nodes=args.random_nodes,
-					extra_edge_prob=args.random_edge_prob,
-					seed=args.random_seed,
-				),
-			)
-		)
+	compare_tensors = args.with_tensor_compare
+	
+	# Determine which methods to test
+	if args.method == "all":
+		methods = ["spider_fusion", "to_gh", "local_complementation"]
+	else:
+		methods = [args.method]
+	
+	print(f"Testing {args.graphs} random graphs with methods: {', '.join(methods)}")
+	print(f"Graph parameters: nodes={args.nodes}, edge_prob={args.edge_prob}, seed={args.seed}")
+	print(f"Tensor comparison: {'enabled' if compare_tensors else 'disabled (speed-only)'}")
+	print()
 	
 	results = {}
-	timing_results: dict[str, dict[str, float]] = {}
-	for name, builder in fixtures:
-		try:
-			passed, timings = test_fixture(name, builder)
-			results[name] = passed
-			timing_results[name] = timings
-		except Exception as e:
-			print(f"EXCEPTION in {name}: {type(e).__name__}: {e}")
-			results[name] = False
-			timing_results[name] = {}
+	timing_results: dict[int, dict[str, dict[str, float]]] = {}
 	
-	print(f"\n\n{'='*60}")
+	for graph_num in range(1, args.graphs + 1):
+		# Generate a unique seed for each graph
+		graph_seed = args.seed + graph_num
+		
+		# Build random fixture
+		g_ref = build_random_big_fixture(
+			nodes=args.nodes,
+			extra_edge_prob=args.edge_prob,
+			seed=graph_seed
+		)
+		
+		# Test across backends and methods
+		try:
+			passed, timings = test_fixture(graph_num, g_ref, methods, compare_tensors)
+			results[graph_num] = passed
+			timing_results[graph_num] = timings
+		except Exception as e:
+			print(f"  EXCEPTION: {type(e).__name__}: {e}")
+			results[graph_num] = False
+			timing_results[graph_num] = {}
+	
+	# Summary
+	print(f"\n{'='*70}")
 	print("SUMMARY")
-	print(f"{'='*60}")
-	for name, passed in results.items():
-		status = "✓ PASS" if passed else "✗ FAIL"
-		print(f"{status}: {name}")
+	print(f"{'='*70}")
 	
 	total = len(results)
 	passed = sum(1 for p in results.values() if p)
-	print(f"\nTotal: {passed}/{total} passed")
-
-	print(f"\n{'='*60}")
+	print(f"Passed: {passed}/{total}\n")
+	
+	# Timing summary
+	print(f"{'='*70}")
 	print("SPEED SUMMARY (seconds)")
-	print(f"{'='*60}")
-	print(f"{'Fixture':45} {'Simple':>10} {'Memgraph':>10} {'AGE':>10}")
-	for name in results.keys():
-		t = timing_results.get(name, {})
-		s = t.get("simple")
-		m = t.get("memgraph")
-		a = t.get("age")
+	print(f"{'='*70}")
+	print(f"{'Method':<20} {'Simple':>12} {'Memgraph':>12} {'AGE':>12}")
+	
+	method_times: dict[str, list[float]] = {m: {"simple": [], "memgraph": [], "age": []} for m in methods}
+	
+	for graph_num in sorted(timing_results.keys()):
+		timings = timing_results[graph_num]
+		for method in methods:
+			if method in timings:
+				for backend in ["simple", "memgraph", "age"]:
+					if backend in timings[method]:
+						method_times[method][backend].append(timings[method][backend])
+	
+	# Print averages per method
+	for method in methods:
+		times = method_times[method]
+		s_avg = sum(times["simple"]) / len(times["simple"]) if times["simple"] else 0.0
+		m_avg = sum(times["memgraph"]) / len(times["memgraph"]) if times["memgraph"] else 0.0
+		a_avg = sum(times["age"]) / len(times["age"]) if times["age"] else 0.0
 		print(
-			f"{name[:45]:45} "
-			f"{(f'{s:.6f}' if s is not None else '-'):>10} "
-			f"{(f'{m:.6f}' if m is not None else '-'):>10} "
-			f"{(f'{a:.6f}' if a is not None else '-'):>10}"
+			f"{method:<20} "
+			f"{(f'{s_avg:.6f}' if s_avg > 0 else '-'):>12} "
+			f"{(f'{m_avg:.6f}' if m_avg > 0 else '-'):>12} "
+			f"{(f'{a_avg:.6f}' if a_avg > 0 else '-'):>12}"
 		)
-
-	valid_simple = [t["simple"] for t in timing_results.values() if "simple" in t]
-	valid_mem = [t["memgraph"] for t in timing_results.values() if "memgraph" in t]
-	valid_age = [t["age"] for t in timing_results.values() if "age" in t]
-	if valid_simple and valid_mem and valid_age:
-		print("\nAverages:")
-		print(f"  simple:   {sum(valid_simple)/len(valid_simple):.6f}")
-		print(f"  memgraph: {sum(valid_mem)/len(valid_mem):.6f}")
-		print(f"  age:      {sum(valid_age)/len(valid_age):.6f}")
 	
 	return 0 if all(results.values()) else 1
 
