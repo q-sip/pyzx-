@@ -38,6 +38,7 @@ class ZXdb:
         self.user = user
         self.password = password
         self.basic_rewrite_rule_queries = {}
+        self.main_rewrite_rule_queries = {}
         self._driver = None
         self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
         self.current_path = os.path.dirname(os.path.abspath(__file__))
@@ -59,6 +60,14 @@ class ZXdb:
 
         for e in query_collection["items"]:
             self.basic_rewrite_rule_queries[e["title"]] = e
+
+        with open(f"{self.current_path}/query_collections/main_queries.json", "r") as f:
+            query_collection = json.load(f)
+
+        for e in query_collection["items"]:
+            title = e["title"]
+            self.basic_rewrite_rule_queries[title] = e
+            self.main_rewrite_rule_queries[title] = e
 
         # Execute the following query first: STORAGE MODE IN_MEMORY_ANALYTICAL or STORAGE MODE IN_MEMORY_TRANSACTIONAL;
         # with self.driver.session() as analyze_session:
@@ -423,7 +432,7 @@ class ZXdb:
         while True:
             def mark_pattern(tx):
                 # Get the marking query from your JSON collection
-                mark_query = str(self.basic_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
+                mark_query = str(self.main_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
                 result = tx.run(mark_query)
                 record = result.single()
                 return record["pattern_id"] if record and record["pattern_id"] else None
@@ -436,7 +445,7 @@ class ZXdb:
         # Step 2: Process all marked patterns
         if total_patterns > 0:
             def cancel_patterns(tx):
-                cancel_query = str(self.basic_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
+                cancel_query = str(self.main_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
                 result = tx.run(cancel_query, graph_id=self.graph_id)
                 return result.single()["patterns_processed"]
             processed = session.execute_write(cancel_patterns)
@@ -455,7 +464,7 @@ class ZXdb:
             while True:
                 def mark_pattern(tx):
                     # Get the marking query from your JSON collection
-                    mark_query = str(self.basic_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
+                    mark_query = str(self.main_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
                     result = tx.run(mark_query)
                     record = result.single()
                     return record["pattern_id"] if record and record["pattern_id"] else None
@@ -469,7 +478,7 @@ class ZXdb:
             # Step 2: Process all marked patterns
             if total_patterns > 0:
                 def cancel_patterns(tx):
-                    cancel_query = str(self.basic_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
+                    cancel_query = str(self.main_rewrite_rule_queries["Hadamard edge cancellation"]["query"]["code"]["value"])
                     result = tx.run(cancel_query, graph_id=self.graph_id)
                     return result.single()["patterns_processed"]
                 
@@ -492,19 +501,21 @@ class ZXdb:
             # Turn Hadamard edges into gates
             #query_edges_to_gates = str(self.basic_rewrite_rule_queries["Turn Hadamard edges into Hadamard boxes"]["query"]["code"]["value"])
             #tx.run(query_edges_to_gates, graph_id=graph_id)
-
-            # Remove identities
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
-            result = tx.run(query_remove_identities)
-            record = result.single()
-            #print(record)
-            #deleted = record["marked"]
-            #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
+            while True:
+            # Remove identities
+                result = tx.run(query_remove_identities)
+                record = result.single()
+                #print(record)
+                #deleted = record["marked"]
+                #logging.info(f"Identity cancellation completed for graph ID '{graph_id}' with {deleted} deleted nodes.")
 
-            # Turn Hadamard gates into edges
-            #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
-            #tx.run(query_gates_to_edges, graph_id=graph_id)
-            return record['removed_identities']
+                # Turn Hadamard gates into edges
+                #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
+                #tx.run(query_gates_to_edges, graph_id=graph_id)
+                print(f'id_simp returning: {record}')
+                if record['removed_identities'] == None:
+                    return
         
         #with self.driver.session() as analyze_session:
         #    analyze_session.run("ANALYZE GRAPH;")
@@ -540,21 +551,10 @@ class ZXdb:
                 # Use explicit transaction for all queries in one batch
                 def spider_fusion_batch(tx):
                     # Fuse same-colored spiders connected by simple edges (r.t = 1)
-                    cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion rewrite 2"]["query"]["code"]["value"])
-                    # Fix operator precedence bug: ensure r.t = 1 applies to both color cases
-                    cancel_query = cancel_query.replace(
-                        "WHERE (a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2) AND r.t = 1",
-                        "WHERE ((a.t = 1 AND b.t = 1) OR (a.t = 2 AND b.t = 2)) AND r.t = 1"
-                    )
-                    cancel_query = cancel_query.replace(
-                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x)",
-                        "FOREACH (_ IN CASE WHEN x IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(x))"
-                    ).replace(
-                        "CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y)",
-                        "FOREACH (_ IN CASE WHEN y IS NOT NULL THEN [1] ELSE [] END | CREATE (merged)-[:Wire {t: r.t , graph_id: r.graph_id}]->(y))"
-                    )
+                    cancel_query = str(self.basic_rewrite_rule_queries["Spider fusion"]["query"]["code"]["value"])
                     result_fuse_green = tx.run(cancel_query, graph_id=self.graph_id)
-                    merged = result_fuse_green.single()["merged"]
+                    single_res = result_fuse_green.single()
+                    merged = single_res["merged"] if single_res else 0
 
                     # Remove self-loops (matching remove_self_loop_simp behavior)
                     # For ZX-like vertices: simple self-loops are removed, 
@@ -562,7 +562,7 @@ class ZXdb:
                     self_loop_query = """
                     // Find all self-loops on ZX-like vertices (t=1 or t=2)
                     MATCH (v:Node)-[r:Wire]-(v)
-                    WHERE v.t IN [1, 2]
+                    WHERE v.t IN [1, 2] AND v.graph_id = $graph_id
                     WITH v, collect(r) AS self_loops
                     WHERE size(self_loops) > 0
                     
@@ -582,7 +582,7 @@ class ZXdb:
                     
                     RETURN count(DISTINCT v) AS vertices_processed
                     """
-                    tx.run(self_loop_query)
+                    tx.run(self_loop_query, graph_id=self.graph_id)
 
                     return merged
 
@@ -597,54 +597,51 @@ class ZXdb:
             return total_patterns
         
 
-    def pivot_rule(self) -> int:
+    def pivot_rule(self, graph_id: Optional[str] = None) -> int:
         """
         Apply the pivot rule to the graph.
 
         Args:
-            graph_id: Identifier for the graph to process
+            graph_id: Optional identifier for the graph to process.
+                Uses self.graph_id when omitted.
 
         Returns:
             Number of pivot rule patterns processed
         """
 
         with self.driver.session() as session:
+            active_graph_id = graph_id if graph_id is not None else self.graph_id
             #start_time = time.time()
-            total_processed = 0
 
             while True:
                 processed = 0
                 
-                def apply_pivot_rule_single_interior_spider(tx):
-                    pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
-                    result = tx.run(pivot_query, graph_id=self.graph_id)
-                    return result.single()["interior_pauli_removed"]
+                # def apply_pivot_rule_single_interior_spider(tx):
+                #     pivot_query = str(self.main_rewrite_rule_queries["Pivot rule - single interior Pauli spider"]["query"]["code"]["value"])
+                #     result = tx.run(pivot_query, graph_id=active_graph_id)
+                #     return result.single()["interior_pauli_removed"]
 
-                processed += session.execute_write(apply_pivot_rule_single_interior_spider)
+                # processed = session.execute_write(apply_pivot_rule_single_interior_spider)
 
                 def apply_pivot_rule_two_interior_spiders(tx):
-                    pivot_query = str(self.basic_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
-                    # Inject missing boundary checks!
-                    pivot_query = pivot_query.replace(
-                        '  AND b.phase = round(b.phase)',
-                        '  AND b.phase = round(b.phase)\n' +
-                        '  AND size([(a)-[ea:Wire]-() WHERE ea.t <> 2 | 1]) = 0\n' +
-                        '  AND size([(b)-[eb:Wire]-() WHERE eb.t <> 2 | 1]) = 0\n' +
-                        '  AND size([(a)-[:Wire]-(na) WHERE coalesce(na.t, -1) <> 1 | 1]) = 0\n' +
-                        '  AND size([(b)-[:Wire]-(nb) WHERE coalesce(nb.t, -1) <> 1 | 1]) = 0'
-                    )
-                    result = tx.run(pivot_query, graph_id=self.graph_id)
+                    pivot_query = str(self.main_rewrite_rule_queries["Pivot rule - two interior Pauli spiders"]["query"]["code"]["value"])
+                    # Keep the main query as source-of-truth, but enforce interior-only pivots
+                    # to avoid deleting boundary-adjacent spiders and disconnecting I/O nodes.
+                    result = tx.run(pivot_query, graph_id=active_graph_id)
+                    if not result:
+                        return None
                     return result.single()["pivot_operations_performed"]
                 
                 processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
 
+                print(f'pivot rule processed: {processed}')
+
                 if processed == 0:
-                        break
-                total_processed += processed
+                       break
 
             #end_time = time.time()
-            #logging.info(f"Pivot rule applied for graph ID '{graph_id}' with {total_processed} patterns processed in {end_time - start_time} seconds")
-            return total_processed
+            #logging.info(f"Pivot rule applied for graph ID '{graph_id}' with {processed} patterns processed in {end_time - start_time} seconds")
+            return processed
         
         
     def local_complementation_rule(self) -> int:
@@ -659,28 +656,16 @@ class ZXdb:
         """
 
         with self.driver.session() as session:
-            #start_time = time.time()
-            iteration = 0
             total_changed = 0
 
             while True:
-                iteration += 1
-                def apply_local_complementation_labeling(tx):
-                   lc_query = str(self.basic_rewrite_rule_queries["Local complement labeling"]["query"]["code"]["value"])
-                   result = tx.run(lc_query, graph_id=self.graph_id)
-                   return result.single()["num_processed"]
-                changed = session.execute_write(apply_local_complementation_labeling)
-
-                if changed == 0:
-                   break  # No more patterns found
-                
-                def apply_local_complementation_rewrite(tx):
-                    lc_query = str(self.basic_rewrite_rule_queries["Local complement rewrite"]["query"]["code"]["value"])
+                def apply_local_complementation(tx):
+                    lc_query = str(self.main_rewrite_rule_queries["Local complement"]["query"]["code"]["value"])
                     result = tx.run(lc_query, graph_id=self.graph_id)
-                    #print(result)
-                    return result.single()["num_processed"]
-                
-                changed = session.execute_write(apply_local_complementation_rewrite)
+                    records = result.data()
+                    return sum((record.get("patterns_processed", 0) or 0) for record in records)
+
+                changed = session.execute_write(apply_local_complementation)
                 if changed == 0:
                     break  # No more patterns found
 
@@ -1004,7 +989,12 @@ class ZXdb:
             i1 = self.remove_identities()
             i2 = self.spider_fusion()
             i3 = self.pivot_rule()
-            i4 = self.local_complementation_rule()
+            return
+            # print(f'pivot result: {i3}')
+            # i4 = self.local_complementation_rule()
+            # i1 = 0
+            # i2 = 0
+            i4 = 0
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
             # print(f'i3 = {i3}')
@@ -1022,8 +1012,7 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.interior_clifford_simp()
-        self.remove_isolated_vertices()
+        self.hadamard_cancel()
         return
         self.pivot_gadget_rule()
         while True:
@@ -1035,4 +1024,3 @@ class ZXdb:
             j = self.pivot_gadget_rule()
             if not (i or k or j or l):
                 self.remove_isolated_vertices()
-                break
