@@ -14,9 +14,9 @@ import sys
 import uuid
 
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if REPO_ROOT not in sys.path:
-	sys.path.insert(0, REPO_ROOT)
+#REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#if REPO_ROOT not in sys.path:
+#	sys.path.insert(0, REPO_ROOT)
 
 from pyzx.graph.zxdb_age.zxdb_age import ZXdbAge
 
@@ -27,7 +27,6 @@ def run_to_gh_manual_test() -> bool:
 
 	try:
 		db.clear_all_data()
-
 		db._execute_cypher(
 			"""
 			CREATE (:Node {t: 2}), (:Node {t: 2}), (:Node {t: 1})
