@@ -102,6 +102,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
             return False
         return True
 
+    def __del__(self):
+        self.close()
+
     def remove_all_data(self) -> None:
         """Removes ALL nodes and relationships for this graph_id."""
         query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
