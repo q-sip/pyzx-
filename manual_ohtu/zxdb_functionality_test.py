@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 import pyzx as zx
+from pyzx.simplify import spider_simp, to_gh
 from pyzx.graph.zxdb.zxdb import ZXdb
 
 # import random
@@ -22,11 +23,12 @@ AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 
 with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
     stop_requested = False
+    found = False
     for q in range(2, 10):
-        if stop_requested:
+        if stop_requested or found:
             break
         for d in range(10, 100, 10):
-            if stop_requested:
+            if stop_requested or found:
                 break
             for s in range(1, 100, 10):
                 g = zx.generate.cliffordT(q, d, seed=s, backend='memgraph')
@@ -40,6 +42,7 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
 
                 print('full reduce done!')
                 print(f"Node count zxdb: {g.num_vertices()}")
+                nodes = g.num_vertices()
 
                 g.normalize()
                 print('normalize done')
@@ -48,6 +51,26 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
                 g_local = g.copy(backend='simple')
                 compare = zx.compare_tensors(g_local, c, preserve_scalar=False)
                 print(f'Comparing: {compare}')
+
+                zxdb.clear_all_data()
+
+                g = zx.generate.cliffordT(q, d, seed=s, backend='memgraph')
+                c = g.copy(backend='simple')
+                print(f"Node count: {g.num_vertices()}")
+
+                zxdb.spider_fusion()
+                zxdb.to_gh()
+                zxdb.pivot_rule()
+                zxdb.remove_identities()
+                
+                
+                print('full reduce done!')
+                print(f"Node count zxdb: {g.num_vertices()}")
+
+                if nodes != g.num_vertices():
+                    found = True
+                    print(f"{q,d,s} failed")
+                    break
 
                 zxdb.clear_all_data()
 
