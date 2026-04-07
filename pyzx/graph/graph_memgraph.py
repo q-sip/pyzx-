@@ -95,6 +95,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             return False
         return True
 
+    def __del__(self):
+        self.close()
+
     def init_indices(self) -> None:
         "Sets id properties to nodes"
         query = """CREATE INDEX ON :Node(graph_id)"""
