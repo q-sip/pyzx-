@@ -584,6 +584,13 @@ class ZXdb:
                     """
                     tx.run(self_loop_query, graph_id=self.graph_id)
 
+                    # Keep spider fusion rewrite and parallel-edge cleanup separate
+                    # so dedup logic can be tuned independently.
+                    remove_extra_edges_query = str(
+                        self.basic_rewrite_rule_queries["Remove extra edges"]["query"]["code"]["value"]
+                    )
+                    tx.run(remove_extra_edges_query, graph_id=self.graph_id)
+
                     return merged
 
                 merged = session.execute_write(spider_fusion_batch)
@@ -896,21 +903,6 @@ class ZXdb:
 
                 session.execute_write(_remove_operations)
 
-    def edge_fusion(self) -> None:
-        query = """MATCH (n:Node)-[r1:Wire]-(m:Node), (n)-[r2:Wire]-(m)
-                WHERE id(n) < id(m) 
-                AND id(r1) < id(r2)
-                AND n.t != m.t
-
-                WITH n, m, r1, r2, ((r1.t + r2.t) % 2) + 1 AS new_t
-
-                DELETE r1, r2"""
-        with self.driver.session() as session:
-            def apply_edge_fusion(tx):
-                tx.run(query)
-
-            session.execute_write(apply_edge_fusion)
-
     def supplementarity_simp(self) -> int:
         """
         Apply the supplementarity rule to the graph.
@@ -1001,18 +993,15 @@ class ZXdb:
         self.to_gh()
         i = 0
         while True:
-            i1 = 0
-            i2 = 0
-            i3 = 0
-            i4 = 0
-            # i1 = self.remove_identities()
-
+            i1 = self.remove_identities()
             i2 = self.spider_fusion()
-            # i3 = self.pivot_rule()
+            i3 = self.pivot_rule()
+            return
             # print(f'pivot result: {i3}')
             # i4 = self.local_complementation_rule()
-            # print(f'local complementation === {i4}')
-            
+            # i1 = 0
+            # i2 = 0
+            i4 = 0
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
             # print(f'i3 = {i3}')
@@ -1030,9 +1019,7 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.interior_clifford_simp()
-        input('before edge fusion')
-        self.edge_fusion()
+        self.spider_fusion()
         return
         self.pivot_gadget_rule()
         while True:
