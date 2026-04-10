@@ -24,13 +24,21 @@ def comparison_1(seed: int, backend: str | None = None):
     backend = "graph_tool" for GraphGT
     """
 
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=30, seed=seed)
 
     g = c.to_graph(backend=backend)
 
     mem.full_reduce(g)
+    graph_id = g.get_graph_id()
+    session = g.session_get
+    print("is graph like:", zx.simplify.is_graph_like(g))
+    print(f"Check connectivity {mem.verify_connectivity(session, graph_id)}")
 
     g.normalize()
+    print(f"Check connectivity {mem.verify_connectivity(session, graph_id)}")
+
+
+    print("is graph like:", zx.simplify.is_graph_like(g))
 
     c_opt = zx.extract_circuit(g.clone())
 
@@ -56,16 +64,16 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     return zx.compare_tensors(c_opt1, c_opt2)
 
 
-for q in range(1, 10):
-    for d in range(1, 100, 10):
-        for s in range(11):
-            print("Memgraph:", comparison_1(s, "memgraph"))
+#for q in range(1, 10):
+  #  for d in range(1, 100, 10):
+   #     for s in range(11):
+    #        print("Memgraph:", comparison_1(s, "memgraph"))
 
 
 
-print("simple:", comparison_1(42))
+#print("simple:", comparison_1(42))
 # print("igraph:", comparison_1(42, "igraph")) doesn't work, doesn't contain all mandatory methods
-print("Multigraph:", comparison_1(42, "multigraph"))
+#print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
 print("Memgraph:", comparison_1(42, "memgraph"))

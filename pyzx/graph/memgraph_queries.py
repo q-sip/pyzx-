@@ -1,3 +1,5 @@
+#Currently working implementation of queries
+
 import textwrap
 
 class ZXQueryStore:
@@ -128,165 +130,105 @@ class ZXQueryStore:
 
     def _spider_fusion_rewrite(self):
         return """
-        // Find adjacent same-color spiders connected by simple edge
+        // 1. Find a single pair of adjacent spiders of the same color connected by a simple edge
         MATCH (u:Node)-[e:Wire {t: 1}]-(v:Node)
-        WHERE ((u.t = 1 AND v.t = 1) OR (u.t = 2 AND v.t = 2))
-          AND u.graph_id = $graph_id 
-          AND v.graph_id = $graph_id
-          AND id(u) < id(v)  // Process each pair once
-        
+        WHERE u.graph_id = $graph_id AND v.graph_id = $graph_id
+          AND ((u.t = 1 AND v.t = 1) OR (u.t = 2 AND v.t = 2))
+          AND id(u) < id(v)
         WITH u, v, e
-        LIMIT 100  // Batch size
+        LIMIT 1
         
-        // Create merged node
+        // 2. Count parallel Hadamard edges between them BEFORE deleting them
+        OPTIONAL MATCH (u)-[e_had:Wire {t: 2}]-(v)
+        WITH u, v, e, count(e_had) AS num_had_loops
+        
+        // 3. Create the merged node, safely adding phases AND the lost Hadamard loops
         CREATE (merged:Node {
             t: u.t,
-            phase: coalesce(u.phase, 0.0) + coalesce(v.phase, 0.0),
+            phase: coalesce(toFloat(u.phase), 0.0) + coalesce(toFloat(v.phase), 0.0) + toFloat(num_had_loops),
             graph_id: $graph_id,
             id: u.id,
             qubit: u.qubit,
             row: u.row
         })
-        
-        // Collect u neighbors
+
+        // 4. Collect ALL neighbors of u and v (excluding u and v themselves)
         WITH u, v, merged
-        OPTIONAL MATCH (u)-[r:Wire]-(x:Node)
-        WHERE x <> v
-        WITH u, v, merged, collect({node_id: id(x), node_t: x.t, edge_t: r.t}) as u_conns
+        OPTIONAL MATCH (u)-[e_u:Wire]-(n_u:Node)
+        WHERE n_u <> v AND n_u <> u
+        WITH u, v, merged, collect({node: n_u, type: e_u.t}) AS u_edges
         
-        // Collect v neighbors
-        WITH u, v, merged, u_conns
-        OPTIONAL MATCH (v)-[r:Wire]-(y:Node)
-        WHERE y <> u
-        WITH u, v, merged, u_conns + collect({node_id: id(y), node_t: y.t, edge_t: r.t}) as all_conns
+        OPTIONAL MATCH (v)-[e_v:Wire]-(n_v:Node)
+        WHERE n_v <> u AND n_v <> v
+        WITH u, v, merged, u_edges + collect({node: n_v, type: e_v.t}) AS all_edges
         
-        // Delete original nodes
+        // 5. UNWIND safely without losing the row if the spiders had no other neighbors
+        UNWIND (CASE WHEN size(all_edges) > 0 THEN all_edges ELSE [{node: null, type: null}] END) AS edge
+        WITH u, v, merged, edge.node AS w, collect(edge.type) AS types
+        
+        // 6. Apply PyZX Hopf and Mixed-Edge Resolution Rules
+        WITH u, v, merged, w,
+             CASE WHEN w IS NOT NULL THEN size([x IN types WHERE x = 1]) ELSE 0 END AS count_1,
+             CASE WHEN w IS NOT NULL THEN size([x IN types WHERE x = 2]) ELSE 0 END AS count_2,
+             CASE WHEN w IS NOT NULL AND merged.t = w.t THEN true ELSE false END AS is_same
+             
+        WITH u, v, merged, w, is_same,
+             CASE WHEN w IS NULL THEN 0 
+                  WHEN is_same AND count_1 > 0 THEN 1 
+                  WHEN is_same THEN 0 
+                  ELSE (count_1 % 2) END AS n1,
+             CASE WHEN w IS NULL THEN 0 
+                  WHEN is_same THEN (count_2 % 2) 
+                  WHEN count_2 > 0 THEN 1 
+                  ELSE 0 END AS n2
+                  
+        WITH u, v, merged, w, is_same,
+             CASE WHEN n1 = 1 AND n2 = 1 AND is_same THEN 1 
+                  WHEN n1 = 1 AND n2 = 1 THEN 0 
+                  ELSE n1 END AS final_1,
+             CASE WHEN n1 = 1 AND n2 = 1 AND is_same THEN 0 
+                  WHEN n1 = 1 AND n2 = 1 THEN 1 
+                  ELSE n2 END AS final_2,
+             CASE WHEN n1 = 1 AND n2 = 1 THEN 1.0 ELSE 0.0 END AS phase_shift
+             
+        // 7. Re-aggregate back to the merged node level
+        WITH u, v, merged, 
+             collect(CASE WHEN w IS NOT NULL THEN {w: w, f1: final_1, f2: final_2} ELSE null END) AS edges_to_create, 
+             sum(phase_shift) AS total_phase_shift
+             
+        // 8. Create the mathematically resolved edges
+        UNWIND (CASE WHEN size(edges_to_create) > 0
+          THEN edges_to_create
+          ELSE [{w: null, f1: 0, f2: 0}]
+        END) AS item
+        WITH u, v, merged, total_phase_shift, item.w AS target, item.f1 AS f1, item.f2 AS f2
+        WHERE target IS NOT NULL
+        FOREACH (_ IN CASE WHEN f1 = 1 THEN [1] ELSE [] END |
+          CREATE (merged)-[:Wire {t: 1, graph_id: $graph_id}]->(target)
+        )
+        FOREACH (_ IN CASE WHEN f2 = 1 THEN [1] ELSE [] END |
+          CREATE (merged)-[:Wire {t: 2, graph_id: $graph_id}]->(target)
+        )
+
+        WITH u, v, merged, total_phase_shift
+        SET merged.phase = merged.phase + coalesce(total_phase_shift, 0.0)
+        
+        // 9. Cleanly destroy original nodes and their old parallel edges
+        WITH u, v, merged
         DETACH DELETE u, v
         
-        // Unwind connections to process them
-        WITH merged, all_conns
-        UNWIND (CASE WHEN size(all_conns) > 0 THEN all_conns ELSE [null] END) as c
-        WITH merged, c
-        WHERE c IS NOT NULL
-        
-        // Re-match t to have a valid node reference for creating edges
-        MATCH (t:Node) WHERE id(t) = c.node_id
-
-        // Group by neighbor to handle parallel edges
-        WITH merged, t, c.node_t as t_type, collect(c.edge_t) as edge_types
-        
-        // Logic for merging parallel edges
-        // 1 = Simple, 2 = Hadamard
-        // ...
-        
-        WITH merged, t, edge_types,
-             CASE 
-                WHEN t_type = 0 THEN 0 // Boundary
-                WHEN t_type = merged.t THEN 1 // Same color
-                ELSE 2 // Diff color
-             END as relation_type
-             
-        WITH merged, t, edge_types, relation_type,
-             // Count edges.
-             // For Simple edges (1) and Hadamard edges (2).
-             size([x IN edge_types WHERE x=1]) as n_simple,
-             size([x IN edge_types WHERE x=2]) as n_hadamard
-             
-        // Determine final edge
-        // If Boundary (relation 0): Always keep 1 edge (Simple). Be robust.
-        // If Same Color (relation 1): 
-        //    Simple edges cancel in pairs (n_simple % 2)
-        //    Hadamard edges cancel in pairs (n_hadamard % 2)
-        //    Result:
-        //      If remaining simple -> Simple edge
-        //      If remaining hadamard -> Hadamard edge
-        //      If both? -> Hopf/loop logic? Usually don't happen in spider fusion unless already existed.
-        //      If both exist, we need to create BOTH? GraphS can't.
-        //      Assume standard fusion: pairs cancel.
-        // If Diff Color (relation 2):
-        //    Simple edges cancel (n_simple % 2)
-        //    Hadamard edges merge? No, Hopf rule applies to Simple edges (1).
-        //    Actually, standard Parallel Edge rule (fhopf):
-        //    - Parallel H-edges (2) between diff colors: Cancel?
-        //    - Parallel S-edges (1) between diff colors: Hopf rule.
-        
-        // Simplified Logic mimicking `GraphS.add_edge_smart`:
-        // Just sum modulo 2?
-        
-        WITH merged, t, relation_type, n_simple, n_hadamard,
-             CASE 
-                WHEN relation_type = 0 THEN 1 // Boundary: always keep 1 simple edge
-                WHEN relation_type = 1 THEN // Same Color
-                     CASE 
-                        WHEN n_simple > 0 THEN 1 // Keeping 1 simple edge allows subsequent fusion! 
-                        // If we have parallel simple edges, they prevent Hopf? No, they CAUSE fusion.
-                        // Ideally we fuse immediately. A simple edge between same color = fusion.
-                        // If we keep 1, the next pass of spider_simp will fuse 'merged' with 't'.
-                        // This preserves connectivity until fusion happens.
-                        
-                        ELSE 0 
-                     END
-                ELSE // Diff Color
-                     n_simple % 2 // Hopf rule: simple edges cancel in pairs
-             END as final_simple,
-             
-             CASE 
-                WHEN relation_type = 0 THEN 0 // Boundary: no Hadamard
-                WHEN relation_type = 1 THEN // Same Color
-                     n_hadamard % 2 // Hopf rule (Same Color): Parallel H-edges cancel in pairs
-                ELSE // Diff Color
-                     // Parallel H-edges between Diff Color.
-                     // Standard ZX: Keep them parrallel.
-                     // GraphS: Cannot support.
-                     // If we assume consistent "mod 2" behaviour for simplifications:
-                     n_hadamard % 2
-             END as final_hadamard
-             
-        // Handle Mixed Edges (Simple + Hadamard in parallel on Same Color)
-        // This corresponds to a standard Hopf reduction where the Hadamard edge adds a pi phase.
-        WITH merged, t, relation_type, final_simple, final_hadamard,
-             CASE 
-                WHEN relation_type = 1 AND final_simple > 0 AND final_hadamard > 0 THEN 1
-                ELSE 0
-             END as is_mixed
-             
-        WITH merged, t, final_simple, 
-             CASE WHEN is_mixed = 1 THEN 0 ELSE final_hadamard END as real_final_hadamard,
-             is_mixed
-        
-        // Create edges
-        FOREACH (_ IN CASE WHEN final_simple > 0 THEN [1] ELSE [] END |
-            MERGE (merged)-[:Wire {t: 1}]->(t)
-        )
-        FOREACH (_ IN CASE WHEN real_final_hadamard > 0 THEN [1] ELSE [] END |
-            MERGE (merged)-[:Wire {t: 2}]->(t)
-        )
-        
-        // Aggregate phase shift
-        WITH merged, sum(is_mixed) as total_phase_shift
-        SET merged.phase = merged.phase + total_phase_shift
-        
-        RETURN count(DISTINCT merged) as rewrites_applied
+        // 10. Aggregated return to fix the UserWarning
+        RETURN count(merged) AS rewrites_applied
         """
 
     def _id_simp(self):
-        # Identity removal: degree-2 spider with zero phase.
-        # Fuses the two neighbors.
-        # If neighbors are n1, n2 via e1, e2:
-        # If e1.t == e2.t (both Simple or both Hadamard), result is Simple edge (type 1).
-        # If e1.t != e2.t (one Simple, one Hadamard), result is Hadamard edge (type 2).
-        # This matches the logic: H*H = I, S*S = I? No.
-        # Simple*Simple = Simple.
-        # Simple*Hadamard = Hadamard.
-        # Hadamard*Hadamard = Simple.
-        # So: type = (e1.t == e2.t) ? 1 : 2. Correct.
         return """
         MATCH (v:Node)
         WHERE v.graph_id = $graph_id
           AND v.t = 1  // ONLY Z-spiders (t=1) are identity spiders (phase 0)
-          AND (v.phase IS NULL OR v.phase = 0)
+          AND (v.phase IS NULL OR toFloat(v.phase) = 0.0)
         
-        // Check degree using count instead of size() on pattern if problematic
+        // Check degree using count
         MATCH (v)-[r:Wire]-()
         WITH v, count(r) as d
         WHERE d = 2
@@ -295,17 +237,16 @@ class ZXQueryStore:
         MATCH (v)-[e2:Wire]-(n2:Node)
         WHERE id(e1) < id(e2)
         
-        // Ensure no other connections (redundant with degree check but safer against multigraphs)
         WITH v, n1, n2, e1, e2
 
-        // Create new edge
-        MERGE (n1)-[new_edge:Wire {t: CASE WHEN e1.t = e2.t THEN 1 ELSE 2 END}]-(n2)
-        SET new_edge.graph_id = $graph_id
+        // CRITICAL FIX: Use CREATE instead of MERGE to preserve parallel edges!
+        CREATE (n1)-[new_edge:Wire {t: CASE WHEN e1.t = e2.t THEN 1 ELSE 2 END, graph_id: $graph_id}]->(n2)
 
         // Remove v
         DETACH DELETE v
 
-        RETURN 1 AS rewrites_applied
+        // CRITICAL FIX: Aggregate the return to fix the UserWarning
+        RETURN count(DISTINCT v) AS rewrites_applied
         """
 
     def _remove_self_loop_simp(self):
@@ -352,13 +293,13 @@ class ZXQueryStore:
         WITH a, b, pivot_edge
         OPTIONAL MATCH (a)-[edge_a:Wire {t: 2}]-(neighbor_a {t: 1})
         WHERE neighbor_a <> b
-          AND NOT EXISTS((neighbor_a)-[:Wire]-(b))  // Not connected to b
+          AND NOT EXISTS { MATCH (neighbor_a)-[:Wire]-(b) }  // Not connected to b
         WITH a, b, pivot_edge, COLLECT(DISTINCT neighbor_a) as neighbors_a
 
         // Find neighbors of b (excluding a and nodes connected to a)
         OPTIONAL MATCH (b)-[edge_b:Wire {t: 2}]-(neighbor_b {t: 1})
         WHERE neighbor_b <> a
-          AND NOT EXISTS((neighbor_b)-[:Wire]-(a))  // Not connected to a
+          AND NOT EXISTS { MATCH (neighbor_b)-[:Wire]-(a) }  // Not connected to a
           AND NOT neighbor_b IN neighbors_a  // Extra safety check
         WITH a, b, pivot_edge, neighbors_a, COLLECT(DISTINCT neighbor_b) as neighbors_b
 
@@ -402,21 +343,17 @@ class ZXQueryStore:
             CREATE (node_b)-[:Wire {t: 2}]->(shared_node) )
         }
             
-        // 6. Update phases on the neighbor nodes. 
-        // Correct Pivot Logic:
-        // neighbors_a (only connected to a) should get b.phase
-        // neighbors_b (only connected to b) should get a.phase
-        
+        // 6. Update phases safely using toFloat
         FOREACH (n IN neighbors_a |
-          SET n.phase = coalesce(n.phase, 0.0) + b.phase
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) + toFloat(b.phase)
         ) 
 
         FOREACH (n IN neighbors_b |
-          SET n.phase = coalesce(n.phase, 0.0) + a.phase
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) + toFloat(a.phase)
         ) 
           
         FOREACH (shared_neighbor IN shared_neighbors | 
-          SET shared_neighbor.phase = coalesce(shared_neighbor.phase, 0) + a.phase + b.phase + 1
+          SET shared_neighbor.phase = coalesce(toFloat(shared_neighbor.phase), 0.0) + toFloat(a.phase) + toFloat(b.phase) + 1.0
         )
 
         // 7. Delete the original pivot nodes
@@ -534,7 +471,7 @@ class ZXQueryStore:
         MATCH (center:Node {t: 1})
         WHERE center.graph_id = $graph_id
           AND center.phase IS NOT NULL
-          AND (center.phase = 0.5 OR center.phase = -0.5)
+          AND (toFloat(center.phase) = 0.5 OR toFloat(center.phase) = -0.5)
         
         // Check for any "bad" connections (boundary nodes, simple edges, or non-Z neighbors)
         OPTIONAL MATCH (center)-[bad_edge]-(bad_neighbor)
@@ -547,50 +484,39 @@ class ZXQueryStore:
         WHERE nbr.graph_id = $graph_id
         WITH center, COLLECT(DISTINCT nbr) AS neighbors
         WHERE size(neighbors) > 0
-        LIMIT 1  // Process one at a time
+        LIMIT 1  
+        
+        // Update phases (once per center) safely using floats
+        WITH center, neighbors
+        FOREACH (n IN neighbors |
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) - coalesce(toFloat(center.phase), 0.0)
+        )
         
         // Toggle edges between all neighbor pairs (local complement)
-        // ... rest is same
         WITH center, neighbors, range(0, size(neighbors)-2) AS indices_i
         UNWIND indices_i AS i
         WITH center, neighbors, i, range(i+1, size(neighbors)-1) AS indices_j
         UNWIND indices_j AS j
         WITH center, neighbors, neighbors[i] AS n1, neighbors[j] AS n2
         
-        // Toggle Hadamard edge: create if missing, delete if present
-        
-        // Check existence of edge explicitly
-        // If multiple edges exist, delete all. If 0, create one.
-        
+        // Explicitly check for existing edges
         OPTIONAL MATCH (n1)-[e:Wire]-(n2)
-        // No WHERE clause to ensure we catch everything
+        WITH center, neighbors, n1, n2, COLLECT(e) as found_edges
         
-        WITH center, neighbors, n1, n2, collect(e) as found_edges
-        
-        // Decide action
-        WITH center, neighbors, 
-             found_edges,
-             CASE WHEN size(found_edges) = 0 THEN size(found_edges) ELSE -1 END as debug_val,
-             CASE WHEN size(found_edges) = 0 THEN true ELSE false END as do_create
-        
-        // Deletions: Delete found edges
+        // Deletions: Delete all found edges
         FOREACH (edge IN found_edges | DELETE edge)
         
-        // Creations: Create one edge if needed
-        FOREACH (x IN CASE WHEN do_create THEN [1] ELSE [] END | 
-            MERGE (n1)-[:Wire {t: 2, graph_id: $graph_id}]-(n2)
-        )
-        
-        // 5. Update phases (once per center)
-        WITH center, neighbors
-        FOREACH (n IN neighbors |
-          SET n.phase = coalesce(n.phase, 0) - coalesce(center.phase, 0)
+        // Creations: Create one Hadamard edge if none existed
+        FOREACH (_ IN CASE WHEN size(found_edges) = 0 THEN [1] ELSE [] END | 
+            CREATE (n1)-[:Wire {t: 2, graph_id: $graph_id}]->(n2)
         )
         
         // Remove the center
+        WITH DISTINCT center
         DETACH DELETE center
         
-        RETURN 1 AS num_processed
+        // AGGREGATE to fix the warning
+        RETURN count(DISTINCT center) AS num_processed
         """
 
     def _gadget_fusion_red_green(self):
@@ -711,183 +637,310 @@ class ZXQueryStore:
 
     def _pivot_gadget(self):
         return """
-        // 1. Find pivot candidates: two t=1 nodes connected by t=2 edge, where one has integer phase
+        // Canonical pivot-gadget rewrite equivalent to
+        // match_pivot_gadget + pivot_NOT_REWORKED (single match per call).
+
+        // 1. Candidate pair: z_j is Pauli, z_alpha is non-Pauli, both interior Z-spiders.
         MATCH (z_j:Node {t: 1})-[pivot_edge:Wire {t: 2}]-(z_alpha:Node {t: 1})
         WHERE z_j.graph_id = $graph_id AND z_alpha.graph_id = $graph_id
           AND z_j.phase IS NOT NULL AND z_alpha.phase IS NOT NULL
-          // Check if z_j's phase is an integer multiple of pi.
-          AND z_j.phase = round(z_j.phase)
-          // NEW: Ensure both are interior spiders (no simple wires of type t=1).
-          AND NOT EXISTS((z_j)-[:Wire {t: 1}]-())
-          AND NOT EXISTS((z_alpha)-[:Wire {t: 1}]-())
+          AND toFloat(z_j.phase) = round(toFloat(z_j.phase))
+          AND NOT (toFloat(z_alpha.phase) = 0.0 OR toFloat(z_alpha.phase) = 1.0)
+          AND degree(z_alpha) > 1
 
-        // 1b. Out of all candidates, keep only the one with the largest z_j.phase
+        // Neighbors must be Z-spiders (interior condition in matcher).
+        OPTIONAL MATCH (z_j)-[e_bad_j:Wire]-(n_bad_j:Node)
+        WHERE n_bad_j <> z_alpha AND n_bad_j.t <> 1
+        WITH z_j, z_alpha, count(e_bad_j) AS bad_j
+        WHERE bad_j = 0
+
+        OPTIONAL MATCH (z_alpha)-[e_bad_a:Wire]-(n_bad_a:Node)
+        WHERE n_bad_a <> z_j AND n_bad_a.t <> 1
+        WITH z_j, z_alpha, count(e_bad_a) AS bad_a
+        WHERE bad_a = 0
+
+        // z_j may not be connected to a phase-gadget leaf (except through pivot edge).
+        OPTIONAL MATCH (z_j)-[:Wire]-(leaf:Node {t: 1})
+        WHERE leaf <> z_alpha AND degree(leaf) = 1
+        WITH z_j, z_alpha, count(leaf) AS leaf_count
+        WHERE leaf_count = 0
+
+        // Keep one candidate to avoid overlapping rewrites in one transaction.
         WITH z_j, z_alpha
-        ORDER BY z_j.phase DESC
-        //LIMIT 1
+        ORDER BY toFloat(z_j.phase) DESC
+        LIMIT 1
 
-        // 2. Collect the three disjoint sets of neighbors.
-        // N_j: Neighbors of z_j only.
-        WITH z_j, z_alpha
-        OPTIONAL MATCH (z_j)-[:Wire {t: 2}]-(n_j:Node {t: 1})
-        WHERE NOT EXISTS((n_j)-[:Wire]-(z_alpha)) AND n_j <> z_alpha
-        WITH z_j, z_alpha, COLLECT(DISTINCT n_j) AS neighbors_j
+        // 2. Compute n0, n1, n2 sets from pivot_NOT_REWORKED.
+        OPTIONAL MATCH (z_j)-[:Wire]-(n_j:Node {t: 1})
+        WHERE n_j <> z_alpha
+        WITH z_j, z_alpha, COLLECT(DISTINCT n_j) AS neighbors_j_all
 
-        // N_alpha: Neighbors of z_alpha only.
-        OPTIONAL MATCH (z_alpha)-[:Wire {t: 2}]-(n_alpha:Node {t: 1})
-        WHERE NOT EXISTS((n_alpha)-[:Wire]-(z_j)) AND n_alpha <> z_j
-        WITH z_j, z_alpha, neighbors_j, COLLECT(DISTINCT n_alpha) AS neighbors_alpha
+        OPTIONAL MATCH (z_alpha)-[:Wire]-(n_a:Node {t: 1})
+        WHERE n_a <> z_j
+        WITH z_j, z_alpha, neighbors_j_all, COLLECT(DISTINCT n_a) AS neighbors_alpha_all
 
-        // N_shared: Neighbors of both.
-        OPTIONAL MATCH (z_j)-[:Wire {t: 2}]-(n_shared:Node {t: 1})-[:Wire {t: 2}]-(z_alpha)
-        WHERE n_shared <> z_j AND n_shared <> z_alpha
-        WITH z_j, z_alpha, neighbors_j, neighbors_alpha, COLLECT(DISTINCT n_shared) AS shared_neighbors
+        WITH z_j, z_alpha,
+             [n IN neighbors_j_all WHERE n IN neighbors_alpha_all] AS shared_neighbors,
+             [n IN neighbors_j_all WHERE NOT n IN neighbors_alpha_all] AS neighbors_j,
+             [n IN neighbors_alpha_all WHERE NOT n IN neighbors_j_all] AS neighbors_alpha,
+             coalesce(toFloat(z_j.phase), 0.0) AS zj_phase,
+             coalesce(toFloat(z_alpha.phase), 0.0) AS alpha_phase
 
-        // 3. Create the two new central nodes for the rewritten structure.
-        CREATE (z_new_phaseless:Node {t: 1, phase: 1.0, graph_id: z_j.graph_id, id: z_j.id, qubit: z_j.qubit, row: z_j.row}),
-               (z_new_phased:Node {t: 1, phase: (CASE z_j.phase % 2 WHEN 0 THEN -1 ELSE 1 END) * z_alpha.phase, graph_id: z_j.graph_id, id: z_alpha.id, qubit: z_alpha.qubit, row: z_alpha.row})
-        CREATE (z_new_phaseless)-[:Wire {t: 2}]->(z_new_phased)
+        // 3. Gadgetization pre-step from match_pivot_gadget.
+        MATCH (n:Node {graph_id: $graph_id})
+        WITH z_j, z_alpha, neighbors_j, neighbors_alpha, shared_neighbors, zj_phase, alpha_phase,
+             coalesce(max(n.id), -1) AS max_id
+        CREATE (v_gadget:Node {
+            t: 1,
+            phase: alpha_phase,
+            graph_id: $graph_id,
+            id: max_id + 1,
+            qubit: -2,
+            row: z_j.row
+        })
+        SET z_j.qubit = -1,
+            z_alpha.phase = 0.0
+        CREATE (z_alpha)-[:Wire {t: 1, graph_id: $graph_id}]->(v_gadget)
 
-        // 4. Connect the new central nodes to all neighbors.
-        // Connect z_new_phaseless to N_j and shared
-        FOREACH (n IN neighbors_j | CREATE (z_new_phaseless)-[:Wire {t: 2}]->(n))
-        FOREACH (n IN shared_neighbors | CREATE (z_new_phaseless)-[:Wire {t: 2}]->(n))
-
-        // 5. Create the 3-partite clique between the neighbor sets.
-        FOREACH (n_j IN neighbors_j |
-            FOREACH (n_alpha IN neighbors_alpha |
-                CREATE (n_j)-[:Wire {t: 2}]->(n_alpha)
-            )
-        )
-        FOREACH (n_j IN neighbors_j |
-            FOREACH (n_shared IN shared_neighbors |
-                CREATE (n_j)-[:Wire {t: 2}]->(n_shared)
-            )
-        )
-        FOREACH (n_alpha IN neighbors_alpha |
-            FOREACH (n_shared IN shared_neighbors |
-                CREATE (n_alpha)-[:Wire {t: 2}]->(n_shared)
-            )
-        )
-
-        // 6. Update phases on the neighbor nodes.
+        // 4. Phase updates from pivot_NOT_REWORKED.
         FOREACH (n IN neighbors_alpha |
-            SET n.phase = coalesce(n.phase, 0.0) + z_j.phase
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) + zj_phase
         )
         FOREACH (n IN shared_neighbors |
-            SET n.phase = coalesce(n.phase, 0.0) + z_j.phase + 1
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) + zj_phase + 1.0
         )
 
-        // 7. Finally, remove the original two central spiders.
-        WITH z_j, z_alpha
-        DETACH DELETE z_j, z_alpha
+        // 5. Boundary-like rewiring for m[1][1] = [v_gadget]: move edge from z_alpha to z_j and toggle type.
+        WITH z_j, z_alpha, v_gadget, neighbors_j, neighbors_alpha, shared_neighbors
+        MATCH (z_alpha)-[zg:Wire]-(v_gadget)
+        WITH z_j, z_alpha, v_gadget, neighbors_j, neighbors_alpha, shared_neighbors,
+             CASE coalesce(zg.t, 1)
+               WHEN 1 THEN 2
+               WHEN 2 THEN 1
+               ELSE 2
+             END AS rewired_t,
+             zg
+        DELETE zg
+        CREATE (z_j)-[:Wire {t: rewired_t, graph_id: $graph_id}]->(v_gadget)
 
-        RETURN count(*) AS pivot_operations_performed;
+        // 6. Add one Hadamard edge on n0xn1, n1xn2, n0xn2 with add_edge semantics.
+        WITH z_alpha, neighbors_j, neighbors_alpha, shared_neighbors
+
+        CALL {
+            WITH neighbors_j, neighbors_alpha
+            UNWIND neighbors_j AS a_node
+            UNWIND neighbors_alpha AS b_node
+            WITH a_node, b_node
+            WHERE a_node <> b_node
+            OPTIONAL MATCH (a_node)-[e:Wire]-(b_node)
+            WITH a_node, b_node, COLLECT(e) AS existing_edges
+            WITH a_node, b_node, existing_edges, head([rel IN existing_edges | rel.t]) AS edge_t
+            FOREACH (edge IN CASE WHEN edge_t = 2 THEN existing_edges ELSE [] END | DELETE edge)
+            FOREACH (_ IN CASE WHEN edge_t IS NULL THEN [1] ELSE [] END |
+              CREATE (a_node)-[:Wire {t: 2, graph_id: $graph_id}]->(b_node)
+            )
+            FOREACH (_ IN CASE WHEN edge_t = 1 THEN [1] ELSE [] END |
+              SET a_node.phase = coalesce(toFloat(a_node.phase), 0.0) + 1.0
+            )
+            RETURN count(*) AS toggles_01
+        }
+
+        CALL {
+            WITH neighbors_alpha, shared_neighbors
+            UNWIND neighbors_alpha AS a_node
+            UNWIND shared_neighbors AS b_node
+            WITH a_node, b_node
+            WHERE a_node <> b_node
+            OPTIONAL MATCH (a_node)-[e:Wire]-(b_node)
+            WITH a_node, b_node, COLLECT(e) AS existing_edges
+            WITH a_node, b_node, existing_edges, head([rel IN existing_edges | rel.t]) AS edge_t
+            FOREACH (edge IN CASE WHEN edge_t = 2 THEN existing_edges ELSE [] END | DELETE edge)
+            FOREACH (_ IN CASE WHEN edge_t IS NULL THEN [1] ELSE [] END |
+              CREATE (a_node)-[:Wire {t: 2, graph_id: $graph_id}]->(b_node)
+            )
+            FOREACH (_ IN CASE WHEN edge_t = 1 THEN [1] ELSE [] END |
+              SET a_node.phase = coalesce(toFloat(a_node.phase), 0.0) + 1.0
+            )
+            RETURN count(*) AS toggles_12
+        }
+
+        CALL {
+            WITH neighbors_j, shared_neighbors
+            UNWIND neighbors_j AS a_node
+            UNWIND shared_neighbors AS b_node
+            WITH a_node, b_node
+            WHERE a_node <> b_node
+            OPTIONAL MATCH (a_node)-[e:Wire]-(b_node)
+            WITH a_node, b_node, COLLECT(e) AS existing_edges
+            WITH a_node, b_node, existing_edges, head([rel IN existing_edges | rel.t]) AS edge_t
+            FOREACH (edge IN CASE WHEN edge_t = 2 THEN existing_edges ELSE [] END | DELETE edge)
+            FOREACH (_ IN CASE WHEN edge_t IS NULL THEN [1] ELSE [] END |
+              CREATE (a_node)-[:Wire {t: 2, graph_id: $graph_id}]->(b_node)
+            )
+            FOREACH (_ IN CASE WHEN edge_t = 1 THEN [1] ELSE [] END |
+              SET a_node.phase = coalesce(toFloat(a_node.phase), 0.0) + 1.0
+            )
+            RETURN count(*) AS toggles_02
+        }
+
+        // 7. Remove z_alpha (m[1][0] is empty in pivot_NOT_REWORKED).
+        WITH z_alpha
+        DETACH DELETE z_alpha
+        RETURN count(*) AS pivot_operations_performed
         """
 
     def _pivot_boundary(self):
         return """
-        // 1. Find pivot candidates: interior spider (z_j) and boundary-connected spider (z_alpha).
+        // 1. Find one boundary pivot candidate (v=z_j, w=z_alpha)
         MATCH (z_j:Node {t: 1})-[pivot_edge:Wire {t: 2}]-(z_alpha:Node {t: 1})
         MATCH (z_alpha)-[boundary_wire:Wire {t: 1}]-(boundary_node:Node {t: 0})
         WHERE z_j.graph_id = $graph_id AND z_alpha.graph_id = $graph_id
-          AND z_j.phase = round(z_j.phase)
+          AND z_j.phase IS NOT NULL
+          AND toFloat(z_j.phase) = round(toFloat(z_j.phase))
 
-        // Ensure that z_j is not connected to a simple wire 
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node
-        OPTIONAL MATCH (z_j)-[simple_edge:Wire {t: 1}]-()
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node, count(simple_edge) AS num_simple
-        WHERE num_simple = 0
+        // z_j must be interior-like: only Z-neighbors over Hadamard, except z_alpha
+        OPTIONAL MATCH (z_j)-[e_bad_j:Wire]-(n_bad_j:Node)
+        WHERE n_bad_j <> z_alpha AND NOT (n_bad_j.t = 1 AND e_bad_j.t = 2)
+        WITH z_j, z_alpha, boundary_node, boundary_wire, count(e_bad_j) AS bad_j
+        WHERE bad_j = 0
 
-        // Ensure that z_j is not connected to a boundary node
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node
-        OPTIONAL MATCH (z_j)-[w:Wire]-(n:Node {t: 0})
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node, count(w) AS w_count
-        WHERE w_count = 0
+        // z_alpha can only have one simple edge (the boundary edge); other neighbors must be Z via Hadamard
+        OPTIONAL MATCH (z_alpha)-[e_bad_a:Wire]-(n_bad_a:Node)
+        WHERE n_bad_a <> z_j AND n_bad_a <> boundary_node AND NOT (n_bad_a.t = 1 AND e_bad_a.t = 2)
+        WITH z_j, z_alpha, boundary_node, boundary_wire, count(e_bad_a) AS bad_a
+        WHERE bad_a = 0
 
-        // Ensure that all neighbors of z_j have degree > 1 (not lonely Z-spiders)
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node
-        OPTIONAL MATCH (z_j)-[w:Wire]-(n:Node {t: 1})
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node, collect(n) AS neighbors
-        WHERE ALL(neigh IN neighbors WHERE degree(neigh) > 1)
-
-        // Ensure z_alpha has ONLY ONE t=1 wire (the one to the boundary).
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node
-        OPTIONAL MATCH (z_alpha)-[w:Wire {t:1}]-()
-        WITH z_j, z_alpha, pivot_edge, boundary_wire, boundary_node, count(w) AS num_simple_wires
+        OPTIONAL MATCH (z_alpha)-[simple_w:Wire {t:1}]-()
+        WITH z_j, z_alpha, boundary_node, boundary_wire, count(simple_w) AS num_simple_wires
         WHERE num_simple_wires = 1
 
-        // Return only those z_j, z_alpha pairs that satisfy all conditions
-        //RETURN z_j, z_alpha, pivot_edge
-
         WITH z_j, z_alpha, boundary_node, boundary_wire
-        ORDER BY z_j.phase DESC
+        ORDER BY toFloat(z_j.phase) DESC
         LIMIT 1
 
-        // 2. Collect the three disjoint sets of neighbors (connected via Hadamard edges).
+        // 2. Gadgetize the boundary Clifford as in match_pivot_boundary
+        MATCH (n:Node {graph_id: $graph_id})
+        WITH z_j, z_alpha, boundary_node, boundary_wire, coalesce(max(n.id), -1) AS max_id
+        CREATE (v1:Node {
+            t: 1,
+            phase: coalesce(toFloat(z_alpha.phase), 0.0),
+            graph_id: $graph_id,
+            id: max_id + 1,
+            qubit: -2,
+            row: z_alpha.row
+        }),
+        (v2:Node {
+            t: 1,
+            phase: 0.0,
+            graph_id: $graph_id,
+            id: max_id + 2,
+            qubit: -1,
+            row: z_alpha.row
+        })
+        CREATE (v1)-[:Wire {t: 2, graph_id: $graph_id}]->(v2)
+        CREATE (z_alpha)-[:Wire {t: 2, graph_id: $graph_id}]->(v2)
+        SET z_alpha.phase = 0.0
+
+        // 3. Compute n0, n1, n2 for the pivot between z_j and z_alpha
         WITH z_j, z_alpha, boundary_node, boundary_wire
         OPTIONAL MATCH (z_j)-[:Wire {t: 2}]-(n_j:Node {t: 1})
-        WHERE NOT EXISTS((n_j)-[:Wire]-(z_alpha)) AND n_j <> z_alpha
-        WITH z_j, z_alpha, boundary_node, boundary_wire, COLLECT(DISTINCT n_j) AS neighbors_j
+        WHERE n_j <> z_alpha
+        WITH z_j, z_alpha, boundary_node, boundary_wire, COLLECT(DISTINCT n_j) AS neighbors_j_all
 
-        OPTIONAL MATCH (z_alpha)-[:Wire {t: 2}]-(n_alpha:Node {t: 1})
-        WHERE NOT EXISTS((n_alpha)-[:Wire]-(z_j)) AND n_alpha <> z_j
-        WITH z_j, z_alpha, boundary_node, boundary_wire, neighbors_j, COLLECT(DISTINCT n_alpha) AS neighbors_alpha
+        OPTIONAL MATCH (z_alpha)-[:Wire {t: 2}]-(n_a:Node {t: 1})
+        WHERE n_a <> z_j
+        WITH z_j, z_alpha, boundary_node, boundary_wire, neighbors_j_all, COLLECT(DISTINCT n_a) AS neighbors_alpha_all
 
-        OPTIONAL MATCH (z_j)-[:Wire {t: 2}]-(n_shared:Node {t: 1})-[:Wire {t: 2}]-(z_alpha)
-        WHERE n_shared <> z_j AND n_shared <> z_alpha
-        WITH z_j, z_alpha, boundary_node, boundary_wire, neighbors_j, neighbors_alpha, COLLECT(DISTINCT n_shared) AS shared_neighbors
+        WITH z_j, z_alpha, boundary_node, boundary_wire,
+             [n IN neighbors_j_all WHERE n IN neighbors_alpha_all] AS shared_neighbors,
+             [n IN neighbors_j_all WHERE NOT n IN neighbors_alpha_all] AS neighbors_j,
+             [n IN neighbors_alpha_all WHERE NOT n IN neighbors_j_all] AS neighbors_alpha
 
-        // RETURN z_j, z_alpha, boundary_node, boundary_wire, neighbors_j, neighbors_alpha, shared_neighbors
-        // 3. Create the THREE new central spiders for the rewritten structure.
-        CREATE (z_new_phaseless:Node {t: 1, phase: 1.0, graph_id: z_j.graph_id}),
-               (z_new_phased:Node {t: 1, graph_id: z_j.graph_id, phase: (CASE z_j.phase % 2 WHEN 0 THEN -1 ELSE 1 END) * z_alpha.phase}),
-               (z_j_replacement:Node {t: 1, phase: z_j.phase, graph_id: z_j.graph_id})
-        CREATE (z_new_phaseless)-[:Wire {t: 2}]->(z_new_phased)
-
-        // 4. Perform the boundary rewiring and connect the new spiders.
-        // Connect the boundary to the new j*pi spider.
-        CREATE (boundary_node)-[:Wire {t: 2}]->(z_j_replacement)
-
-        // 5. Connect the new spiders to the neighbor sets.
-        // Connect z_new_phaseless to N_alpha, and N_shared.
-        FOREACH (n IN neighbors_j | CREATE (z_new_phaseless)-[:Wire {t: 2}]->(n))
-        FOREACH (n IN shared_neighbors | CREATE (z_new_phaseless)-[:Wire {t: 2}]->(n))
-        // Connect z_j_replacement to N_alpha, and N_shared.
-        FOREACH (n IN neighbors_j | CREATE (z_j_replacement)-[:Wire {t: 2}]->(n))
-        FOREACH (n IN shared_neighbors | CREATE (z_j_replacement)-[:Wire {t: 2}]->(n))
-
-        // 6. Create the 3-partite clique between the neighbor sets.
-        FOREACH (n_j IN neighbors_j |
-            FOREACH (n_alpha IN neighbors_alpha |
-                CREATE (n_j)-[:Wire {t: 2}]->(n_alpha)
-            )
-        )
-        FOREACH (n_j IN neighbors_j |
-            FOREACH (n_shared IN shared_neighbors |
-                CREATE (n_j)-[:Wire {t: 2}]->(n_shared)
-            )
-        )
-        FOREACH (n_alpha IN neighbors_alpha |
-            FOREACH (n_shared IN shared_neighbors |
-                CREATE (n_alpha)-[:Wire {t: 2}]->(n_shared)
-            )
-        )
-
-        // 6. Update phases on the neighbor nodes.
+        // 4. Phase updates from phase(z_j), and +pi on shared neighbors
         FOREACH (n IN neighbors_alpha |
-            SET n.phase = coalesce(n.phase, 0.0) + z_j.phase
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) + coalesce(toFloat(z_j.phase), 0.0)
         )
         FOREACH (n IN shared_neighbors |
-            SET n.phase = coalesce(n.phase, 0.0) + z_j.phase + 1
+          SET n.phase = coalesce(toFloat(n.phase), 0.0) + coalesce(toFloat(z_j.phase), 0.0) + 1.0
         )
 
-        // 8. Finally, remove the original two central spiders.
-        WITH z_j, z_alpha, boundary_wire
+        // 5. Move boundary connection from z_alpha to z_j and toggle edge type
+        WITH z_j, z_alpha, boundary_node, boundary_wire, neighbors_j, neighbors_alpha, shared_neighbors,
+             CASE coalesce(boundary_wire.t, 1)
+               WHEN 1 THEN 2
+               WHEN 2 THEN 1
+               ELSE 2
+             END AS boundary_new_t
         DELETE boundary_wire
-        DETACH DELETE z_j, z_alpha
+        CREATE (boundary_node)-[:Wire {t: boundary_new_t, graph_id: $graph_id}]->(z_j)
 
-        RETURN count(*) AS pivot_operations_performed;
+        // 6. Add one Hadamard edge on n0xn1, n1xn2, n0xn2 using add_edge-table semantics
+        WITH z_alpha, neighbors_j, neighbors_alpha, shared_neighbors
+
+        CALL {
+            WITH neighbors_j, neighbors_alpha
+            UNWIND neighbors_j AS a_node
+            UNWIND neighbors_alpha AS b_node
+            WITH a_node, b_node
+            WHERE a_node <> b_node
+            OPTIONAL MATCH (a_node)-[e:Wire]-(b_node)
+            WITH a_node, b_node, COLLECT(e) AS existing_edges
+            WITH a_node, b_node, existing_edges,
+              head([rel IN existing_edges | rel.t]) AS edge_t
+            FOREACH (edge IN CASE WHEN edge_t = 2 THEN existing_edges ELSE [] END | DELETE edge)
+            FOREACH (_ IN CASE WHEN edge_t IS NULL THEN [1] ELSE [] END |
+              CREATE (a_node)-[:Wire {t: 2, graph_id: $graph_id}]->(b_node)
+            )
+            FOREACH (_ IN CASE WHEN edge_t = 1 THEN [1] ELSE [] END |
+              SET a_node.phase = coalesce(toFloat(a_node.phase), 0.0) + 1.0
+            )
+            RETURN count(*) AS toggles_01
+        }
+
+        CALL {
+            WITH neighbors_alpha, shared_neighbors
+            UNWIND neighbors_alpha AS a_node
+            UNWIND shared_neighbors AS b_node
+            WITH a_node, b_node
+            WHERE a_node <> b_node
+            OPTIONAL MATCH (a_node)-[e:Wire]-(b_node)
+            WITH a_node, b_node, COLLECT(e) AS existing_edges
+            WITH a_node, b_node, existing_edges,
+              head([rel IN existing_edges | rel.t]) AS edge_t
+            FOREACH (edge IN CASE WHEN edge_t = 2 THEN existing_edges ELSE [] END | DELETE edge)
+            FOREACH (_ IN CASE WHEN edge_t IS NULL THEN [1] ELSE [] END |
+              CREATE (a_node)-[:Wire {t: 2, graph_id: $graph_id}]->(b_node)
+            )
+            FOREACH (_ IN CASE WHEN edge_t = 1 THEN [1] ELSE [] END |
+              SET a_node.phase = coalesce(toFloat(a_node.phase), 0.0) + 1.0
+            )
+            RETURN count(*) AS toggles_12
+        }
+
+        CALL {
+            WITH neighbors_j, shared_neighbors
+            UNWIND neighbors_j AS a_node
+            UNWIND shared_neighbors AS b_node
+            WITH a_node, b_node
+            WHERE a_node <> b_node
+            OPTIONAL MATCH (a_node)-[e:Wire]-(b_node)
+            WITH a_node, b_node, COLLECT(e) AS existing_edges
+            WITH a_node, b_node, existing_edges,
+              head([rel IN existing_edges | rel.t]) AS edge_t
+            FOREACH (edge IN CASE WHEN edge_t = 2 THEN existing_edges ELSE [] END | DELETE edge)
+            FOREACH (_ IN CASE WHEN edge_t IS NULL THEN [1] ELSE [] END |
+              CREATE (a_node)-[:Wire {t: 2, graph_id: $graph_id}]->(b_node)
+            )
+            FOREACH (_ IN CASE WHEN edge_t = 1 THEN [1] ELSE [] END |
+              SET a_node.phase = coalesce(toFloat(a_node.phase), 0.0) + 1.0
+            )
+            RETURN count(*) AS toggles_02
+        }
+
+        // 7. Remove z_alpha (the boundary pivot vertex)
+        WITH z_alpha
+        DETACH DELETE z_alpha
+        RETURN count(*) AS pivot_operations_performed
         """
 
     def _bialgebra_red_green(self):
@@ -1076,42 +1129,41 @@ class ZXQueryStore:
         // Find neighbors and ensure all are Z-spiders connected via Hadamard edges
         MATCH (center)-[w:Wire {t:2}]-(nbr:Node {t:1})
         WITH center, collect(distinct nbr) as neighbors
-        
+
         // Only proceed if ALL incident edges were Hadamard and neighbors are Z-spiders
-        // (The match above enforces w:Wire{t:2} and nbr:Node{t:1}. We need to ensure
-        // center has NO OTHER connections)
         WHERE size(neighbors) > 0 AND degree(center) = size(neighbors)
-        
+
         // Limit to 1 match for safety/determinism per iteration
         WITH center, neighbors LIMIT 1
-        
-        // 1. Update neighbors' phases
+
+        // Capture center's phase before any modifications
+        WITH center, neighbors, center.phase as center_phase
+
+        // 1. Update neighbors' phases safely
         WITH center, neighbors
         FOREACH (n IN neighbors | 
-            SET n.phase = n.phase - center.phase
+            SET n.phase = coalesce(toFloat(n.phase), 0.0) - coalesce(toFloat(center.phase), 0.0)
         )
-        
-        // 2. Delete the center node immediately to ensure execution
+
+        // 2. Delete center node first to release the edges
+        WITH center, neighbors
         DETACH DELETE center
-        
+
         // 3. Toggle edges between all pairs of neighbors
-        WITH neighbors, center
+        WITH neighbors
+        WHERE size(neighbors) >= 2
         UNWIND range(0, size(neighbors)-2) as i
         UNWIND range(i+1, size(neighbors)-1) as j
-        WITH neighbors, center, neighbors[i] as n1, neighbors[j] as n2
-        
-        // Force delete using explicit match?
+        WITH neighbors[i] as n1, neighbors[j] as n2
+
+        // Toggle edge: delete if exists, create if not
         OPTIONAL MATCH (n1)-[e:Wire]-(n2)
-        
-        // If e matched, delete it.
-        // Use separate clause to be sure.
+        WITH n1, n2, e
         FOREACH (dummy IN CASE WHEN e IS NOT NULL THEN [1] ELSE [] END | DELETE e)
-        
-        // Create if didn't exist
         FOREACH (dummy IN CASE WHEN e IS NULL THEN [1] ELSE [] END |
-             MERGE (n1)-[:Wire {t: 2, graph_id: $graph_id}]-(n2)
+             MERGE (n1)-[:Wire {t: 2}]-(n2)
         )
-        
+
         RETURN 1 as count
         """
 
@@ -1184,9 +1236,9 @@ class ZXQueryStore:
         UNWIND matchedEdges AS e
         WITH startNode(e) AS u, endNode(e) AS v
 
-        // Step 3: Create the new merged node with summed phase
+        // Step 3: Create the new merged node with safely added phase
         CREATE (merged:Node {
-          phase: coalesce(u.phase, 0) + coalesce(v.phase, 0),
+          phase: coalesce(toFloat(u.phase), 0.0) + coalesce(toFloat(v.phase), 0.0),
           t: u.t,
           graph_id: u.graph_id,
           id: u.id,
@@ -1262,15 +1314,15 @@ class ZXQueryStore:
         MATCH (v:Node {t: 1})
         WHERE v.graph_id = $graph_id
           AND v.phase IS NOT NULL
-          AND v.phase <> 0
-          AND v.phase * 2 <> round(v.phase * 2)
+          AND toFloat(v.phase) <> 0
+          AND toFloat(v.phase) * 2 <> round(toFloat(v.phase) * 2)
 
         MATCH (w:Node {t: 1})
         WHERE w.graph_id = $graph_id
           AND id(v) < id(w)
           AND w.phase IS NOT NULL
-          AND w.phase <> 0
-          AND w.phase * 2 <> round(w.phase * 2)
+          AND toFloat(w.phase) <> 0
+          AND toFloat(w.phase) * 2 <> round(toFloat(w.phase) * 2)
 
         OPTIONAL MATCH (v)-[vw:Wire]-(w)
 
@@ -1287,8 +1339,8 @@ class ZXQueryStore:
 
         WITH v, w, v_neighbors AS neighbors,
              CASE WHEN vw IS NULL THEN 1 ELSE 2 END AS supp_type,
-             coalesce(v.phase, 0) AS alpha,
-             coalesce(w.phase, 0) AS beta
+             coalesce(toFloat(v.phase), 0.0) AS alpha,
+             coalesce(toFloat(w.phase), 0.0) AS beta
 
         WITH v, w, neighbors, supp_type,
              abs((alpha + beta) % 2) AS sum_mod2,
@@ -1304,7 +1356,7 @@ class ZXQueryStore:
           FOREACH (_ IN CASE
             WHEN (supp_type = 1 AND sum_mod2 = 1) OR (supp_type = 2 AND sum_mod2 = 0)
             THEN [1] ELSE [] END |
-            SET n.phase = coalesce(n.phase, 0) + 1
+            SET n.phase = coalesce(toFloat(n.phase), 0.0) + 1.0
           )
         )
 

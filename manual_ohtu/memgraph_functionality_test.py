@@ -102,7 +102,10 @@ def graph_full_reduce():
     graph = zx.generate.cliffordT(3,20, backend="memgraph")
     zx.simplify.full_reduce(graph)
     print(f'num vertices ===== {graph.num_vertices()}')
-    #graph.normalise()
+    graph.normalize()
+    c_opt = zx.extract_circuit(graph.clone())
+
+    return zx.compare_tensors(graph, c_opt)
 
 #graph_step_by_step()
 # graph_full_reduce()
@@ -358,7 +361,8 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
 
 
 
-iterable_graph_creation()
-test_depths_qubits(2, 100, 100)
-large_graph()
-test_num_vertices_against_simple_graph(2, 100)
+#iterable_graph_creation()
+#test_depths_qubits(2, 100, 100)
+#large_graph()
+#test_num_vertices_against_simple_graph(2, 100)
+graph_full_reduce()
