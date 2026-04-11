@@ -1,3 +1,7 @@
+# THIS IS THE MEMGRAPH_SIMPLIFY THAT WORKS WITH THE NEWEST QUERIES SOMETIMES, IT IS ERRATIC, BUT WORKS SOMETIMES
+
+# MEMGRAPH_PY simplify
+
 # PyZX - Python library for quantum circuit rewriting
 #        and optimization using the ZX-calculus
 # Copyright (C) 2018 - Aleks Kissinger and John van de Wetering
@@ -135,17 +139,25 @@ def _execute_query(
 
     with session_factory() as session:
         result = session.run(query, params)
-        record = result.single()
-        
-        if record is None:
-            return 0
-        
-        # Try to extract count from various possible return formats
         count = 0
-        if hasattr(record, 'values'):
+        for record in result:
+            if not hasattr(record, "values"):
+                continue
             values = record.values()
-            if values and len(values) > 0:
-                count = values[0] or 0
+            if not values:
+                continue
+            raw = values[0]
+            if raw is None:
+                continue
+            if isinstance(raw, bool):
+                count += int(raw)
+            elif isinstance(raw, (int, float)):
+                count += int(raw)
+            else:
+                try:
+                    count += int(raw)
+                except (TypeError, ValueError):
+                    continue
         
         if not quiet and count > 0:
             print(f"Applied {count} rewrites")
@@ -154,37 +166,22 @@ def _execute_query(
 
 
 def spider_simp(
-    session_factory: Callable,
-    graph_id: str,
-    quiet: bool = True,
-    stats: Optional[Stats] = None
+    session_factory: Callable, graph_id: str, quiet: bool = True, stats: Optional[Stats] = None
 ) -> bool:
-    """
-    Perform spider fusion on the graph in the database.
-    Fuses adjacent spiders of the same color.
-    
-    Args:
-        session_factory: Function that returns a database session
-        graph_id: Identifier of the graph to simplify
-        quiet: If False, print progress information
-        stats: Optional statistics tracker
-        
-    Returns:
-        True if any rewrites were applied, False otherwise
-    """
     queries = ZXQueryStore()
     query = queries.get("spider_fusion_rewrite")
-    
-    # Add graph_id filter to query
-    # Note: This assumes your queries support graph_id filtering
     params = {"graph_id": graph_id}
     
-    count = _execute_query(session_factory, query, params, quiet)
-    
+    total_count = 0
+    while True:
+        c = _execute_query(session_factory, query, params, quiet)
+        if c == 0:
+            break
+        total_count += c
+        
     if stats:
-        stats.count_rewrites("spider_fusion", count)
-    
-    return count > 0
+        stats.count_rewrites("spider_fusion", total_count)
+    return total_count > 0
 
 
 def id_simp(
@@ -209,7 +206,14 @@ def id_simp(
     query = queries.get("id_simp")
     params = {"graph_id": graph_id}
 
-    count = _execute_query(session_factory, query, params, quiet)
+    # The Cypher query applies at most one identity rewrite per call.
+    # Loop locally to preserve the canonical "repeat until no matches" behavior.
+    count = 0
+    while True:
+        c = _execute_query(session_factory, query, params, quiet)
+        if c == 0:
+            break
+        count += c
 
     if stats:
         stats.count_rewrites("id_simp", count)
@@ -312,71 +316,50 @@ def hadamard_simp(
     return count > 0
 
 
+# Pivot simp 
+
 def pivot_simp(
-    session_factory: Callable,
-    graph_id: str,
-    quiet: bool = True,
-    stats: Optional[Stats] = None
+    session_factory: Callable, graph_id: str, quiet: bool = True, stats: Optional[Stats] = None
 ) -> bool:
-    """
-    Apply pivot rewrites (both two-interior and single-interior variants).
-    
-    Args:
-        session_factory: Function that returns a database session
-        graph_id: Identifier of the graph to simplify
-        quiet: If False, print progress information
-        stats: Optional statistics tracker
-        
-    Returns:
-        True if any rewrites were applied, False otherwise
-    """
     queries = ZXQueryStore()
     params = {"graph_id": graph_id}
-    
-    # Try two-interior pivot first
     query1 = queries.get("pivot_rule_two_interior_pauli")
-    count1 = _execute_query(session_factory, query1, params, quiet)
+    # NOTE: The single-interior-pauli Cypher rule is currently non-canonical
+    # and can cause run-to-run divergence in boundary-adjacent rewrites.
+    # Keep it out of the automatic simplification loop until it is rewritten
+    # to fully match pivot_NOT_REWORKED semantics.
+    enable_single_interior_pauli = False
+    query2 = queries.get("pivot_rule_single_interior_pauli") if enable_single_interior_pauli else None
     
-    # Try single-interior pivot
-    query2 = queries.get("pivot_rule_single_interior_pauli")
-    count2 = _execute_query(session_factory, query2, params, quiet)
-    
-    total_count = count1 + count2
+    total_count = 0
+    while True:
+        c1 = _execute_query(session_factory, query1, params, quiet)
+        c2 = _execute_query(session_factory, query2, params, quiet) if query2 is not None else 0
+        if (c1 + c2) == 0:
+            break
+        total_count += (c1 + c2)
     
     if stats:
         stats.count_rewrites("pivot", total_count)
-    
     return total_count > 0
 
-
 def lcomp_simp(
-    session_factory: Callable,
-    graph_id: str,
-    quiet: bool = True,
-    stats: Optional[Stats] = None
+    session_factory: Callable, graph_id: str, quiet: bool = True, stats: Optional[Stats] = None
 ) -> bool:
-    """
-    Apply local complementation rewrites.
-    
-    Args:
-        session_factory: Function that returns a database session
-        graph_id: Identifier of the graph to simplify
-        quiet: If False, print progress information
-        stats: Optional statistics tracker
-        
-    Returns:
-        True if any rewrites were applied, False otherwise
-    """
     queries = ZXQueryStore()
     query = queries.get("local_complement_full")
     params = {"graph_id": graph_id}
     
-    count = _execute_query(session_factory, query, params, quiet)
-    
+    total_count = 0
+    while True:
+        c = _execute_query(session_factory, query, params, quiet)
+        if c == 0:
+            break
+        total_count += c
+        
     if stats:
-        stats.count_rewrites("local_complement", count)
-    
-    return count > 0
+        stats.count_rewrites("local_complement", total_count)
+    return total_count > 0
 
 
 def bialgebra_simp(
@@ -426,7 +409,8 @@ def interior_clifford_simp(
 ) -> bool:
     """
     Repeatedly apply interior Clifford simplifications until none apply.
-    This includes spider fusion, Hadamard cancellation, pivot, and local complementation.
+    This follows the canonical PyZX structure: id, spider, pivot, lcomp,
+    with explicit self-loop cleanup for the database backend.
     
     Args:
         session_factory: Function that returns a database session
@@ -451,17 +435,16 @@ def interior_clifford_simp(
             print(f"  Iteration {iteration}")
         
         i0 = id_simp(session_factory, graph_id, quiet, stats)
+        if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after id_simp")
         i1 = spider_simp(session_factory, graph_id, quiet, stats)
         if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after spider_simp")
         i2 = remove_self_loop_simp(session_factory, graph_id, quiet, stats)
-        i3 = hadamard_simp(session_factory, graph_id, quiet, stats)
-        if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after hadamard_simp")
-        i4 = pivot_simp(session_factory, graph_id, quiet, stats)
+        i3 = pivot_simp(session_factory, graph_id, quiet, stats)
         if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after pivot_simp")
-        i5 = lcomp_simp(session_factory, graph_id, quiet, stats)
+        i4 = lcomp_simp(session_factory, graph_id, quiet, stats)
         if not quiet and not verify_connectivity(session_factory, graph_id): print("Broken after lcomp_simp")
         
-        if not (i0 or i1 or i2 or i3 or i4 or i5):
+        if not (i0 or i1 or i2 or i3 or i4):
             break
         
         applied_any = True

@@ -44,30 +44,30 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     g1 = c.to_graph(backend=b1)
     g2 = c.to_graph(backend=b2)
 
-    zx.full_reduce(g1)
+    mem.full_reduce(g1)
     zx.full_reduce(g2)
 
     g1.normalize()
     g2.normalize()
 
-    c_opt1 = zx.extract_circuit(g1.copy())
+    c_opt1 = zx.extract_circuit(g1.clone())
     c_opt2 = zx.extract_circuit(g2.copy())
 
     return zx.compare_tensors(c_opt1, c_opt2)
 
 
-for q in range(1, 10):
-    for d in range(1, 100, 10):
-        for s in range(11):
-            print("Memgraph:", comparison_1(s, "memgraph"))
+###for q in range(1, 10):
+    #for d in range(1, 100, 10):
+       # for s in range(11):
+         #   print("Memgraph:", comparison_1(s, "memgraph"))
 
 
 
-print("simple:", comparison_1(42))
+#print("simple:", comparison_1(42))
 # print("igraph:", comparison_1(42, "igraph")) doesn't work, doesn't contain all mandatory methods
-print("Multigraph:", comparison_1(42, "multigraph"))
+#print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
 print("Memgraph:", comparison_1(42, "memgraph"))
 
-#print("Neo4j vs simple:", comparison_2(42, "simple", "neo4j"))
+#print("Memgraph vs simple:", comparison_2(42, "memgraph", "simple"))
