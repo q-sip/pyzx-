@@ -39,7 +39,7 @@ def comparison_1(seed: int, backend: str | None = None):
 
 def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     """compares one backend to another"""
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=9, depth=50, seed=seed)
 
     g1 = c.to_graph(backend=b1)
     g2 = c.to_graph(backend=b2)
@@ -49,6 +49,9 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
 
     g1.normalize()
     g2.normalize()
+    
+    print(f"memgraph nodes: {g1.num_vertices()}")
+    print(f"simple nodes: {g2.num_vertices()}")
 
     c_opt1 = zx.extract_circuit(g1.clone())
     c_opt2 = zx.extract_circuit(g2.copy())
@@ -68,6 +71,6 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
 #print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
-print("Memgraph:", comparison_1(42, "memgraph"))
+#print("Memgraph:", comparison_1(42, "memgraph"))
 
-#print("Memgraph vs simple:", comparison_2(42, "memgraph", "simple"))
+print("Memgraph vs simple:", comparison_2(72, "memgraph", "simple"))

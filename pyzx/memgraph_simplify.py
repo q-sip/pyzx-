@@ -328,7 +328,7 @@ def pivot_simp(
     # and can cause run-to-run divergence in boundary-adjacent rewrites.
     # Keep it out of the automatic simplification loop until it is rewritten
     # to fully match pivot_NOT_REWORKED semantics.
-    enable_single_interior_pauli = False
+    enable_single_interior_pauli = True
     query2 = queries.get("pivot_rule_single_interior_pauli") if enable_single_interior_pauli else None
     
     total_count = 0

@@ -1016,7 +1016,6 @@ class ZXdb:
 
     def full_reduce(self):
         self.interior_clifford_simp()
-        return
         self.pivot_gadget_rule()
         while True:
             self.clifford_simp()
