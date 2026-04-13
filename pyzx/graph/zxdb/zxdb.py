@@ -40,7 +40,8 @@ class ZXdb:
         self.basic_rewrite_rule_queries = {}
         self.main_rewrite_rule_queries = {}
         self._driver = None
-        self.graph_id = graph_id if graph_id is not None else "graph_test_zxdb"
+        self.graph_id = graph_id if graph_id is not None else f"graph_{int(time.time() * 1000000) % 1000000}"
+        print(f'graph_id == {self.graph_id}')
         self.current_path = os.path.dirname(os.path.abspath(__file__))
 
         with open(f"{self.current_path}/query_collections/memgraph-collection-zxdb.json", "r") as f:
@@ -465,7 +466,7 @@ class ZXdb:
                 def mark_pattern(tx):
                     # Get the marking query from your JSON collection
                     mark_query = str(self.main_rewrite_rule_queries["Hadamard cancellation labeling query"]["query"]["code"]["value"])
-                    result = tx.run(mark_query)
+                    result = tx.run(mark_query, graph_id=self.graph_id)
                     record = result.single()
                     return record["pattern_id"] if record and record["pattern_id"] else None
                 
@@ -504,7 +505,7 @@ class ZXdb:
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
             while True:
             # Remove identities
-                result = tx.run(query_remove_identities)
+                result = tx.run(query_remove_identities, graph_id=self.graph_id)
                 record = result.single()
                 #print(record)
                 #deleted = record["marked"]
@@ -559,29 +560,7 @@ class ZXdb:
                     # Remove self-loops (matching remove_self_loop_simp behavior)
                     # For ZX-like vertices: simple self-loops are removed, 
                     # hadamard self-loops add pi phase and are removed
-                    self_loop_query = """
-                    // Find all self-loops on ZX-like vertices (t=1 or t=2)
-                    MATCH (v:Node)-[r:Wire]-(v)
-                    WHERE v.t IN [1, 2] AND v.graph_id = $graph_id
-                    WITH v, collect(r) AS self_loops
-                    WHERE size(self_loops) > 0
-                    
-                    // Count hadamard self-loops (t=2)
-                    WITH v, self_loops,
-                         size([r IN self_loops WHERE r.t = 2]) AS hadamard_count
-                    
-                    // If odd number of hadamard self-loops, add pi to phase
-                    FOREACH (_ IN CASE WHEN hadamard_count % 2 = 1 THEN [1] ELSE [] END |
-                        SET v.phase = coalesce(v.phase, 0) + 1
-                    )
-                    
-                    // Delete all self-loop edges
-                    WITH v, self_loops
-                    UNWIND self_loops AS loop_edge
-                    DELETE loop_edge
-                    
-                    RETURN count(DISTINCT v) AS vertices_processed
-                    """
+                    self_loop_query = str(self.basic_rewrite_rule_queries["Self loop query"]["query"]["code"]["value"])
                     tx.run(self_loop_query, graph_id=self.graph_id)
 
                     # Keep spider fusion rewrite and parallel-edge cleanup separate
@@ -888,18 +867,8 @@ class ZXdb:
             with self.driver.session() as session:
                 def _remove_operations(tx):
                     # Remove completely isolated vertices (degree 0)
-                    tx.run("""
-                        // 1. Find and delete isolated pairs (two nodes only connected to each other)
-                        MATCH (n)-[r]-(m)
-                        WHERE degree(n) = 1 AND degree(m) = 1
-                        DETACH DELETE n, m
-                        WITH count(n) AS deleted_pairs
-
-                        // 2. Find and delete completely isolated single vertices
-                        MATCH (v)
-                        WHERE degree(v) = 0
-                        DELETE v;
-                        """)
+                    query = str(self.basic_rewrite_rule_queries["Remove isolated vertices"]["query"]["code"]["value"])
+                    tx.run(query, graph_id=self.graph_id)
 
                 session.execute_write(_remove_operations)
 
@@ -919,27 +888,7 @@ class ZXdb:
                     # 3. Disconnected
                     # 4. Same degree
                     # 5. Same neighbors (inclusion + same degree)
-                    query = """
-                    MATCH (v:Node {graph_id: $graph_id, t: 1}), (w:Node {graph_id: $graph_id, t: 1})
-                    WHERE id(v) < id(w)
-                      AND NOT (v)-[:Wire]-(w)
-                      AND abs((v.phase * 2) - round(v.phase * 2)) > 1e-5
-                      AND abs((w.phase * 2) - round(w.phase * 2)) > 1e-5
-                      AND size((v)-[:Wire]-()) = size((w)-[:Wire]-())
-                      AND size([(v)-[:Wire]-(n) WHERE NOT (n)-[:Wire]-(w) | 1]) = 0
-                    WITH v, w
-                    WITH v, w, v.phase + w.phase AS s, v.phase - w.phase AS d
-                    WITH v, w,
-                         (abs(s - round(s)) < 1e-5 AND toInteger(round(s)) % 2 <> 0) AS sum_odd,
-                         (abs(d - round(d)) < 1e-5 AND toInteger(round(d)) % 2 <> 0) AS diff_odd
-                    WHERE sum_odd OR diff_odd
-                    OPTIONAL MATCH (v)-[:Wire]-(n)
-                    FOREACH (_ IN CASE WHEN sum_odd THEN [1] ELSE [] END | 
-                        SET n.phase = coalesce(n.phase, 0.0) + 1.0
-                    )
-                    DETACH DELETE v, w
-                    RETURN count(*) as c
-                    """
+                    query = str(self.basic_rewrite_rule_queries["Supplementarity simp 1"]["query"]["code"]["value"])
                     result = tx.run(query, graph_id=self.graph_id)
                     record = result.single()
                     return record["c"] if record else 0
@@ -954,28 +903,7 @@ class ZXdb:
                     # 3. Connected
                     # 4. Same degree
                     # 5. Same other neighbors
-                    query = """
-                    MATCH (v:Node {graph_id: $graph_id, t: 1}), (w:Node {graph_id: $graph_id, t: 1})
-                    WHERE id(v) < id(w)
-                      AND (v)-[:Wire]-(w)
-                      AND abs((v.phase * 2) - round(v.phase * 2)) > 1e-5
-                      AND abs((w.phase * 2) - round(w.phase * 2)) > 1e-5
-                      AND size((v)-[:Wire]-()) = size((w)-[:Wire]-())
-                      AND size([(v)-[:Wire]-(n) WHERE n <> w AND NOT (n)-[:Wire]-(w) | 1]) = 0
-                    WITH v, w
-                    WITH v, w, v.phase + w.phase AS s, v.phase - w.phase AS d
-                    WITH v, w,
-                         (abs(s - round(s)) < 1e-5 AND toInteger(round(s)) % 2 = 0) AS sum_even,
-                         (abs(d - round(d)) < 1e-5 AND toInteger(round(d)) % 2 <> 0) AS diff_odd
-                    WHERE sum_even OR diff_odd
-                    OPTIONAL MATCH (v)-[:Wire]-(n)
-                    WHERE n <> w
-                    FOREACH (_ IN CASE WHEN sum_even THEN [1] ELSE [] END | 
-                        SET n.phase = coalesce(n.phase, 0.0) + 1.0
-                    )
-                    DETACH DELETE v, w
-                    RETURN count(*) as c
-                    """
+                    query = query = str(self.basic_rewrite_rule_queries["Supplementarity simp 2"]["query"]["code"]["value"])
                     result = tx.run(query, graph_id=self.graph_id)
                     record = result.single()
                     return record["c"] if record else 0
@@ -1019,7 +947,9 @@ class ZXdb:
         return i
 
     def full_reduce(self):
-        self.spider_fusion()
+        self.interior_clifford_simp()
+        return
+        self.interior_clifford_simp()
         return
         self.pivot_gadget_rule()
         while True:
