@@ -58,7 +58,7 @@ c = g.copy(backend='simple')
 #         # They MUST be connected by HADAMARD edges for the rule to trigger
 #         g.add_edge((center, neighbor), edgetype=zx.EdgeType.HADAMARD)
 
-zxdb = ZXdb(URI, AUTH[0], AUTH[1])
+zxdb = ZXdb(URI, AUTH[0], AUTH[1], graph_id=g.graph_id)
 path = zxdb.current_path
 print('starting full reduce...')
 zxdb.full_reduce()

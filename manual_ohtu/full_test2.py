@@ -2,18 +2,13 @@ from time import time
 import os
 import pyzx as zx
 import pyzx.memgraph_simplify as mem
-from neo4j import GraphDatabase
+from pyzx.graph.zxdb.zxdb import ZXdb
 from dotenv import load_dotenv
-# load_dotenv()
 
-# This deletes all data before running the comparison tests
-query = "MATCH(N) DETACH DELETE N"
-# GraphDatabase.driver(
-#     os.getenv("NEO4J_URI"),
-#     auth=(os.getenv("NEO4J_USER"),
-#     os.getenv("NEO4J_PASSWORD"))).session().execute_write(lambda tx: tx.run(query))
-# ----
-# print('deleted data')
+
+load_dotenv()
+URI = os.getenv("MEMGRAPH_URI")
+AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 
 def comparison_1(seed: int, backend: str | None = None):
     """compares neo4j-backend circuit reduction to itself
@@ -26,9 +21,19 @@ def comparison_1(seed: int, backend: str | None = None):
 
     c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=4, depth=40, seed=seed)
 
+    print(f"Generated a circuit with depth {c.depth()}")
+
     g = c.to_graph(backend=backend)
 
-    mem.full_reduce(g)
+    print(f"Graph has {g.num_vertices()} vertices and {g.num_edges()} edges")
+
+    zxdb = ZXdb(URI, AUTH[0], AUTH[1], graph_id=g.graph_id)
+    try:
+        zxdb.full_reduce()
+    finally:
+        zxdb.close()
+
+    print(f"After full_reduce, graph has {g.num_vertices()} vertices and {g.num_edges()} edges")
 
     g.normalize()
 
@@ -39,12 +44,17 @@ def comparison_1(seed: int, backend: str | None = None):
 
 def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
     """compares one backend to another"""
-    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=9, depth=50, seed=seed)
+    c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=9, depth=70, seed=seed)
 
     g1 = c.to_graph(backend=b1)
     g2 = c.to_graph(backend=b2)
 
-    mem.full_reduce(g1)
+    zxdb = ZXdb(URI, AUTH[0], AUTH[1], graph_id=g1.graph_id)
+    try:
+        zxdb.full_reduce()
+    finally:
+        zxdb.close()
+
     zx.full_reduce(g2)
 
     g1.normalize()
@@ -71,6 +81,6 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
 #print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
-#print("Memgraph:", comparison_1(42, "memgraph"))
+#print("Memgraph-ZXdb:", comparison_1(42, "memgraph"))
 
-print("Memgraph vs simple:", comparison_2(72, "memgraph", "simple"))
+print("Memgraph-ZXdb vs simple:", comparison_2(42, "memgraph", "simple"))

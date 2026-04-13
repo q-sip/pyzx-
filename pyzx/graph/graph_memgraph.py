@@ -1262,14 +1262,14 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Gets the outputs of the graph.
 
         Behaviour:
-        - Returns the in-memory outputs tuple (`self._outputs`) if it is non-empty.
-        - Otherwise attempts to read outputs from Neo4j labels (:Output) for this graph_id,
-          returns them ordered by vertex id.
-        - If neither exists, returns an empty tuple.
-        """
-        if getattr(self, "_outputs", None):
-            return self._outputs
+                - Reads outputs from Neo4j labels (:Output) for this graph_id,
+                    returns them ordered by vertex id.
 
+                Notes:
+                - We intentionally refresh from DB on every call because rewrite passes
+                    in `ZXdb` can mutate the graph out-of-band (outside this instance),
+                    which would make cached `_outputs` stale and break `normalize()`.
+        """
         query = """
         MATCH (n:Output {graph_id: $graph_id})
         RETURN n.id AS id
@@ -1374,14 +1374,14 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Gets the inputs of the graph.
 
         Behaviour:
-        - Returns the in-memory inputs tuple (`self._inputs`) if it is non-empty.
-        - Otherwise attempts to read inputs from Neo4j labels (:Input) for this graph_id,
-          returns them ordered by vertex id.
-        - If neither exists, returns an empty tuple.
-        """
-        if getattr(self, "_inputs", None):
-            return self._inputs
+                - Reads inputs from Neo4j labels (:Input) for this graph_id,
+                    returns them ordered by vertex id.
 
+                Notes:
+                - We intentionally refresh from DB on every call because rewrite passes
+                    in `ZXdb` can mutate the graph out-of-band (outside this instance),
+                    which would make cached `_inputs` stale and break `normalize()`.
+        """
         query = """
         MATCH (n:Input {graph_id: $graph_id})
         RETURN n.id AS id
