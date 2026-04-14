@@ -19,11 +19,11 @@ c_local = c.to_graph(backend='simple')
 g = c.to_graph(backend='memgraph')
 
 
-zxdb = ZXdb(URI, AUTH[0], AUTH[1], 'graph_test_zxdb')
+zxdb = ZXdb(URI, AUTH[0], AUTH[1])
 # path = zxdb.current_path
 print('starting full reduce...')
 print(f"Node count: {g.num_vertices()}")
-zxdb.full_reduce()
+zxdb.full_reduce(g)
 zx.full_reduce(c_local)
 print('full reduce done!')
 print(f"Node count zxdb: {g.num_vertices()}")

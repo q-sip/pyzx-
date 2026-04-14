@@ -109,6 +109,15 @@ class ZXdb:
 
             session.execute_write(clear_graph)
 
+    def _check_graph_like(self, graph):
+        self.graph_id = graph.graph_id
+        query = "MATCH (n {graph_id: $graph_id}) RETURN n LIMIT 1;"
+        with self.driver.session() as session:
+            test = session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id).data())
+        if not test:
+            raise TypeError(f'Graph {graph} is not a valid graph')
+        print(f'graph id insice reduce: {self.graph_id}')
+
 
     def empty_graphdb(self) -> None:
         """
@@ -946,7 +955,8 @@ class ZXdb:
             if not i2: break
         return i
 
-    def full_reduce(self):
+    def full_reduce(self, graph):
+        self._check_graph_like(graph)
         self.interior_clifford_simp()
         return
         self.interior_clifford_simp()
