@@ -3,6 +3,8 @@ nav:
    - Home: index.md
    - User: user.md
    - Developer: dev.md
+   - Age: ohtu-muutokset_age.md
+   - Neo4j: ohtu-muutokset_neo4j.md
    - About: about.md
 theme: readthedocs
 markdown_extensions:
