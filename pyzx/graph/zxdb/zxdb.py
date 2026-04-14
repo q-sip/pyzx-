@@ -500,7 +500,7 @@ class ZXdb:
             return total_patterns
 
 
-    def remove_identities(self) -> None:
+    def remove_identities(self) -> int:
         """
         Remove identity gates from the graph.
         
@@ -512,6 +512,7 @@ class ZXdb:
             #query_edges_to_gates = str(self.basic_rewrite_rule_queries["Turn Hadamard edges into Hadamard boxes"]["query"]["code"]["value"])
             #tx.run(query_edges_to_gates, graph_id=graph_id)
             query_remove_identities = str(self.basic_rewrite_rule_queries["Remove identities with refactor"]["query"]["code"]["value"])
+            removed_total = 0
             while True:
             # Remove identities
                 result = tx.run(query_remove_identities, graph_id=self.graph_id)
@@ -524,8 +525,11 @@ class ZXdb:
                 #query_gates_to_edges = str(self.basic_rewrite_rule_queries["Turn Hadamard gates into Hadamard edges"]["query"]["code"]["value"])
                 #tx.run(query_gates_to_edges, graph_id=graph_id)
                 print(f'id_simp returning: {record}')
-                if record['removed_identities'] == None:
-                    return
+                removed = record.get("removed_identities") if record is not None else 0
+                # Different query variants return either bool/null or numeric counts.
+                if not removed:
+                    return removed_total
+                removed_total += int(removed) if isinstance(removed, (int, float)) else 1
         
         #with self.driver.session() as analyze_session:
         #    analyze_session.run("ANALYZE GRAPH;")
@@ -933,7 +937,6 @@ class ZXdb:
             i1 = self.remove_identities()
             i2 = self.spider_fusion()
             i3 = self.pivot_rule()
-            return
             # print(f'pivot result: {i3}')
             # i4 = self.local_complementation_rule()
             # i1 = 0
@@ -957,10 +960,8 @@ class ZXdb:
 
     def full_reduce(self, graph):
         self._check_graph_like(graph)
+
         self.interior_clifford_simp()
-        return
-        self.interior_clifford_simp()
-        return
         self.pivot_gadget_rule()
         while True:
             self.clifford_simp()
@@ -971,3 +972,4 @@ class ZXdb:
             j = self.pivot_gadget_rule()
             if not (i or k or j or l):
                 self.remove_isolated_vertices()
+                break
