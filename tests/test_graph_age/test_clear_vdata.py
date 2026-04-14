@@ -1,5 +1,6 @@
 import unittest
 import sys
+from fractions import Fraction
 
 if __name__ == '__main__':
 	sys.path.append('../..')
@@ -47,6 +48,21 @@ class TestGraphAGEClearVData(unittest.TestCase):
 
 		self.g.clear_vdata(v)
 		self.assertEqual(self.g.type(v), VertexType.H_BOX)
+		self.assertNotIn('label', set(self.g.vdata_keys(v)))
+		self.assertNotIn('color', set(self.g.vdata_keys(v)))
+
+	def test_clear_vdata_preserves_core_node_fields(self):
+		"""clear_vdata should preserve phase/qubit/row values used by compose and tensor semantics."""
+		v = self.g.add_vertex(VertexType.Z, qubit=2, row=3, phase=Fraction(1, 2))
+		self.g.set_vdata(v, 'label', 'hello')
+		self.g.set_vdata(v, 'color', 'blue')
+
+		self.g.clear_vdata(v)
+
+		self.assertEqual(self.g.type(v), VertexType.Z)
+		self.assertEqual(self.g.phase(v), Fraction(1, 2))
+		self.assertEqual(self.g.qubit(v), 2)
+		self.assertEqual(self.g.row(v), 3)
 		self.assertNotIn('label', set(self.g.vdata_keys(v)))
 		self.assertNotIn('color', set(self.g.vdata_keys(v)))
 
