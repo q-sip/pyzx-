@@ -142,6 +142,10 @@ def run_spider_fusion_manual_test() -> bool:
 			pass
 		db.close()
 
+def run_remove_identities(G):
+	#WIP
+    pass
+
 
 if __name__ == "__main__":
 	print("--- Running to_gh manual test ---")
@@ -151,4 +155,5 @@ if __name__ == "__main__":
 	spider_ok = run_spider_fusion_manual_test()
 
 	raise SystemExit(0 if (to_gh_ok and spider_ok) else 1)
+
 
