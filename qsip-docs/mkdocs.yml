@@ -5,3 +5,5 @@ nav:
    - Developer: dev.md
    - About: about.md
 theme: readthedocs
+markdown_extensions:
+  - md_in_html

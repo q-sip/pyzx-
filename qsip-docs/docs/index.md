@@ -1,7 +1,5 @@
 # Welcome to QSIP
-
-..
-
+...
 
 ## Project layout
 
