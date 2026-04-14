@@ -82,23 +82,120 @@ docker ps
 </details>
 
 
-
-
-<details>
+<details markdown="1">
   <summary>macOS</summary>
 
-  Hidden content goes here.
+  **A) Install Docker**
 
-  You can include **Markdown** here too.
+  **Option 1: Manual install**
+  Download Docker Desktop for Mac from [Docker](https://docs.docker.com/desktop/setup/install/mac-install/) and follow the instructions there.
+
+  **Option 2: Homebrew (optional)**
+  
+```
+brew install --cask docker-desktop
+open -a Docker
+```
+
+---
+
+**B) Verify Docker and Docker Compose**
+
+Docker Compose is included with Docker Desktop, so no separate Compose install is needed.
+
+```bash
+docker --version
+docker compose version
+```
+
+---
+
+**C) Check whether Docker requires sudo**
+
+On macOS, Docker normally works without `sudo`.
+
+```bash
+docker ps
+```
+
+If that works, you're done.
+
+If it fails:
+
+1. Make sure Docker Desktop is running:
+
+```bash
+open -a Docker
+```
+
+2. Wait for Docker Desktop to finish starting.
+
+3. Then test again:
+
+```bash
+docker ps
+```
+
+If this is your first launch, complete the Docker Desktop setup prompts and rerun:
+
+```bash
+docker ps
+```
+
 </details>
 
-<details>
+
+<details markdown="1">
   <summary>Windows</summary>
 
-  Hidden content goes here.
+  **A) Install Docker**
 
-  You can include **Markdown** here too.
+  Download Docker Desktop for Windows from [Docker](https://docs.docker.com/desktop/setup/install/windows-install/).
+
+  ------
+
+  **B) Verify Docker and Docker Compose**
+
+  Docker Compose is included with Docker Desktop, so no separate Compose install is needed.
+
+```powershell
+docker --version
+docker compose version
+```
+
+---
+
+**C) Check whether Docker requires Administrator privileges**
+
+On Windows, Docker normally works without running your terminal as Administrator after installation.
+
+```powershell
+docker ps
+```
+
+If that works, you're done.
+
+If it fails:
+
+1. Make sure **Docker Desktop** is running.
+2. Wait for Docker Desktop to finish starting.
+3. Then test again:
+
+```powershell
+docker ps
+```
+
+If you get a permissions or access error, ask an Administrator to add your user to the `docker-users` group, then sign out and sign back in.
+
+Example command for an Administrator shell:
+
+```powershell
+net localgroup docker-users "%USERNAME%" /add
+```
+
 </details>
+
+
 
 -------
 
