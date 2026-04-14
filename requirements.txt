@@ -34,3 +34,5 @@ sympy
 scienceplots
 qiskit
 quimb
+
+mkdocs

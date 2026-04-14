@@ -1,0 +1,7 @@
+site_name: Q-sip
+nav:
+   - Home: index.md
+   - User: user.md
+   - Developer: dev.md
+   - About: about.md
+theme: readthedocs
