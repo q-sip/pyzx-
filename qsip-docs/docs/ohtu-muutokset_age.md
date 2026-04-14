@@ -16,13 +16,26 @@ gid = f"example_{uuid.uuid4().hex}"
 g = GraphAGE()
 ```
 
-## GraphAGE.add_vertex(ty: VertexType = VertexType.BOUNDARY, qubit: FloatInt = -1, row: FloatInt = -1, phase: Optional[FractionLike] = None, ground: bool = False, index: Optional[VT] = None) -> VT
+## Methods
+
+### add_vertex
+
+**Full method signature:**
+
+```
+g.add_vertex(ty: VertexType = VertexType.BOUNDARY, 
+qubit: FloatInt = -1, 
+row: FloatInt = -1, 
+phase: Optional[FractionLike] = None, 
+ground: bool = False, 
+index: Optional[VT] = None) -> VT
+```
 
 Adds a single vertex to the graph and returns its vertex id.
 
 This method supports both enum and integer vertex types. For example, `add_vertex(0, 1, 2)` is valid and means boundary vertex on qubit `1`, row `2`.
 
-### Behaviour
+**Behaviour**
 
 - Accepts `ty` as either `VertexType` or its integer value
 - If `phase` is omitted, defaults to `1` for `H_BOX` and `0` otherwise
@@ -31,7 +44,7 @@ This method supports both enum and integer vertex types. For example, `add_verte
 - Otherwise creates at current internal index and increments `_vindex`
 - Applies `ground` and phase-tracking metadata when enabled
 
-### Parameters
+**Parameters**
 
 - `ty`: `VertexType`  
   Vertex type (enum or compatible integer value).
@@ -46,17 +59,17 @@ This method supports both enum and integer vertex types. For example, `add_verte
 - `index`: `Optional[VT]`  
   Explicit vertex id to use.
 
-### Returns
+**Returns**
 
 - `VT`  
   The created vertex id.
 
-### Raises
+**Raises**
 
 - `ValueError`  
   If `ty` is not a valid vertex type.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -73,7 +86,7 @@ print(v1, g.type(v1), g.qubit(v1), g.row(v1))
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Integer type mapping uses `VertexType` enum values (`0=BOUNDARY`, `1=Z`, `2=X`, ...).
 - Invalid integer types raise `ValueError`.
@@ -83,13 +96,19 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.add_vertex_indexed(v: VT) -> None
+### add_vertex_indexed
+
+**Full method signature:**
+
+```
+g.add_vertex_indexed(v: VT) -> None
+```
 
 Adds a vertex with a guaranteed explicit vertex id.
 
 This method is intended for workflows where vertex ids must be preserved (for example cloning/import/undo flows).
 
-### Behaviour
+**Behaviour**
 
 - Checks whether a node with id `v` already exists
 - Raises `ValueError` if the id is already in use
@@ -100,21 +119,21 @@ This method is intended for workflows where vertex ids must be preserved (for ex
   - `row = -1`
 - Updates internal `_vindex` to `v + 1` when needed
 
-### Parameters
+**Parameters**
 
 - `v`: `VT`  
   Exact vertex id to reserve and create.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Raises
+**Raises**
 
 - `ValueError`  
   If a vertex with id `v` already exists.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -132,7 +151,7 @@ except ValueError as e:
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Created vertex uses backend defaults; customize with `set_type`, `set_phase`, `set_qubit`, `set_row` after creation.
 - This method only creates the vertex and reserves the id; it does not set inputs/outputs or edges.
@@ -142,7 +161,13 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.add_vertices(amount: int) -> List[VT]
+### add_vertices
+
+**Full method signature**: 
+
+```
+g.add_vertices(amount: int) -> List[VT]
+```
 
 Adds `amount` number new vertices to the graph in Neo4j and returns a list of containing the created vertex IDs.
 
@@ -155,18 +180,19 @@ Vertices are created as `(:Node {graph_id, id, t, phase, qubit, row})` with the 
 
 Vertex ids are allocated consecutively starting from the current internal vertex index (`self._vindex`). After insertio>
 
-### Parameters
+**Parameters**
 
 - amount: `int`
   Number of vertices to create. Must be `>= 0`.
   - If `amount == 0`, the method returns an empty list and performs no database writes.
   - If `amount < 0`, the method raises `ValueError`.
-### Returns
+
+**Returns**
 
 - `List[VT]`
   A list of the new vertex ids, e.g. `[0, 1, 2]`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_age import GraphAGE
@@ -186,13 +212,19 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.add_edge(edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE) -> ET
+### add_edge
+
+**Full method signature:** 
+
+```
+g.add_edge(edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE) -> ET
+```
 
 Adds a single edge and returns its canonical edge tuple.
 
 This method normalizes endpoint order and applies ZX rewrite logic when a parallel edge already exists.
 
-### Behaviour
+**Behaviour**
 
 - Accepts an edge endpoint pair `(s, t)` and edge type
 - Handles self-loops specially:
@@ -204,24 +236,24 @@ This method normalizes endpoint order and applies ZX rewrite logic when a parall
 - If a parallel edge exists, applies Hopf/spider-law reduction rules
 - Returns canonical edge id via `self.edge(src, dst)`
 
-### Parameters
+**Parameters**
 
 - `edge_pair`: `Tuple[VT, VT]`  
   Endpoints of the edge to add.
 - `edgetype`: `EdgeType`  
   Edge type to add (default: `EdgeType.SIMPLE`).
 
-### Returns
+**Returns**
 
 - `ET`  
   Canonical edge tuple for the resulting edge.
 
-### Raises
+**Raises**
 
 - `ValueError`  
   For invalid self-loop types or unreducible parallel-edge cases.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -238,7 +270,7 @@ print(e)  # canonical order, e.g. (0, 1)
 g.close()
 ```
 
-### Notes
+**Notes
 
 - Endpoint order is canonicalized internally.
 - Parallel-edge handling may modify phases/scalar or remove an edge depending on types.
@@ -248,28 +280,33 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.get_vertices() -> List[VT]
+### get_vertices
+
+**Full method signature:** 
+```
+g.get_vertices() -> List[VT]
+```
 
 Returns all vertex ids currently in the graph.
 
 This is a backend-specific convenience getter that queries AGE directly and returns integer ids.
 
-### Behaviour
+**Behaviour**
 
 - Executes a Cypher query returning `n.id` for all nodes
 - Parses AGType values to Python `int`
 - Returns a list of vertex ids
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `List[VT]`  
   List of vertex ids in the graph.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -282,7 +319,7 @@ print(g.get_vertices())  # [0, 1, 2]
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - In practice this overlaps with `vertices()` in this backend.
 - Output values are always parsed as integers.
@@ -292,28 +329,35 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.get_edges() -> List[ET]
+### get_edges
+
+**Full method signature:**
+
+```
+g.get_edges() -> List[ET]
+```
+
 
 Returns all edges currently in the graph as endpoint tuples.
 
 This is a backend-specific convenience getter that queries AGE directly for relationship endpoints.
 
-### Behaviour
+**Behaviour**
 
 - Executes a Cypher query matching `(a:Node)-[e]->(b:Node)`
 - Parses endpoint ids from AGType to Python `int`
 - Returns a list of `(source, target)` tuples
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `List[ET]`  
   List of edge endpoint tuples.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -329,7 +373,7 @@ print(g.get_edges())  # e.g. [(0, 1), (1, 2)]
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Output is returned as raw endpoint tuples parsed from the query result.
 - For higher-level filtering by endpoints, use `edges(s, t)`.
@@ -339,13 +383,18 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.remove_vertices(vertices) -> None
+### remove_vertices
+
+**Full method signature:**
+```
+g.remove_vertices(vertices) -> None
+```
 
 Removes multiple vertices from the graph in a single database operation.
 
 When vertices are deleted, all edges connected to them are automatically removed as well (using `DETACH DELETE` in the Cypher query).
 
-### Behaviour
+**Behaviour**
 
 - Takes an iterable of vertex IDs
 - Early returns if the list is empty (optimization)
@@ -353,16 +402,16 @@ When vertices are deleted, all edges connected to them are automatically removed
 - Deletes all matching vertices and their incident edges in a single Cypher query
 - Does not return anything; modifies the graph in-place
 
-### Parameters
+**Parameters**
 
 - `vertices`: Iterable of `VT`  
   The vertex IDs to remove. Can be a list, tuple, set, or any iterable.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -387,7 +436,7 @@ print(f"After: {g.num_vertices()} vertices")  # 3
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - All edges connected to the removed vertices are automatically deleted.
 - This is a bulk operation; removing many vertices at once is more efficient than removing them one by one.
@@ -397,13 +446,19 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.remove_edges(edges) -> None
+### remove_edges
+
+**Full method signature:**
+
+```
+g.remove_edges(edges) -> None
+```
 
 Removes multiple edges from the graph in a single database operation.
 
 Unlike `remove_vertices()`, this method only deletes `Wire` relationships. The endpoint vertices stay in the graph.
 
-### Behaviour
+**Behaviour**
 
 - Takes an iterable of edge tuples like `(source, target)`
 - Early returns if the iterable is empty
@@ -412,16 +467,16 @@ Unlike `remove_vertices()`, this method only deletes `Wire` relationships. The e
 - Matches `:Wire` relationships between the given vertex IDs and deletes them
 - Does not return anything; modifies the graph in-place
 
-### Parameters
+**Parameters**
 
 - `edges`: Iterable of `ET`  
   The edges to remove. Each edge is expected to be a tuple `(s, t)`.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -447,7 +502,7 @@ print(f"Vertices still exist: {g.num_vertices()}")  # 4
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - The query uses an undirected edge match, so the order of the edge tuple does not matter for deletion.
 - This is a bulk operation; deleting many edges at once is more efficient than deleting them one by one.
@@ -458,27 +513,32 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.num_vertices() -> int
+### num_vertices
+
+**Full method signature**:
+```
+g.num_vertices() -> int
+```
 
 Returns the total number of vertices currently stored in the graph.
 
-### Behaviour
+**Behaviour**
 
 - Runs a Cypher query that matches all `Node` vertices
 - Uses `count(n)` to compute the total number of vertices
 - Converts the AGE `agtype` result into a Python `int`
 - Returns `0` if no row is returned
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `int`  
   The total number of vertices in the graph.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -496,7 +556,7 @@ print(g.num_vertices())  # 3
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This method counts only vertices, not edges.
 - It reflects the current database state of the graph.
@@ -506,29 +566,34 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.vindex() -> int
+### vindex
+
+**Full method signature:**
+```
+g.vindex() -> int
+```
 
 Returns the next fresh vertex index.
 
 This method does not query the database. It simply returns the current value of the internal vertex allocator, `self._vindex`.
 
-### Behaviour
+**Behaviour**
 
 - Returns the next vertex id that would be used for automatically created vertices
 - Reads the value directly from the Python object
 - Does not inspect the database state
 - Does not modify the graph
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `int`  
   The next fresh vertex index.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -546,7 +611,7 @@ print(g.vindex())  # 11
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This is the internal allocator value used by methods like `add_vertex()` and `add_vertices()`.
 - It may differ from the actual maximum vertex id in the database if vertices were removed.
@@ -556,13 +621,18 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.num_edges(s: Optional[VT] = None, t: Optional[VT] = None, et: Optional[EdgeType] = None) -> int
+### num_edges
+
+**Full method signature:**
+```
+g.num_edges(s: Optional[VT] = None, t: Optional[VT] = None, et: Optional[EdgeType] = None) -> int
+```
 
 Returns the number of edges in the graph.
 
 This method can either count all edges in the graph, or count only the edges between two specific vertices. If an edge type is provided, it can further restrict the count to edges of that type.
 
-### Behaviour
+**Behaviour**
 
 - If called with no arguments, counts all `Wire` relationships in the graph
 - If called with both `s` and `t`, counts only edges between those two vertices
@@ -571,7 +641,7 @@ This method can either count all edges in the graph, or count only the edges bet
 - Converts the AGE `agtype` count result into a Python `int`
 - Returns `0` if no row is returned
 
-### Parameters
+**Parameters**
 
 - `s`: `Optional[VT]`  
   Source vertex ID. Must be provided together with `t` to count edges between two vertices.
@@ -580,12 +650,12 @@ This method can either count all edges in the graph, or count only the edges bet
 - `et`: `Optional[EdgeType]`  
   Optional edge type filter. Only used when both `s` and `t` are given.
 
-### Returns
+**Returns**
 
 - `int`  
   The number of matching edges.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -605,7 +675,7 @@ print(g.num_edges(vs[1], vs[2], EdgeType.HADAMARD))  # 1
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - When counting between two vertices, the method assumes the internal edge storage uses canonical direction, which matches how `add_edge()` inserts edges.
 - If only one of `s` or `t` is given, the method falls back to counting all edges.
@@ -615,13 +685,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.depth() -> int
+### depth
 
+**Full method signature**:
+```
+g.depth() -> int
+```
 Returns the maximum non-negative row index in the graph.
 
 In practice, this gives the largest layer position (`row`) currently assigned to any vertex. If the graph has no valid non-negative row values, it returns `-1`.
 
-### Behaviour
+**Behaviour**
 
 - Runs a Cypher query that matches all vertices with `row >= 0`
 - Computes `max(n.row)` in AGE
@@ -629,16 +703,16 @@ In practice, this gives the largest layer position (`row`) currently assigned to
 - Stores the result in `self._maxr`
 - Returns `-1` when no valid row value is available
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `int`  
   The maximum non-negative row index, or `-1` if unavailable.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -648,7 +722,8 @@ g = GraphAGE(graph_id="example_depth")
 print(g.depth())  # -1 (no rows set yet)
 
 v0 = g.add_vertex(row=0)
-v1 = g.add_vertex(row=5)
+v1 = g.add_
+vertex(row=5)
 v2 = g.add_vertex(row=3)
 
 print(g.depth())  # 5
@@ -659,7 +734,7 @@ print(g.depth())  # 3
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Only non-negative rows are considered (`row >= 0`).
 - Vertices with `row` missing, null, or negative are ignored by this query.
@@ -669,23 +744,29 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.remove_isolated_vertices() -> None
+### remove_isolated_vertices
+
+**Full method signature:**
+```
+g.remove_isolated_vertices() -> None
+```
+
 
 Deletes isolated vertices and isolated vertex pairs, while updating the ZX scalar correctly.
 
 This is a semantic simplification step: it removes components that are disconnected (or effectively disconnected) from the rest of the diagram and folds their contribution into `self.scalar`.
 
-### Behaviour
+**Behaviour**
 
 The method iterates over vertices and applies two main rules:
 
-#### 1. Isolated single vertices (`degree == 0`)
+1. Isolated single vertices (`degree == 0`)
 
 - If the vertex is `BOUNDARY`, it raises `TypeError` (diagram is ill-typed).
 - If the vertex is `H_BOX`, it is removed and its phase is added via `self.scalar.add_phase(...)`.
 - Otherwise (ZX-like node), it is removed and added via `self.scalar.add_node(...)`.
 
-#### 2. Isolated pairs (`degree == 1` on both ends)
+2. Isolated pairs (`degree == 1` on both ends)
 
 For a vertex `v` with degree 1, let `w` be its only neighbor:
 
@@ -702,20 +783,20 @@ If valid, both vertices are removed, and scalar update depends on:
 
 After collecting all removable vertices, it performs one bulk `remove_vertices(rem)` call.
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Raises
+**Raises**
 
 - `TypeError`  
   If an isolated boundary vertex is found.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -741,7 +822,7 @@ print(before, after)  # after is smaller; scalar updated internally
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This method updates `self.scalar` as part of simplification semantics.
 - It is not a plain structural delete; scalar math is part of the operation.
@@ -752,29 +833,34 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.vertices() -> Iterable[VT]
+### vertices
+
+**Full method signature:**
+```
+g.vertices() -> Iterable[VT]
+```
 
 Returns all vertex IDs currently in the graph.
 
 Internally, this method queries AGE for all node ids and converts each returned AGType value into a Python integer.
 
-### Behaviour
+**Behaviour**
 
 - Runs a Cypher query matching all `Node` vertices with a non-null `id`
 - Fetches all rows through the backend read helper (`_fetchall`)
 - Converts each returned AGType value to `int`
 - Returns a Python list of vertex ids (typed as `Iterable[VT]`)
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Iterable[VT]`  
   The vertex IDs currently in the graph.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -793,7 +879,7 @@ print(g.vertices())     # e.g. [0, 2, 3]
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - In this backend implementation, the method currently returns a concrete Python list.
 - Ordering is determined by query results and should not be relied on as a strict sorted guarantee unless explicitly sorted by caller.
@@ -803,11 +889,16 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edges(s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]
+### edges
+
+**Full method signature:**
+```
+g.edges(s: Optional[VT] = None, t: Optional[VT] = None) -> Iterable[ET]
+```
 
 Returns edges from the graph, either globally or only between a specific vertex pair.
 
-### Behaviour
+**Behaviour**
 
 - If both `s` and `t` are provided:
   - Returns edges that connect exactly those two vertices
@@ -818,19 +909,19 @@ Returns edges from the graph, either globally or only between a specific vertex 
 - Converts AGType endpoint values to Python `int`
 - Returns edge tuples as `(source, target)` pairs
 
-### Parameters
+**Parameters**
 
 - `s`: `Optional[VT]`  
   First vertex for pair-specific edge query.
 - `t`: `Optional[VT]`  
   Second vertex for pair-specific edge query.
 
-### Returns
+**Returns**
 
 - `Iterable[ET]`  
   Iterable of edge tuples.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -851,7 +942,7 @@ print(g.edges(v0, v2))  # usually []
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - In this backend, the result is currently a concrete Python list.
 - For all-edge queries, duplicate reverse edge tuples are filtered with `n1.id <= n2.id`.
@@ -861,13 +952,19 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edge(s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET
+### edge
+
+**Full method signature**:
+```
+GraphAGE.edge(s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET
+```
+
 
 Returns the canonical edge tuple for two vertices.
 
 This method does not query the database and does not create or validate an edge. It only returns the normalized edge identifier used by the backend.
 
-### Behaviour
+**Behaviour**
 
 - Takes two vertex ids `s` and `t`
 - Ignores the `et` argument in this backend implementation
@@ -875,7 +972,7 @@ This method does not query the database and does not create or validate an edge.
   - `(s, t)` if `s < t`
   - `(t, s)` otherwise
 
-### Parameters
+**Parameters**
 
 - `s`: `VT`  
   First vertex id.
@@ -884,12 +981,12 @@ This method does not query the database and does not create or validate an edge.
 - `et`: `EdgeType`  
   Edge type parameter from the shared interface. Present for compatibility; not used by this method.
 
-### Returns
+**Returns**
 
 - `ET`  
   Canonical edge tuple `(min(s, t), max(s, t))`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -904,7 +1001,7 @@ print(g.edge(7, 7, EdgeType.HADAMARD))    # (7, 7)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This is a pure helper for canonicalizing edge ids.
 - It does not check whether vertices exist.
@@ -914,30 +1011,36 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edge_st(edge: ET) -> Tuple[VT, VT]
+### edge_st
+
+**Full method signature:**
+```
+g.edge_st(edge: ET) -> Tuple[VT, VT]
+```
+
 
 Returns the source/target tuple representation of an edge.
 
 In this backend, edge identifiers are already stored as tuples, so `edge_st()` is a direct identity mapping.
 
-### Behaviour
+**Behaviour**
 
 - Takes an edge identifier `edge`
 - Returns the same tuple unchanged
 - Performs no database access
 - Performs no validation of edge existence
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge identifier tuple.
 
-### Returns
+**Returns**
 
 - `Tuple[VT, VT]`  
   The edge endpoints as `(source, target)` in the backend's stored order.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -953,7 +1056,7 @@ print(st)  # (3, 9)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - In GraphAGE, `edge_st(edge)` currently returns `edge` as-is.
 - This method exists mainly for backend interface consistency across implementations.
@@ -963,13 +1066,19 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edge_s(edge: ET) -> VT
+### edge_s
+
+**Full method signature:**
+
+```
+GraphAGE.edge_s(edge: ET) -> VT
+```
 
 Returns the source endpoint (first element) of an edge tuple.
 
 In GraphAGE, this method delegates to `edge_st(edge)` and returns index `0`.
 
-### Behaviour
+**Behaviour**
 
 - Accepts an edge identifier tuple
 - Calls `edge_st(edge)`
@@ -977,17 +1086,17 @@ In GraphAGE, this method delegates to `edge_st(edge)` and returns index `0`.
 - Performs no database access
 - Does not validate that the edge exists in the graph
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge identifier tuple.
 
-### Returns
+**Returns**
 
 - `VT`  
   The source endpoint (first item in the backend edge tuple).
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1000,7 +1109,7 @@ print(g.edge_s(e)) # 3
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - In this backend, edges are canonicalized as ordered tuples, so `edge_s` returns the smaller endpoint id for canonical edges.
 - This is a lightweight tuple helper for interface consistency.
@@ -1010,13 +1119,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edge_t(edge: ET) -> VT
+### edge_t
+**Full method signature:**
+```
+g.edge_t(edge: ET) -> VT
+```
 
 Returns the target endpoint (second element) of an edge tuple.
 
 In GraphAGE, this method delegates to `edge_st(edge)` and returns index `1`.
 
-### Behaviour
+**Behaviour**
 
 - Accepts an edge identifier tuple
 - Calls `edge_st(edge)`
@@ -1024,17 +1137,17 @@ In GraphAGE, this method delegates to `edge_st(edge)` and returns index `1`.
 - Performs no database access
 - Does not validate that the edge exists in the graph
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge identifier tuple.
 
-### Returns
+**Returns**
 
 - `VT`  
   The target endpoint (second item in the backend edge tuple).
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1047,7 +1160,7 @@ print(g.edge_t(e)) # 8
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - In this backend, edges are canonicalized as ordered tuples, so `edge_t` returns the larger endpoint id for canonical edges.
 - This is a lightweight tuple helper for interface consistency.
@@ -1057,13 +1170,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.connected(v1: VT, v2: VT) -> bool
+### connected
+**Full method signature:**
+```
+g.connected(v1: VT, v2: VT) -> bool
+```
 
 Returns whether two vertices share at least one edge.
 
 The method queries AGE for `Wire` relationships between `v1` and `v2` and returns `True` if the relationship count is greater than zero.
 
-### Behaviour
+**Behaviour**
 
 - Runs a Cypher query matching `:Wire` edges between `v1` and `v2`
 - Uses an undirected pattern (`-[r:Wire]-`), so edge orientation does not matter
@@ -1071,19 +1188,19 @@ The method queries AGE for `Wire` relationships between `v1` and `v2` and return
 - Returns `False` if no row is returned
 - Otherwise returns `True` when count is greater than `0`
 
-### Parameters
+**Parameters**
 
 - `v1`: `VT`  
   First vertex id.
 - `v2`: `VT`  
   Second vertex id.
 
-### Returns
+**Returns**
 
 - `bool`  
   `True` if at least one edge exists between `v1` and `v2`, else `False`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1099,7 +1216,7 @@ print(g.connected(v0, v2))  # False
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This method checks existence, not edge type.
 - It is unaffected by stored edge direction due to undirected matching.
@@ -1109,13 +1226,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.neighbors(vertex: VT) -> Sequence[VT]
+### neighbors
+**Full method signature:**
+```
+g.neighbors(vertex: VT) -> Sequence[VT]
+```
 
 Returns all neighboring vertices connected to the given vertex.
 
 The method queries all `Wire` edges touching `vertex`, collects neighbor ids, removes duplicates, and returns them as a list.
 
-### Behaviour
+**Behaviour**
 
 - Runs a Cypher query with an undirected edge pattern: `(n)-[r:Wire]-(m)`
 - Filters by `n.id = vertex`
@@ -1124,17 +1245,17 @@ The method queries all `Wire` edges touching `vertex`, collects neighbor ids, re
 - Uses a set internally to remove duplicate neighbor ids
 - Returns the neighbors as a Python list
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose neighbors should be returned.
 
-### Returns
+**Returns**
 
 - `Sequence[VT]`  
   Neighbor vertex ids.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1152,7 +1273,7 @@ print(n)  # e.g. [1, 2, 3] (order may vary)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Result order is not guaranteed because deduplication is done with a set.
 - Returns an empty list when no neighbors exist.
@@ -1162,13 +1283,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.vertex_degree(vertex: VT) -> int
+### vertex_degree
+**Full method signature:**
+```
+g.vertex_degree(vertex: VT) -> int
+```
 
 Returns the degree of a vertex (the number of incident `Wire` edges).
 
 The method runs a count query in AGE over all `Wire` relationships touching the given vertex id.
 
-### Behaviour
+**Behaviour**
 
 - Matches edges using an undirected pattern: `(n)-[r:Wire]-()`
 - Filters by `n.id = vertex`
@@ -1176,17 +1301,17 @@ The method runs a count query in AGE over all `Wire` relationships touching the 
 - Converts the AGType count value into a Python integer
 - Returns `0` when no row is returned
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose degree should be computed.
 
-### Returns
+**Returns**
 
 - `int`  
   Number of incident edges.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1204,7 +1329,7 @@ print(g.vertex_degree(v2))  # 1
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Degree is purely edge-count based and does not depend on edge type.
 - Uses undirected matching, so storage direction does not matter.
@@ -1214,13 +1339,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.incident_edges(vertex: VT) -> Sequence[ET]
+### incident_edges
+**Full method signature:**
+```
+GraphAge.incident_edges(vertex: VT) -> Sequence[ET]
+```
 
 Returns all edges incident to the given vertex.
 
 The method queries all `Wire` relationships touching `vertex` and returns endpoint tuples for each matched edge.
 
-### Behaviour
+**Behaviour**
 
 - Matches edges with an undirected pattern: `(n)-[r:Wire]-(m)`
 - Filters by `n.id = vertex`
@@ -1228,17 +1357,17 @@ The method queries all `Wire` relationships touching `vertex` and returns endpoi
 - Converts AGType values to Python integers
 - Returns a list of edge tuples
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose incident edges should be listed.
 
-### Returns
+**Returns**
 
 - `Sequence[ET]`  
   Edge tuples incident to `vertex`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1255,7 +1384,7 @@ print(ie)  # e.g. [(0, 1), (0, 2)] or equivalent orientation
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Because matching is undirected, tuple orientation may vary by query result.
 - Unlike `edges()`, this method does not explicitly canonicalize tuple order.
@@ -1265,13 +1394,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edge_type(e: ET) -> EdgeType
+### edge_type
+**Full method signature:**
+```
+g.edge_type(e: ET) -> EdgeType
+```
 
 Returns the edge type of a given edge.
 
 This method looks up the `t` property on the matched `Wire` relationship and converts it to a PyZX `EdgeType`.
 
-### Behaviour
+**Behaviour**
 
 - Matches a `Wire` relationship between the two endpoints in `e`
 - Reads `r.t` from AGE
@@ -1279,22 +1412,22 @@ This method looks up the `t` property on the matched `Wire` relationship and con
 - If `r.t` is missing or null, defaults to `EdgeType.SIMPLE`
 - Otherwise converts the numeric value to `EdgeType`
 
-### Parameters
+**Parameters**
 
 - `e`: `ET`  
   Edge tuple whose type should be returned.
 
-### Returns
+**Returns**
 
 - `EdgeType`  
   The edge type (typically `SIMPLE` or `HADAMARD`).
 
-### Raises
+**Raises**
 
 - `KeyError`  
   If the specified edge is not found.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1315,7 +1448,7 @@ except KeyError as e:
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Query matching is undirected, so endpoint order in `e` does not matter.
 - Missing edge-type property is treated as `SIMPLE`.
@@ -1325,31 +1458,35 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_edge_type(e: ET, t: EdgeType) -> None
+### set_edge_type
+**Full method signature:**
+```
+g.set_edge_type(e: ET, t: EdgeType) -> None
+```
 
 Sets the type of a given edge.
 
 This method updates the `t` property of the matched `Wire` relationship in AGE.
 
-### Behaviour
+**Behaviour**
 
 - Matches a `Wire` relationship between the two endpoints in `e`
 - Sets `r.t` to `t.value`
 - Executes the update directly in AGE
 - Does not return a value
 
-### Parameters
+**Parameters**
 
 - `e`: `ET`  
   Edge tuple to update.
 - `t`: `EdgeType`  
   New edge type to store (for example `EdgeType.SIMPLE` or `EdgeType.HADAMARD`).
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1368,7 +1505,7 @@ print(g.edge_type((v0, v1)))  # EdgeType.HADAMARD
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Endpoint order in `e` is not important because the relationship is matched undirected.
 - If no matching edge exists, AGE updates zero rows; this method does not raise by itself.
@@ -1378,13 +1515,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.type(vertex: VT) -> VertexType
+### type
+**Full method signature:**
+```
+g.type(vertex: VT) -> VertexType
+```
 
 Returns the type of a given vertex.
 
 This method first tries the numeric AGE property `n.t`, and if missing, falls back to the legacy/string property `n.ty`.
 
-### Behaviour
+**Behaviour**
 
 - Matches the node by `id`
 - Reads `n.t` and `n.ty`
@@ -1392,22 +1533,22 @@ This method first tries the numeric AGE property `n.t`, and if missing, falls ba
 - Otherwise, if `n.ty` is present, converts it by enum name lookup
 - Raises `KeyError` if the node does not exist or neither type field is available
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose type should be returned.
 
-### Returns
+**Returns**
 
 - `VertexType`  
   The vertex type value for the given node.
 
-### Raises
+**Raises**
 
 - `KeyError`  
   If the vertex is not found, or if both type fields are missing/null.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1428,7 +1569,7 @@ except KeyError as e:
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Numeric `n.t` takes precedence over string `n.ty` when both exist.
 - This dual-read behavior preserves compatibility with older stored graph representations.
@@ -1438,13 +1579,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.types() -> Mapping[VT, VertexType]
+### types
+**Full method signature:**
+```
+g.types() -> Mapping[VT, VertexType]
+```
 
 Returns a mapping of all vertices to their types.
 
 This method reads all nodes and resolves each type using `n.t` first, then `n.ty` as fallback.
 
-### Behaviour
+**Behaviour**
 
 - Matches all `Node` vertices in the graph
 - Reads `n.id`, `n.t`, and `n.ty` for each row
@@ -1452,21 +1597,21 @@ This method reads all nodes and resolves each type using `n.t` first, then `n.ty
 - Uses numeric `n.t` when present; otherwise uses enum-name lookup via `n.ty`
 - Raises `KeyError` if any vertex has neither usable `t` nor `ty`
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Mapping[VT, VertexType]`  
   Dictionary mapping each vertex id to a `VertexType` value.
 
-### Raises
+**Raises**
 
 - `KeyError`  
   If at least one returned vertex has no valid type information.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1484,7 +1629,7 @@ print(tmap[v0], tmap[v1])  # VertexType.Z VertexType.X
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Numeric `n.t` has priority over string `n.ty`, matching `type(vertex)` semantics.
 - The method returns all currently stored vertices in one query.
@@ -1494,31 +1639,35 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_type(vertex: VT, t: VertexType) -> None
+### set_type
+**Full method signature:**
+```
+g.set_type(vertex: VT, t: VertexType) -> None
+```
 
 Sets the type of a given vertex.
 
 This method stores the numeric type in `n.t` and clears legacy `n.ty` to keep the representation canonical.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Sets `n.t` to `t.value`
 - Removes `n.ty` from the node
 - Executes update in AGE and returns no value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose type should be updated.
 - `t`: `VertexType`  
   New vertex type.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1534,7 +1683,7 @@ print(g.type(v0))  # VertexType.X
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This normalizes type storage to numeric `n.t`.
 - Removing `n.ty` avoids ambiguity between old and new representations.
@@ -1544,13 +1693,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.phase(vertex: VT) -> FractionLike
+### phase
+**Full method signature:**
+```
+g.phase(vertex: VT) -> FractionLike
+```
 
 Returns the phase value of a given vertex.
 
 This method reads `n.phase` and converts it to a Python `Fraction`, with safe fallback to `Fraction(0)` when the value is missing or invalid.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Reads `n.phase`
@@ -1559,17 +1712,17 @@ This method reads `n.phase` and converts it to a Python `Fraction`, with safe fa
 - Attempts `Fraction(phase_raw).limit_denominator(10**9)` for valid values
 - Returns `Fraction(0)` if conversion raises `ValueError`
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose phase should be returned.
 
-### Returns
+**Returns**
 
 - `FractionLike`  
   Parsed phase value, normalized as a `Fraction` when possible.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1586,7 +1739,7 @@ print(g.phase(99999))  # Fraction(0, 1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Missing vertex does not raise; it returns zero phase.
 - Invalid stored phase strings are treated as zero.
@@ -1596,13 +1749,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.phases() -> Mapping[VT, FractionLike]
+### phases
+**Full method signature:**
+```
+g.phases() -> Mapping[VT, FractionLike]
+```
 
 Returns a mapping of all vertices to their phase values.
 
 In PyZX, phases are represented in units of $\pi$ (so `1/2` means $\pi/2$), and each stored value is parsed into a `Fraction` when possible.
 
-### Behaviour
+**Behaviour**
 
 - Matches all `Node` vertices
 - Reads `n.id` and `n.phase`
@@ -1611,16 +1768,16 @@ In PyZX, phases are represented in units of $\pi$ (so `1/2` means $\pi/2$), and 
 - Stores `Fraction(0)` for empty/null phase values
 - Stores `Fraction(0)` for invalid phase strings (`ValueError`)
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Mapping[VT, FractionLike]`  
   Dictionary mapping each vertex id to its phase value.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1638,7 +1795,7 @@ print(pmap[v0], pmap[v1])        # Fraction(1, 2) Fraction(1, 1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Returned values are per-vertex and tolerant to malformed backend values.
 - Missing/invalid phase values are normalized to zero phase.
@@ -1648,13 +1805,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_phase(vertex: VT, phase: FractionLike) -> None
+### set_phase
+**Full method signature:**
+```
+g.set_phase(vertex: VT, phase: FractionLike) -> None
+```
 
 Sets the phase value of a given vertex.
 
 In PyZX, phases are stored in units of $\pi$, so a value like `1/2` means an angle of $\pi/2$. Before writing, this method tries to reduce the phase modulo `2`, because phases differing by $2$ represent the same angle modulo $2\pi$.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Tries to normalize `phase` with `phase % 2`
@@ -1662,18 +1823,18 @@ In PyZX, phases are stored in units of $\pi$, so a value like `1/2` means an ang
 - Converts the final value to string and stores it in `n.phase`
 - Executes the update in AGE and returns no value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose phase should be updated.
 - `phase`: `FractionLike`  
   New phase value, interpreted in units of $\pi$.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1689,7 +1850,7 @@ print(g.phase(v0))  # Fraction(1, 2) because 5/2 mod 2 = 1/2
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Phase values are angles measured as multiples of $\pi$.
 - Modulo `2` corresponds to periodicity modulo $2\pi$.
@@ -1699,13 +1860,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.qubit(vertex: VT) -> FloatInt
+### qubit
+**Full method signature:**
+```
+g.qubit(vertex: VT) -> FloatInt
+```
 
 Returns the qubit index associated with a given vertex.
 
 This is layout metadata used by PyZX: it indicates which circuit wire the vertex belongs to. If no qubit index is stored, the method returns `-1`.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Reads `n.qubit`
@@ -1714,17 +1879,17 @@ This is layout metadata used by PyZX: it indicates which circuit wire the vertex
 - Converts the stored value to `float`
 - Returns `int(val)` when the value is numerically integral; otherwise returns the float value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose qubit index should be returned.
 
-### Returns
+**Returns**
 
 - `FloatInt`  
   The qubit index as an `int` or `float`, or `-1` if no index has been set.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1741,7 +1906,7 @@ print(g.qubit(v0))  # 3
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - `-1` is the sentinel value for “no qubit assigned”.
 - The qubit index is a wire/location label, not a quantum state value.
@@ -1752,13 +1917,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.qubits() -> Mapping[VT, FloatInt]
+### qubits
+**Full method signature:**
+```
+g.qubits() -> Mapping[VT, FloatInt]
+```
 
 Returns a mapping of all vertices to their qubit indices.
 
 Like `qubit(vertex)`, this returns layout metadata telling which circuit wire each vertex belongs to.
 
-### Behaviour
+**Behaviour**
 
 - Matches all `Node` vertices
 - Reads `n.id` and `n.qubit`
@@ -1767,16 +1936,16 @@ Like `qubit(vertex)`, this returns layout metadata telling which circuit wire ea
 - Converts stored numeric values to `float`
 - Returns `int(val)` when a value is numerically integral; otherwise keeps the float value
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Mapping[VT, FloatInt]`  
   Dictionary mapping each vertex id to its qubit index.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1793,7 +1962,7 @@ print(qmap[v0], qmap[v1])  # 0 1
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - `-1` means that no qubit/wire assignment has been stored for that vertex.
 - The values describe layout or wire placement, not quantum state values.
@@ -1803,30 +1972,34 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_qubit(vertex: VT, q: FloatInt) -> None
+### set_qubit
+**Full method signature:**
+```
+g.set_qubit(vertex: VT, q: FloatInt) -> None
+```
 
 Sets the qubit index associated with a given vertex.
 
 This stores the wire/layout position metadata used by PyZX to indicate which circuit wire the vertex belongs to.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Sets `n.qubit` to the provided value `q`
 - Executes the update in AGE and returns no value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose qubit index should be updated.
 - `q`: `FloatInt`  
   New qubit/wire index to store.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1841,7 +2014,7 @@ print(g.qubit(v0))  # 2
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - The stored value is layout metadata, not a quantum state value.
 - Integer and non-integer numeric positions are both accepted.
@@ -1851,13 +2024,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.row(vertex: VT) -> FloatInt
+### row
+**Full method signature:**
+```
+g.row(vertex: VT) -> FloatInt
+```
 
 Returns the row index associated with a given vertex.
 
 This is layout metadata used by PyZX to indicate where the vertex sits along the circuit from left to right. If no row index is stored, the method returns `-1`.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Reads `n.row`
@@ -1866,17 +2043,17 @@ This is layout metadata used by PyZX to indicate where the vertex sits along the
 - Converts the stored value to `float`
 - Returns `int(val)` when the value is numerically integral; otherwise returns the float value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose row index should be returned.
 
-### Returns
+**Returns**
 
 - `FloatInt`  
   The row index as an `int` or `float`, or `-1` if no index has been set.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1893,7 +2070,7 @@ print(g.row(v0))  # 4
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - `-1` is the sentinel value for “no row assigned”.
 - The row index is layout/order metadata, not a quantum state value.
@@ -1903,13 +2080,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.rows() -> Mapping[VT, FloatInt]
+### rows
+**Full method signature:**
+```
+g.rows() -> Mapping[VT, FloatInt]
+```
 
 Returns a mapping of all vertices to their row indices.
 
 Like `row(vertex)`, this returns layout/order metadata describing each vertex position along the circuit.
 
-### Behaviour
+**Behaviour**
 
 - Matches all `Node` vertices
 - Reads `n.id` and `n.row`
@@ -1918,16 +2099,16 @@ Like `row(vertex)`, this returns layout/order metadata describing each vertex po
 - Converts stored numeric values to `float`
 - Returns `int(val)` when a value is numerically integral; otherwise keeps the float value
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Mapping[VT, FloatInt]`  
   Dictionary mapping each vertex id to its row index.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1944,7 +2125,7 @@ print(rmap[v0], rmap[v1])  # 0 3
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - `-1` means no row position has been stored for that vertex.
 - Row values represent layout/order positions, not quantum state data.
@@ -1954,30 +2135,34 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_row(vertex: VT, r: FloatInt) -> None
+### set_row
+**Full method signature:**
+```
+g.set_row(vertex: VT, r: FloatInt) -> None
+```
 
 Sets the row index associated with a given vertex.
 
 This stores the layout/order position used by PyZX to place the vertex along the circuit.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Sets `n.row` to the provided value `r`
 - Executes the update in AGE and returns no value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose row index should be updated.
 - `r`: `FloatInt`  
   New row/layout position to store.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -1992,7 +2177,7 @@ print(g.row(v0))  # 5
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - The stored value is layout/order metadata, not a quantum state value.
 - Integer and non-integer numeric positions are both accepted.
@@ -2002,13 +2187,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.vdata_keys(vertex: VT) -> Sequence[str]
+### vdata_keys
+**Full method signature:**
+```
+g.vdata_keys(vertex: VT) -> Sequence[str]
+```
 
 Returns the available vertex data key names for a given vertex.
 
 If the vertex is missing or keys cannot be parsed, this method returns an empty list.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Reads `keys(n)` from AGE
@@ -2019,17 +2208,17 @@ If the vertex is missing or keys cannot be parsed, this method returns an empty 
 - Filters out base node properties: `id`, `t`, `ty`, `phase`, `qubit`, `row`, `ground`
 - Returns `[]` if parsing fails
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose key names should be listed.
 
-### Returns
+**Returns**
 
 - `Sequence[str]`  
   List of key names currently stored on the vertex.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2045,7 +2234,7 @@ print(g.vdata_keys(v0))  # e.g. ['label', 'weight']
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Returned keys include only custom vdata fields.
 - Order is backend-dependent.
@@ -2055,13 +2244,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.vdata(vertex: VT, key: str, default: Any = None) -> Any
+### vdata
+**Full method signature:**
+```
+g.vdata(vertex: VT, key: str, default: Any = None) -> Any
+```
 
 Returns a vertex data value by key.
 
 If the key is missing, null, or the vertex does not exist, this method returns `default`.
 
-### Behaviour
+**Behaviour**
 
 - Escapes single quotes in the key before query construction
 - Matches one node by `id`
@@ -2074,7 +2267,7 @@ If the key is missing, null, or the vertex does not exist, this method returns `
 - Decodes complex marker objects of the form `{"__complex__": [real, imag]}` into Python `complex`
 - Returns unquoted raw string when JSON parsing fails
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id to read from.
@@ -2083,12 +2276,12 @@ If the key is missing, null, or the vertex does not exist, this method returns `
 - `default`: `Any`  
   Fallback value used when key/vertex has no usable value.
 
-### Returns
+**Returns**
 
 - `Any`  
   Stored value for `key`, otherwise `default`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2106,7 +2299,7 @@ print(g.vdata(v0, "missing", default=-1))  # -1
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - JSON-like stored values are parsed into Python values when possible.
 - Complex values written by `set_vdata` are returned as Python `complex`.
@@ -2117,13 +2310,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_vdata(vertex: VT, key: str, val: Any) -> None
+### set_vdata
+**Full method signature:**
+```
+g.set_vdata(vertex: VT, key: str, val: Any) -> None
+```
 
 Sets a vertex data value for a given key.
 
 This method writes a property on the matched node and converts Python values to compatible AGE/Cypher expressions.
 
-### Behaviour
+**Behaviour**
 
 - Escapes backticks in the key name for safe property access
 - Matches one node by `id`
@@ -2135,7 +2332,7 @@ This method writes a property on the matched node and converts Python values to 
   - other values -> escaped string literal
 - Executes an update query and returns no value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id to update.
@@ -2144,11 +2341,11 @@ This method writes a property on the matched node and converts Python values to 
 - `val`: `Any`  
   Value to store for `key`.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2167,7 +2364,7 @@ print(g.vdata(v0, "enabled"))  # True
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - String values are escaped for quotes and backslashes before writing.
 - Complex values are serialized with a dedicated JSON marker for safe round-trip through AGE.
@@ -2178,11 +2375,15 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.clear_vdata(vertex: VT) -> None
+### clear_vdata
+**Full method signature:**
+```
+g.clear_vdata(vertex: VT) -> None
+```
 
 Removes custom vertex data associated with a vertex while preserving core graph fields.
 
-### Behaviour
+**Behaviour**
 
 - Matches one node by `id`
 - Replaces the full node property map with `{id, t, phase, qubit, row, ground}` from current node values
@@ -2190,16 +2391,16 @@ Removes custom vertex data associated with a vertex while preserving core graph 
 - Preserves core fields required for graph semantics and tensor/compose correctness
 - Executes update query and returns no value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id whose data should be cleared.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2219,7 +2420,7 @@ print(g.vdata(v0, "label", default=None))  # None
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This operation is intended to clear only custom vertex metadata.
 - Core properties (`phase`, `qubit`, `row`, `ground`) remain available after clear.
@@ -2229,13 +2430,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edata(edge: ET, key: str, default: Any = None) -> Any
+### edata
+**Full method signature:**
+```
+g.edata(edge: ET, key: str, default: Any = None) -> Any
+```
 
 Returns an edge data value by key.
 
 If the key is missing, null, or the edge does not exist, this method returns `default`.
 
-### Behaviour
+**Behaviour**
 
 - Escapes single quotes in the key before query construction
 - Matches a `Wire` relationship between the endpoints in `edge`
@@ -2246,7 +2451,7 @@ If the key is missing, null, or the edge does not exist, this method returns `de
 - Returns parsed JSON value when successful
 - Returns unquoted raw string when JSON parsing fails
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge tuple whose data should be read.
@@ -2255,12 +2460,12 @@ If the key is missing, null, or the edge does not exist, this method returns `de
 - `default`: `Any`  
   Fallback value used when edge/key has no usable value.
 
-### Returns
+**Returns**
 
 - `Any`  
   Stored value for `key`, otherwise `default`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2280,7 +2485,7 @@ print(g.edata(e, "missing", default=-1))  # -1
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Endpoint order is treated as undirected by the match pattern.
 - JSON-like stored values are parsed into Python values when possible.
@@ -2290,13 +2495,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_edata(edge: ET, key: str, val: Any) -> None
+### set_edata
+**Full method signature:**
+```
+g.set_edata(edge: ET, key: str, val: Any) -> None
+```
 
 Sets an edge data value for a given key.
 
 This method writes a property on the matched `Wire` relationship and converts Python values to compatible AGE/Cypher expressions.
 
-### Behaviour
+**Behaviour**
 
 - Escapes backticks in the key name for safe property access
 - Matches a `Wire` relationship between the endpoints in `edge`
@@ -2307,7 +2516,7 @@ This method writes a property on the matched `Wire` relationship and converts Py
   - other values -> escaped string literal
 - Executes an update query and returns no value
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge tuple to update.
@@ -2316,11 +2525,11 @@ This method writes a property on the matched `Wire` relationship and converts Py
 - `val`: `Any`  
   Value to store for `key`.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2341,7 +2550,7 @@ print(g.edata(e, "active"))  # True
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - String values are escaped for quotes and backslashes before writing.
 - Endpoint order is matched undirected.
@@ -2351,29 +2560,33 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.clear_edata(edge: ET) -> None
+### clear_edata
+**Full method signature:**
+```
+g.clear_edata(edge: ET) -> None
+```
 
 Removes edge data associated with an edge.
 
 In this AGE backend implementation, the relationship is reset to a minimal property map containing only `t`.
 
-### Behaviour
+**Behaviour**
 
 - Matches a `Wire` relationship between the endpoints in `edge`
 - Replaces the full relationship property map with `{t: r.t}`
 - Removes all other edge properties
 - Executes update query and returns no value
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge tuple whose data should be cleared.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2392,7 +2605,7 @@ print(g.edata(e, "label", default=None))  # None
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This operation keeps only the edge type field `t`.
 - Endpoint order is matched undirected.
@@ -2402,13 +2615,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.edata_keys(edge: ET) -> Sequence[str]
+### edata_keys
+**Full method signature:**
+```
+g.edata_keys(edge: ET) -> Sequence[str]
+```
 
 Returns the available edge data key names for a given edge.
 
 If the edge is missing or keys cannot be parsed, this method returns an empty list.
 
-### Behaviour
+**Behaviour**
 
 - Matches a `Wire` relationship between the endpoints in `edge`
 - Reads `keys(r)` from AGE
@@ -2418,17 +2635,17 @@ If the edge is missing or keys cannot be parsed, this method returns an empty li
 - Returns a string list when parsing succeeds
 - Returns `[]` if parsing fails
 
-### Parameters
+**Parameters**
 
 - `edge`: `ET`  
   Edge tuple whose key names should be listed.
 
-### Returns
+**Returns**
 
 - `Sequence[str]`  
   List of key names currently stored on the edge.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2445,7 +2662,7 @@ print(g.edata_keys(e))  # e.g. ['t', 'label', 'weight']
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Returned keys include base edge fields and custom edata fields.
 - Endpoint order is matched undirected.
@@ -2455,13 +2672,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.clone() -> GraphAGE
+### clone
+**Full method signature:**
+```
+g.clone() -> GraphAGE
+```
 
 Creates and returns a deep clone of the graph in a new AGE graph id.
 
 The clone preserves vertex/edge ids, structure, core properties, scalar, phase-tracking metadata, and custom vertex/edge data.
 
-### Behaviour
+**Behaviour**
 
 - Creates a new graph id based on current id plus a UUID suffix
 - Copies scalar and phase-tracking state (`phase_index`, `phase_mult`, etc.)
@@ -2472,16 +2693,16 @@ The clone preserves vertex/edge ids, structure, core properties, scalar, phase-t
 - Copies custom edata keys (excluding base fields)
 - Copies inputs and outputs
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `GraphAGE`  
   A new graph instance containing copied graph data.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2502,7 +2723,7 @@ g.close()
 g2.close()
 ```
 
-### Notes
+**Notes**
 
 - The clone uses a different `graph_id`, so it is stored independently in AGE.
 - Base fields (`id`, `t`, etc.) are copied via dedicated setters, while custom data is copied key-by-key.
@@ -2512,24 +2733,28 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.close() -> None
+### close
+**Full method signature:**
+```
+g.close() -> None
+```
 
 Closes the database connection used by this graph instance.
 
-### Behaviour
+**Behaviour**
 
 - Closes the underlying Psycopg connection
 - After closing, further graph operations on this instance are expected to fail
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2540,7 +2765,7 @@ g.add_vertices(1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Call `close()` when finished with a graph instance to release DB resources.
 - Closing does not drop the AGE graph; use `delete_graph()` for that.
@@ -2551,25 +2776,29 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.__del__() -> None
+### __del__
+**Full method signature:**
+```
+g.__del__() -> None
+```
 
 Best-effort lifecycle safeguard that closes the DB connection during object finalization.
 
-### Behaviour
+**Behaviour**
 
 - Checks whether `self.conn` exists and is non-null
 - Attempts to close the connection
 - Silently ignores cleanup exceptions
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Notes
+**Notes**
 
 - This method is a fallback, not a replacement for explicit `close()`.
 - Explicit `close()` is still recommended for deterministic resource cleanup.
@@ -2578,13 +2807,17 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.delete_graph() -> None
+### delete_graph
+**Full method signature:**
+```
+g.delete_graph() -> None
+```
 
 Drops the current AGE graph and all of its stored data.
 
 This method issues `drop_graph(graph_id, true)` and clears local read cache state.
 
-### Behaviour
+**Behaviour**
 
 - Clears internal read cache before deletion
 - Executes AGE `drop_graph` for the current `graph_id` with cascading delete enabled
@@ -2592,15 +2825,15 @@ This method issues `drop_graph(graph_id, true)` and clears local read cache stat
 - If deletion raises an exception, rolls back and returns without raising
 - Clears read cache again after successful commit
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2612,7 +2845,7 @@ g.delete_graph()  # removes the AGE graph and its contents
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - This removes the whole graph namespace in AGE, not just selected vertices/edges.
 - The method is best-effort by design: backend deletion errors are swallowed after rollback.
@@ -2622,29 +2855,33 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.db_execute(query: str) -> None
+### db_execute
+**Full method signature:**
+```
+g.db_execute(query: str) -> None
+```
 
 Executes a write/query statement against the AGE-backed database connection.
 
 This helper is used by mutating methods to run SQL/Cypher and manage cache/commit behavior.
 
-### Behaviour
+**Behaviour**
 
 - Clears internal read cache before execution
 - Executes the provided query via Psycopg cursor
 - Commits immediately when not inside a batch (`_batch_depth == 0`)
 - Defers commit when batch mode is active
 
-### Parameters
+**Parameters**
 
 - `query`: `str`  
   SQL statement to execute (typically wrapping an AGE Cypher call).
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2662,7 +2899,7 @@ g.db_execute(q)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Callers are responsible for constructing valid SQL/Cypher.
 - This method itself does not wrap execution in try/except.
@@ -2672,27 +2909,31 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.begin_batch() -> None
+### begin_batch
+**Full method signature:**
+```
+g.begin_batch() -> None
+```
 
 Begins a batched write section.
 
 After calling this, write operations executed through `db_execute()` defer commits until the outermost `end_batch()` call.
 
-### Behaviour
+**Behaviour**
 
 - Increments internal batch depth counter (`_batch_depth`)
 - Enables deferred commit behavior while depth is greater than zero
 - Supports nested batching via repeated `begin_batch()` calls
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2707,7 +2948,7 @@ g.end_batch()  # commit happens here
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - `begin_batch()` by itself does not execute SQL.
 - Use `end_batch()` to leave batch mode and commit at outermost depth.
@@ -2717,28 +2958,32 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.end_batch() -> None
+### end_batch
 
+**Full method signature:**
+```
+g.end_batch() -> None
+```
 Ends a batched write section.
 
 When the outermost batch is ended, pending writes are committed.
 
-### Behaviour
+**Behaviour**
 
 - If batch depth is already zero or negative, returns immediately (no-op)
 - Otherwise decrements internal batch depth counter (`_batch_depth`)
 - Commits the database transaction when depth reaches zero
 - For nested batches, intermediate `end_batch()` calls only reduce depth
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2755,7 +3000,7 @@ g.end_batch()  # outermost end, commit happens here
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Safe to call when not in batch mode (no-op).
 - Use matching `begin_batch()` / `end_batch()` calls for predictable commit behavior.
@@ -2765,27 +3010,31 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.rollback_batch() -> None
+### rollback_batch
+**Full method signature:**
+```
+g.rollback_batch() -> None
+```
 
 Rolls back active batched writes and resets batch state.
 
 This discards uncommitted transactional changes and exits batch mode.
 
-### Behaviour
+**Behaviour**
 
 - Issues database rollback on the active connection
 - Clears internal read cache
 - Resets internal batch depth counter to `0`
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2800,7 +3049,7 @@ g.rollback_batch()  # pending writes are discarded, batch depth reset
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Use this when a batched operation sequence should be canceled.
 - After rollback, subsequent writes run in normal mode until `begin_batch()` is called again.
@@ -2810,28 +3059,33 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.inputs() -> Tuple[VT, ...]
+### inputs
+
+**Full method signature:**
+```
+g.inputs() -> Tuple[VT, ...]
+```
 
 Returns the currently stored input vertex ids.
 
 This method reads the in-memory input tuple tracked by the graph instance.
 
-### Behaviour
+**Behaviour**
 
 - Returns `self._inputs` as a tuple
 - Does not query the database
 - Reflects values previously set via `set_inputs(...)`
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Tuple[VT, ...]`  
   Tuple of input vertex ids.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2846,7 +3100,7 @@ print(g.inputs())  # (v0, v1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Input metadata is maintained on the graph object.
 - This getter has no side effects.
@@ -2856,28 +3110,34 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_inputs(inputs: Tuple[VT, ...]) -> None
+### set_inputs
+
+**Full method signature:**
+```
+g.set_inputs(inputs: Tuple[VT, ...]) -> None
+```
+
 
 Sets the input vertex ids for the graph.
 
 This method stores input metadata in-memory on the graph instance.
 
-### Behaviour
+**Behaviour**
 
 - Converts the provided iterable/tuple to `tuple(inputs)`
 - Stores it in `self._inputs`
 - Does not query or update the database
 
-### Parameters
+**Parameters**
 
 - `inputs`: `Tuple[VT, ...]`  
   Vertex ids that should be treated as graph inputs.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2892,7 +3152,7 @@ print(g.inputs())  # (v0, v1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Input metadata is graph-instance state and is not persisted via a dedicated DB field by this setter.
 - Call `set_inputs(...)` whenever reconstruction/import logic defines new boundary inputs.
@@ -2902,28 +3162,32 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.outputs() -> Tuple[VT, ...]
+### outputs 
+**Full method signature:**
+```
+g.outputs() -> Tuple[VT, ...]
+```
 
 Returns the currently stored output vertex ids.
 
 This method reads the in-memory output tuple tracked by the graph instance.
 
-### Behaviour
+**Behaviour**
 
 - Returns `self._outputs` as a tuple
 - Does not query the database
 - Reflects values previously set via `set_outputs(...)`
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Tuple[VT, ...]`  
   Tuple of output vertex ids.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2938,7 +3202,7 @@ print(g.outputs())  # (v0, v1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Output metadata is maintained on the graph object.
 - This getter has no side effects.
@@ -2948,28 +3212,32 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_outputs(outputs: Tuple[VT, ...]) -> None
+### set_outputs
+**Full method signature:**
+```
+g.set_outputs(outputs: Tuple[VT, ...]) -> None
+```
 
 Sets the output vertex ids for the graph.
 
 This method stores output metadata in-memory on the graph instance.
 
-### Behaviour
+**Behaviour**
 
 - Converts the provided iterable/tuple to `tuple(outputs)`
 - Stores it in `self._outputs`
 - Does not query or update the database
 
-### Parameters
+**Parameters**
 
 - `outputs`: `Tuple[VT, ...]`  
   Vertex ids that should be treated as graph outputs.
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -2984,7 +3252,7 @@ print(g.outputs())  # (v0, v1)
 g.close()
 ```
 
-### Notes
+**Notes**
 
 - Output metadata is graph-instance state and is not persisted via a dedicated DB field by this setter.
 - Call `set_outputs(...)` whenever reconstruction/import logic defines boundary outputs.
@@ -2994,11 +3262,16 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.set_ground(self, vertex: VT, flag: bool = True) -> None
+### set_ground
+
+**Full method signature:**
+```
+g.set_ground(self, vertex: VT, flag: bool = True) -> None
+```
 
 Sets the `ground` property on a vertex.
 
-### Behaviour
+**Behaviour**
 
 - Calls `set_vdata(vertex, "ground", flag)`
 - If `flag=True`, marks the vertex as ground
@@ -3006,18 +3279,18 @@ Sets the `ground` property on a vertex.
 - Uses vertex vdata storage (same path as other custom vertex metadata)
 - Does not return a value
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id to update.
 - `flag`: `bool`  
   Ground-state marker to store on the vertex (`True` = grounded, `False` = not grounded).
 
-### Returns
+**Returns**
 
 - `None`
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -3040,7 +3313,7 @@ g.delete_graph()
 g.close()
 ``` 
 
-### Notes
+**Notes**
 
 - Calling `set_ground(vertex)` is equivalent to `set_ground(vertex, True)`.
 - `is_ground(vertex)` reads this same `ground` value and returns a boolean check result.
@@ -3051,27 +3324,32 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.is_ground(vertex: VT) -> bool
+### is_ground
+
+**Full method signature:**
+```
+g.is_ground(vertex: VT) -> bool
+```
 
 Checks whether a vertex is currently marked as ground.
 
-### Behaviour
+**Behaviour**
 
 - Reads vertex metadata via `vdata(vertex, "ground", False)`
 - Returns `True` only when the stored value is boolean `True`
 - Returns `False` when the key is missing, `False`, or non-boolean
 
-### Parameters
+**Parameters**
 
 - `vertex`: `VT`  
   Vertex id to check.
 
-### Returns
+**Returns**
 
 - `bool`  
   `True` if the vertex is grounded, otherwise `False`.
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -3093,7 +3371,7 @@ g.delete_graph()
 g.close()
 ``` 
 
-### Notes
+**Notes**
 
 - This method is the read counterpart of `set_ground(vertex, flag)`.
 - `grounds()` internally uses `is_ground(v)` while iterating all vertices.
@@ -3103,27 +3381,32 @@ See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/py
 
 ---
 
-## GraphAGE.grounds() -> Iterable[VT]
+### grounds
+
+**Full method signature:**
+```
+g.grounds() -> Iterable[VT]
+```
 
 Returns all currently grounded vertex ids.
 
-### Behaviour
+**Behaviour**
 
 - Iterates through all vertices of the graph
 - Uses `is_ground()` to check every vertex
 - Stores vertex ids in a list when `is_ground(v)` returns `True`
 - Returns that list (typed as `Iterable[VT]` in the API signature)
 
-### Parameters
+**Parameters**
 
 - None
 
-### Returns
+**Returns**
 
 - `Iterable[VT]`  
   Iterable of grounded vertex ids (current implementation returns a list).
 
-### Example
+**Example**
 
 ```python
 from pyzx.graph.graph_AGE import GraphAGE
@@ -3151,7 +3434,7 @@ g.delete_graph()
 g.close()
 ``` 
 
-### Notes
+**Notes**
 
 - This method reflects current vertex metadata at call time.
 - It is equivalent to filtering `vertices()` by `is_ground(v)`.
@@ -3159,9 +3442,10 @@ g.close()
 
 See source [/pyzx/graph/graph_AGE.py](https://github.com/q-sip/pyzx-/blob/dev/pyzx/graph/graph_AGE.py)
 
+-----
 
-# GraphAGE Functionality test
+## GraphAGE Functionality test
 
 Selected functionalities of the GraphAGE can be run with the age functionality test. 
 
-Function plt_graph can be used to draw a graph. The graph will be stored to folder AGE graphs. 
+Function plt_graph can be used to draw a graph. The graph will be stored to folder AGE graphs.
