@@ -100,11 +100,23 @@ def arb_write(g: GraphMemgraph):
     WHERE n.t = 2 
     AND n.graph_id = "graph_test_zxdb"
     SET n.t = 1
-    WITH DISTINCT r AS wire
+    WITH r AS wire
     SET wire.t = CASE WHEN wire.t = 1 THEN 2 ELSE 1 END
     RETURN wire;
     """
     g.arb_quer_write(query=query, kala="koira", kissa="mieto")
+
+def to_gh(g: GraphMemgraph):
+    query = """
+    MATCH (n:Node)-[r:Wire]-(m:Node) 
+    WHERE n.t = 2 
+    AND n.graph_id = "graph_test_zxdb"
+    SET n.t = 1
+    WITH r AS wire
+    SET wire.t = CASE WHEN wire.t = 1 THEN 2 ELSE 1 END
+    RETURN wire;
+    """
+    g.arb_quer_write(query=query)
 
 
 def maini(g: GraphMemgraph):
@@ -160,6 +172,8 @@ def maini(g: GraphMemgraph):
             print(f"arvo: {arvo}", end='\n')
         if choice == "13":
             arb_write(g)
+        if choice == "sw":
+            pass
 
         print(f"Command {choice} done", end='\n')
 
