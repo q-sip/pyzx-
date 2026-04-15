@@ -1,10 +1,26 @@
 ## Contributing
 
-...
+This project is not actively "owned" by anybody, it was initially started as part of a school project.
+The project might be continued in the future by subsequent participants of the course, or somebody else.
+Thus, if you do not see any recent commits, it is likely that your possible pull request will not be reviewed by anybody in a long time.
+In these kinds of situations, it is a good idea to just make a fork of your own for development.
 
-## Getting help / support
+To directly contribute to the repo, you can do so by submitting a pull request with your proposed changes.
+Please describe at least shortly the following:
 
-..
+- What
+
+- Why
+
+- Extent of testing
+
+And make sure that your code adheres to the requirements in [Code quality](dev.md/#code-quality) section of Developer instructions.
+
+
+
+## Getting help
+
+You can open an issue in the Github repositorio page for any issues, but as with pull requests, these might or might not be actively monitored and answered to.
 
 
 ## Licence
