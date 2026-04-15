@@ -57,10 +57,9 @@ class GraphNeo4j(BaseGraph[VT, ET]):
 
     def __init__(
         self,
-        uri: str = os.getenv("DB_URI", "bolt://neo4j:7687"),
-        # If we ahd the pro versio we could use any, but for now only neo4j is valid.
-        user: str = "neo4j", # os.getenv("DB_USER", ""),
-        password: str = os.getenv("DB_PASSWORD", "password"),
+        uri: str = os.getenv("DB_URI1", "bolt://localhost:7687"),
+        user: str =  os.getenv("DB_USER1", "neo4j"),
+        password: str = os.getenv("DB_PASSWORD1", "password"),
         graph_id: Optional[str] = None,
         database: Optional[str] = None,
 

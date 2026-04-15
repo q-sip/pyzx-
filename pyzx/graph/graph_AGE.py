@@ -55,13 +55,13 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
 
-        db_uri = os.getenv("DB_URI")
+        db_uri = os.getenv("DB_URI1", "postgresql://postgres:password@localhost:5432/postgres")
         connect_kwargs = {
-            "host": os.getenv("DB_HOST"),
-            "port": os.getenv("DB_PORT"),
-            "dbname": os.getenv("POSTGRES_DB"),
-            "user": os.getenv("POSTGRES_USER"),
-            "password": os.getenv("POSTGRES_PASSWORD"),
+            "host": os.getenv("DB_HOST1", "localhost"),
+            "port": os.getenv("DB_PORT1", "5432"),
+            "dbname": os.getenv("POSTGRES_DB1", "postgres"),
+            "user": os.getenv("POSTGRES_USER1", "postgres"),
+            "password": os.getenv("POSTGRES_PASSWORD1", "password"),
         }
         if db_uri:
             connect_kwargs["conninfo"] = db_uri
