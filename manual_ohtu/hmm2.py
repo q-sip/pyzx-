@@ -19,6 +19,41 @@ def arb_write(g: GraphMemgraph):
 
 def delete_all(g: GraphMemgraph):
     query = """MATCH (n) DETACH DELETE n;"""
+    g.arb_quer_write(query=query)
+
+def spider_simp(g: GraphMemgraph):
+    query = """
+MATCH (n:Node)-[r:Wire]->(m:Node)
+  WHERE n.t = m.t AND r.t = 1
+DELETE r
+
+//Set the new phase
+WITH n, m, (coalesce(n.phase, 0) + coalesce(m.phase, 0)) AS totalPhase
+SET n.phase = totalPhase
+WITH *
+
+//Find the original connections
+OPTIONAL MATCH (m:Node)-[r4:Wire]->(other4:Node)
+OPTIONAL MATCH (other5:Node)-[r5:Wire]->(m:Node)
+WITH *
+
+//Join the from our node to other relationships
+FOREACH (_ IN CASE WHEN r4 IS NOT NULL THEN [1] ELSE [] END |
+CREATE (n)-[kala4:Wire]->(other4)
+set kala4 = r4
+)
+WITH *
+
+//Join the from other to our node relationships
+FOREACH (_ IN CASE WHEN r5 IS NOT NULL THEN [1] ELSE [] END |
+CREATE (other5)-[kala5:Wire]->(n)
+SET kala5 = r5
+)
+
+//Delete the second node
+WITH *
+DETACH DELETE m;
+    """
     g.arb_quer_write(query=query,)
 
 vertices_data = [
@@ -52,18 +87,19 @@ tens1 = px.compare_tensors(s, g)
 print(f"tens1: {tens1}", end='\n')
 # px.draw(s, labels=True)
 # px.draw(g, labels=True)
-input("ohi")
+# input("ohi")
 px.to_gh(s)
 arb_write(g)
+input("kala")
 tens2 = px.compare_tensors(s, g)
 print(f"tens2: {tens2}", end='\n')
-px.draw(s, labels=True)
+# px.draw(s, labels=True)
 # px.draw(g, labels=True)
-input("sad")
+# input("sad")
 # g = s.copy(backend="memgraph")
 # px.draw(g, labels=True)
-s2 = g.copy(backend="simple")
-px.draw(s2, labels=True)
+# s2 = g.copy(backend="simple")
+# px.draw(s2, labels=True)
 # # px.draw(g, labels=True)
 # g2 = s.clone().copy(backend="memgraph")
 
