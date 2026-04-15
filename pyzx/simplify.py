@@ -93,6 +93,7 @@ remove_self_loop_simp: RewriteSimpSingleVertex = RewriteSimpSingleVertex(check_s
 
 def spider_simp(g: BaseGraph[VT,ET]) -> bool:
     """Performs spider fusion and then removes any self loops"""
+    # breakpoint()
     i = fuse_simp(g)
     j = remove_self_loop_simp(g)
     return i or j
@@ -347,13 +348,18 @@ class Simplifier(Generic[VT, ET]):
 
 def to_gh(g: BaseGraph[VT,ET]) -> None:
     """Turns every red node into a green node by applying a Hadamard to the edges incident to red nodes"""
+    # breakpoint()
+    asd = []
     ty = g.types()
     for v in g.vertices():
         if ty[v] == VertexType.X:
+            # breakpoint()
             g.set_type(v, VertexType.Z)
             for e in g.incident_edges(v):
+                asd.append(e)
                 et = g.edge_type(e)
                 g.set_edge_type(e, toggle_edge(et))
+    # breakpoint()
 
 
 def max_cut(g: BaseGraph[VT,ET], vs0: Optional[Set[VT]]=None, vs1: Optional[Set[VT]]=None) -> Tuple[Set[VT],Set[VT]]:

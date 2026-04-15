@@ -98,6 +98,12 @@ class GraphMemgraph(BaseGraph[VT, ET]):
     def __del__(self):
         self.close()
 
+    def arb_quer_write(self, query, **kwargs):
+        print(f"kwargs: {kwargs}", end='\n')
+        with self._get_session() as session:
+            session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id, **kwargs))
+        pass
+
     def init_indices(self) -> None:
         "Sets id properties to nodes"
         query = """CREATE INDEX ON :Node(graph_id)"""
@@ -852,7 +858,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
-        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n[$key] = $val"""
+        query = """ MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n."""+ key + """ = $val"""
 
         with self._get_session() as session:
             session.execute_write(
@@ -915,7 +921,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
         query = """
         MATCH (n1:Node {graph_id: $graph_id, id: $node1}) -[r:Wire]->(n2:Node {graph_id: $graph_id, id: $node2})
-        SET r[$key] = $val"""
+        SET r.""" +key + """ = $val"""
 
         with self._get_session() as session:
             session.execute_write(
