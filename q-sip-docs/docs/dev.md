@@ -307,3 +307,33 @@ To generate a simple JSON file in the mutants folder for an easy overview of you
 ```bash
 mutmut export-cicd-stats
 ```
+
+## Adding a new backend
+
+..
+
+## Adding/modifying queries
+
+..
+
+## Project structure overview
+
+..
+
+## Dependencies for building
+
+..
+
+## Debugging guide
+
+..
+
+## Running without Docker
+
+..
+
+## Code quality
+
+- formatting
+- style
+- testing requirements

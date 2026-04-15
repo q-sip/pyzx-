@@ -35,3 +35,4 @@ scienceplots
 qiskit
 quimb
 mkdocs
+pymdown-extensions
