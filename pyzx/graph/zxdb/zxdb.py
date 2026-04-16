@@ -741,7 +741,7 @@ class ZXdb:
             changed = session.execute_write(apply_pivot_gadget_labeling)
 
             if changed:
-                print("pivot gadger rule changed")
+                print("pivot gadget rule changed")
 
                 #if changed == 1:
                 #    break  # No more patterns found
@@ -979,6 +979,7 @@ class ZXdb:
         self.pivot_gadget_rule(graph)
         # while True:
         #     self.clifford_simp(graph)
+        #     return
         #     i = self.phase_gadget_fusion_rule(graph)
         #     self.interior_clifford_simp(graph)
         #     k = self.copy_simp(graph)
