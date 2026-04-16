@@ -99,7 +99,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self.close()
 
     def arb_quer_write(self, query, **kwargs):
-        print(f"kwargs: {kwargs}", end='\n')
+        # print(f"kwargs: {kwargs}", end='\n')
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id, **kwargs))
         pass
