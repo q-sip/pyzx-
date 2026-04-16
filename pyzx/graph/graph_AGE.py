@@ -998,6 +998,33 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def is_ground(self, vertex: VT) -> bool:
+        """Returns whether the given vertex is connected to ground."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            RETURN n.ground
+        $$) AS (ground agtype);
+        """
+        row = self._fetchone(query)
+        if not row:
+            return False
+
+        raw = str(row[0]).split("::", 1)[0].strip('"').lower()
+        return raw in ("true", "1")
+
+    def set_ground(self, vertex: VT, flag: bool = True) -> None:
+        """Connect or disconnect the vertex to a ground."""
+        val = "true" if flag else "false"
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            SET n.ground = {val}
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def vdata_keys(self, vertex: VT) -> Sequence[str]:
         """Returns an iterable of the vertex data key names."""
         query = f"""
@@ -1012,9 +1039,22 @@ class GraphAGE(BaseGraph[VT, ET]):
             cur.execute(query)
             row = cur.fetchone()
             self.conn.commit()
-        if row and row[0]:
-            return list(row[0])
-        return []
+
+        if not row:
+            return []
+
+        keys_raw = str(row[0]).split("::", 1)[0]
+        if keys_raw in ("", "null", "None"):
+            return []
+
+        try:
+            parsed = json.loads(keys_raw)
+            if not isinstance(parsed, list):
+                return []
+            builtin = {"id", "t", "ty", "phase", "qubit", "row"}
+            return [str(key) for key in parsed if str(key) not in builtin]
+        except json.JSONDecodeError:
+            return []
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
