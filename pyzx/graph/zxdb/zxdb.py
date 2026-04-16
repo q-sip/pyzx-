@@ -596,7 +596,6 @@ class ZXdb:
                     break
 
             return total_patterns
-        
 
     def pivot_rule(self, graph) -> int:
         """
@@ -629,8 +628,10 @@ class ZXdb:
                     # to avoid deleting boundary-adjacent spiders and disconnecting I/O nodes.
                     result = tx.run(pivot_query, graph_id=graph_id)
                     if not result:
-                        return None
-                    return result.single()["pivot_operations_performed"]
+                        return 0
+                    record = result.single()
+                    processed = record["pivot_operations_performed"] if record else 0
+                    return processed
                 
                 processed += session.execute_write(apply_pivot_rule_two_interior_spiders)
 
@@ -734,8 +735,13 @@ class ZXdb:
             def apply_pivot_gadget_labeling(tx):
                 pgf_query = str(self.basic_rewrite_rule_queries["Pivot gadget"]["query"]["code"]["value"])
                 result = tx.run(pgf_query, graph_id=graph_id)
-                return result.single()["pivot_operations_performed"]
+                record = result.single()
+                changed = record["pivot_operations_performed"] if record else 0
+                return changed
             changed = session.execute_write(apply_pivot_gadget_labeling)
+
+            if changed:
+                print("pivot gadger rule changed")
 
                 #if changed == 1:
                 #    break  # No more patterns found
@@ -763,8 +769,12 @@ class ZXdb:
                 def apply_pivot_boundary_labeling(tx):
                     pgf_query = str(self.basic_rewrite_rule_queries["Pivot boundary"]["query"]["code"]["value"])
                     result = tx.run(pgf_query, graph_id=graph_id)
-                    return result.single()["pivot_operations_performed"]
+                    record = result.single()
+                    changed = record["pivot_operations_performed"] if record else 0
+                    return changed
                 changed = session.execute_write(apply_pivot_boundary_labeling)
+                if changed:
+                    print("pivot boundary changed")
 
                 if changed == 0:
                     break  # No more patterns found
@@ -965,17 +975,16 @@ class ZXdb:
 
     def full_reduce(self, graph):
         self._check_graph_like(graph)
-
         self.interior_clifford_simp(graph)
-        return
+        i = input("s")
         self.pivot_gadget_rule(graph)
-        while True:
-            self.clifford_simp(graph)
-            i = self.phase_gadget_fusion_rule(graph)
-            self.interior_clifford_simp(graph)
-            k = self.copy_simp(graph)
-            l = self.supplementarity_simp(graph)
-            j = self.pivot_gadget_rule(graph)
-            if not (i or k or j or l):
-                self.remove_isolated_vertices(graph)
-                break
+        # while True:
+        #     self.clifford_simp(graph)
+        #     i = self.phase_gadget_fusion_rule(graph)
+        #     self.interior_clifford_simp(graph)
+        #     k = self.copy_simp(graph)
+        #     l = self.supplementarity_simp(graph)
+        #     j = self.pivot_gadget_rule(graph)
+        #     if not (i or k or j or l):
+        #         self.remove_isolated_vertices(graph)
+        #         break
