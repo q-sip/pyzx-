@@ -2,7 +2,7 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments,duplicate-code
 
 import json
 import os
@@ -53,6 +53,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
+        self._edata = {}
 
         db_uri = os.getenv("DB_URI_POSTGRES")
         connect_kwargs = {
@@ -80,7 +81,7 @@ class GraphAGE(BaseGraph[VT, ET]):
             except Exception:
                 # Graph doesn't exist yet, that's fine
                 self.conn.rollback()
-            
+
             try:
                 cur.execute(f"SELECT create_graph('{self.graph_id}');")
                 self.conn.commit()
@@ -255,9 +256,9 @@ class GraphAGE(BaseGraph[VT, ET]):
         if isinstance(ty, int):
             try:
                 ty = VertexType(ty)
-            except ValueError:
-                raise ValueError(f"Invalid vertex type: {ty}")
-        
+            except ValueError as exc:
+                raise ValueError(f"Invalid vertex type: {ty}") from exc
+
         if phase is None:
             if ty == VertexType.H_BOX:
                 phase = 1
@@ -432,6 +433,13 @@ class GraphAGE(BaseGraph[VT, ET]):
         if not vertex_list:
             return
 
+        vertex_set = set(vertex_list)
+        self._edata = {
+            edge: data
+            for edge, data in self._edata.items()
+            if edge[0] not in vertex_set and edge[1] not in vertex_set
+        }
+
         # Build a list of vertex IDs to match in Cypher
         # Using a WHERE clause with INs to match multiple vertices
         vertex_ids_str = ", ".join(str(v) for v in vertex_list)
@@ -450,6 +458,10 @@ class GraphAGE(BaseGraph[VT, ET]):
         edge_list = list(edges)
         if not edge_list:
             return
+
+        for s, t in edge_list:
+            key = (s, t) if s <= t else (t, s)
+            self._edata.pop(key, None)
 
         # Build Cypher list for edge pairs
         edges_list = []
@@ -1152,6 +1164,12 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""
+        edge_key = (edge[0], edge[1]) if edge[0] <= edge[1] else (edge[1], edge[0])
+        if edge_key in self._edata:
+            self._edata[edge_key][key] = val
+        else:
+            self._edata[edge_key] = {key: val}
+
         key_escaped = key.replace("`", "``")
 
         if val is None:
@@ -1175,6 +1193,9 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def clear_edata(self, edge: ET) -> None:
         """Removes all edata associated to an edge."""
+        edge_key = (edge[0], edge[1]) if edge[0] <= edge[1] else (edge[1], edge[0])
+        self._edata.pop(edge_key, None)
+
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n1:Node {{id: {edge[0]}}})-[r:Wire]-(n2:Node {{id: {edge[1]}}})
@@ -1258,6 +1279,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         cpy.set_inputs(self.inputs())
         cpy.set_outputs(self.outputs())
         return cpy
+
     def get_vertices(self) -> List[VT]:
         """Returns all vertices as a list."""
         return list(self.vertices())
