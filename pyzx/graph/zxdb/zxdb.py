@@ -674,6 +674,7 @@ class ZXdb:
 
             #end_time = time.time()
             #logging.info(f"Local complementation applied for graph ID '{graph_id}' with {changed} patterns processed in {end_time - start_time} seconds")
+            print(f'Local complementation patters: {total_changed}')
             return total_changed
         
     
@@ -943,10 +944,9 @@ class ZXdb:
             i2 = self.spider_fusion(graph)
             i3 = self.pivot_rule(graph)
             # print(f'pivot result: {i3}')
-            # i4 = self.local_complementation_rule(graph)
+            i4 = self.local_complementation_rule(graph)
             # i1 = 0
             # i2 = 0
-            i4 = 0
             # print(f'i1 = {i1}')
             # print(f'i2 = {i2}')
             # print(f'i3 = {i3}')
