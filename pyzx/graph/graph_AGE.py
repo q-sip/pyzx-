@@ -33,7 +33,9 @@ from ..utils import (
 )
 from .base import BaseGraph
 
-load_dotenv()
+# Load .env from project root
+_env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+load_dotenv(dotenv_path=_env_path)
 
 VT = int
 ET = Tuple[int, int]
@@ -54,17 +56,45 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._maxr: int = 1
 
         db_uri = os.getenv("DB_URI_POSTGRES")
-        connect_kwargs = {
-            "host": os.getenv("DB_HOST"),
-            "port": os.getenv("DB_PORT"),
-            "dbname": os.getenv("POSTGRES_DB"),
-            "user": os.getenv("POSTGRES_USER"),
-            "password": os.getenv("POSTGRES_PASSWORD"),
-        }
+        
+        # Build connection kwargs with proper type conversion and defaults
+        connect_kwargs = {}
+        
         if db_uri:
             connect_kwargs["conninfo"] = db_uri
+        else:
+            # Use individual connection parameters if no conninfo provided
+            host = os.getenv("DB_HOST", "localhost")
+            port_str = os.getenv("DB_PORT", "5432")
+            dbname = os.getenv("POSTGRES_DB", "age_db")
+            user = os.getenv("POSTGRES_USER", "postgres")
+            password = os.getenv("POSTGRES_PASSWORD", "postgres")
+            
+            # Convert port to int
+            try:
+                port = int(port_str) if port_str else 5432
+            except (ValueError, TypeError):
+                port = 5432
+            
+            connect_kwargs = {
+                "host": host,
+                "port": port,
+                "dbname": dbname,
+                "user": user,
+                "password": password,
+            }
 
-        self.conn = psycopg.connect(**connect_kwargs)
+        try:
+            self.conn = psycopg.connect(**connect_kwargs)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to connect to AGE database: {e}\n"
+                f"Connection parameters: host={connect_kwargs.get('host')}, "
+                f"port={connect_kwargs.get('port')}, "
+                f"dbname={connect_kwargs.get('dbname')}, "
+                f"user={connect_kwargs.get('user')}\n"
+                f"Make sure the AGE database is running and environment variables are set."
+            ) from e
         self._session_prepared = False
         self._batch_depth = 0
         self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
