@@ -16,6 +16,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    Union,
 )
 
 import psycopg
@@ -33,9 +34,7 @@ from ..utils import (
 )
 from .base import BaseGraph
 
-# Load .env from project root
-_env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-load_dotenv(dotenv_path=_env_path)
+load_dotenv()
 
 VT = int
 ET = Tuple[int, int]
@@ -56,45 +55,17 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._maxr: int = 1
 
         db_uri = os.getenv("DB_URI_POSTGRES")
-        
-        # Build connection kwargs with proper type conversion and defaults
-        connect_kwargs = {}
-        
+        connect_kwargs = {
+            "host": os.getenv("DB_HOST"),
+            "port": os.getenv("DB_PORT"),
+            "dbname": os.getenv("POSTGRES_DB"),
+            "user": os.getenv("POSTGRES_USER"),
+            "password": os.getenv("POSTGRES_PASSWORD"),
+        }
         if db_uri:
             connect_kwargs["conninfo"] = db_uri
-        else:
-            # Use individual connection parameters if no conninfo provided
-            host = os.getenv("DB_HOST", "localhost")
-            port_str = os.getenv("DB_PORT", "5432")
-            dbname = os.getenv("POSTGRES_DB", "age_db")
-            user = os.getenv("POSTGRES_USER", "postgres")
-            password = os.getenv("POSTGRES_PASSWORD", "postgres")
-            
-            # Convert port to int
-            try:
-                port = int(port_str) if port_str else 5432
-            except (ValueError, TypeError):
-                port = 5432
-            
-            connect_kwargs = {
-                "host": host,
-                "port": port,
-                "dbname": dbname,
-                "user": user,
-                "password": password,
-            }
 
-        try:
-            self.conn = psycopg.connect(**connect_kwargs)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to connect to AGE database: {e}\n"
-                f"Connection parameters: host={connect_kwargs.get('host')}, "
-                f"port={connect_kwargs.get('port')}, "
-                f"dbname={connect_kwargs.get('dbname')}, "
-                f"user={connect_kwargs.get('user')}\n"
-                f"Make sure the AGE database is running and environment variables are set."
-            ) from e
+        self.conn = psycopg.connect(**connect_kwargs)
         self._session_prepared = False
         self._batch_depth = 0
         self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
@@ -102,6 +73,14 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._prepare_session()
 
         with self.conn.cursor() as cur:
+            try:
+                # Try to drop any existing graph with this ID first
+                cur.execute(f"SELECT drop_graph('{self.graph_id}', true);")
+                self.conn.commit()
+            except Exception:
+                # Graph doesn't exist yet, that's fine
+                self.conn.rollback()
+            
             try:
                 cur.execute(f"SELECT create_graph('{self.graph_id}');")
                 self.conn.commit()
@@ -264,7 +243,7 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def add_vertex(
         self,
-        ty: VertexType = VertexType.BOUNDARY,
+        ty: Union[VertexType, int] = VertexType.BOUNDARY,
         qubit: FloatInt = -1,
         row: FloatInt = -1,
         phase: Optional[FractionLike] = None,
@@ -272,6 +251,13 @@ class GraphAGE(BaseGraph[VT, ET]):
         index: Optional[VT] = None,
     ) -> VT:
         """Add a single vertex to the graph and return its index."""
+        # Convert int to VertexType if needed
+        if isinstance(ty, int):
+            try:
+                ty = VertexType(ty)
+            except ValueError:
+                raise ValueError(f"Invalid vertex type: {ty}")
+        
         if phase is None:
             if ty == VertexType.H_BOX:
                 phase = 1
@@ -1026,6 +1012,9 @@ class GraphAGE(BaseGraph[VT, ET]):
             cur.execute(query)
             row = cur.fetchone()
             self.conn.commit()
+        if row and row[0]:
+            return list(row[0])
+        return []
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
@@ -1085,7 +1074,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node {{id: {vertex}}})
-            SET n = {{id: n.id, t: n.t}}
+            SET n = {{id: n.id, t: n.t, phase: n.phase, qubit: n.qubit, row: n.row}}
             RETURN count(n)
         $$) AS (count agtype);
         """
@@ -1229,3 +1218,14 @@ class GraphAGE(BaseGraph[VT, ET]):
         cpy.set_inputs(self.inputs())
         cpy.set_outputs(self.outputs())
         return cpy
+    def get_vertices(self) -> List[VT]:
+        """Returns all vertices as a list."""
+        return list(self.vertices())
+
+    def get_edges(self) -> List[ET]:
+        """Returns all edges as a list."""
+        return list(self.edges())
+
+    def grounds(self) -> List[VT]:
+        """Returns the list of vertices connected to a ground."""
+        return [v for v in self.vertices() if self.is_ground(v)]
