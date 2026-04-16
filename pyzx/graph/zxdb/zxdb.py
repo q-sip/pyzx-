@@ -976,7 +976,6 @@ class ZXdb:
     def full_reduce(self, graph):
         self._check_graph_like(graph)
         self.interior_clifford_simp(graph)
-        i = input("s")
         self.pivot_gadget_rule(graph)
         # while True:
         #     self.clifford_simp(graph)
