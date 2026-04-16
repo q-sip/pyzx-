@@ -48,7 +48,7 @@ class GraphAGE(BaseGraph[VT, ET]):
     def __init__(self, graph_id: Optional[str] = None):
         BaseGraph.__init__(self)
 
-        self.graph_id = graph_id if graph_id is not None else "test_graph"
+        self.graph_id = graph_id if graph_id is not None else f"graph_{uuid.uuid4().hex}"
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
@@ -74,14 +74,6 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._prepare_session()
 
         with self.conn.cursor() as cur:
-            try:
-                # Try to drop any existing graph with this ID first
-                cur.execute(f"SELECT drop_graph('{self.graph_id}', true);")
-                self.conn.commit()
-            except Exception:
-                # Graph doesn't exist yet, that's fine
-                self.conn.rollback()
-
             try:
                 cur.execute(f"SELECT create_graph('{self.graph_id}');")
                 self.conn.commit()
@@ -828,8 +820,14 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         return result
 
-    def set_type(self, vertex: VT, t: VertexType) -> None:
+    def set_type(self, vertex: VT, t: Union[VertexType, int]) -> None:
         """Sets the type of the given vertex to t."""
+        if isinstance(t, int):
+            try:
+                t = VertexType(t)
+            except ValueError as exc:
+                raise ValueError(f"Invalid vertex type: {t}") from exc
+
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node {{id: {vertex}}})
@@ -1237,7 +1235,18 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def close(self) -> None:
         """Close the database connection."""
-        self.conn.close()
+        conn = getattr(self, "conn", None)
+        if conn is None:
+            return
+        try:
+            if not conn.closed:
+                conn.close()
+        except Exception:
+            pass
+
+    def __del__(self) -> None:
+        """Ensure DB connection is closed when object is collected."""
+        self.close()
 
     def clone(self) -> "GraphAGE":
         """Return an identical copy of the graph without relabeling vertices/edges."""
