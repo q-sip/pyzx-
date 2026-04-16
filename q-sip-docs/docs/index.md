@@ -1,4 +1,4 @@
-# Welcome to QSIP
+# Welcome to Q-SIP
 
 The purpose of this project is to implement database backends to [PyZX](https://github.com/zxcalc/pyzx).
 It uses PyZX as a dependency, and tries to route and reimplement the few pieces of logic needed so that all calculations would eventually occur inside a database.
@@ -28,7 +28,8 @@ The project is a work in progress, and any contributions are of course welcome.
 
 ## Getting help
 
-..
+If you see active commits, you can submit issues for any questions related to the projects.
+If there are no active commits, you will probably not get a quick answer.
 
 ## Installation overview
 
@@ -36,6 +37,5 @@ The project is a work in progress, and any contributions are of course welcome.
 
 ## Project status / timeline
 
-
-
-..
+The project period ends in the end of April, 2026.
+After that, it might or might not start again in autumn, 2026.
