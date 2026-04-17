@@ -9,7 +9,7 @@ def large_graph():
     c = zx.generate.CNOT_HAD_PHASE_circuit(qubits=2, depth=20, seed=50)
     print('Generating graph...')
     g = c.to_graph(backend='memgraph')
-    #i = input('Graph generated')
+    i = input('Graph generated')
 
     print('Full reducing...')
     zx.full_reduce(g)

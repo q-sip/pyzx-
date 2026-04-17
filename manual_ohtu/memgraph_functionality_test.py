@@ -50,6 +50,9 @@ load_dotenv()
 # MANUAALINEN GRAAFI TESTAUKSEEN!
 
 g = GraphMemgraph(
+    uri=os.getenv("MEMGRAPH_URI"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
     database="memgraph",
     graph_id="test_graph",
 )
@@ -355,7 +358,7 @@ def test_depths_qubits(start_qubits: int, end_qubits: int, max_depth: int = 100)
 
 
 
-# iterable_graph_creation()
-# test_depths_qubits(2, 100, 100)
-# large_graph()
-# test_num_vertices_against_simple_graph(2, 100)
+iterable_graph_creation()
+test_depths_qubits(2, 100, 100)
+large_graph()
+test_num_vertices_against_simple_graph(2, 100)

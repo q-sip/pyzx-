@@ -1,8 +1,8 @@
 import unittest
-from tests.tests_from_zxdb._base_unittest_neo4j import Neo4jUnitTestCase
-from pyzx.graph.neo4j_queries import CypherRewrites
+from tests.tests_from_zxdb._base_unittest_memgraph import MemgraphUnitTestCase
+from pyzx.graph.memgraph_queries import ZXQueryStore
 from .helpers import (
-    load_simple_graph_into_neo4j,
+    load_simple_graph,
     make_lcomp_fixture,
     mark_lcomp_fixture_pattern,
     run_db_rule_only,
@@ -10,15 +10,13 @@ from .helpers import (
     assert_boundary_degrees_are_one,
 )
 
-from .random_queries_neo4j import LOCAL_COMPLEMENT_NEO4J
 
-
-class TestLocalComplementFixture(Neo4jUnitTestCase):
-    def test_correct_query(self):
+class TestLocalComplementFixture(MemgraphUnitTestCase):
+    def test_local_complement_rewrite(self):
         qubits = 1
         pyzx_graph = make_lcomp_fixture()
 
-        load_simple_graph_into_neo4j(pyzx_graph, self.g)
+        load_simple_graph(pyzx_graph, self.g)
 
         marked = mark_lcomp_fixture_pattern(self.g)
         self.assertEqual(marked, 4, "Expected exactly 4 marked pattern nodes")
@@ -26,9 +24,9 @@ class TestLocalComplementFixture(Neo4jUnitTestCase):
         run = run_db_rule_only(
             original_graph=pyzx_graph,
             db_graph=self.g,
-            db_query=LOCAL_COMPLEMENT_NEO4J,
-            db_name="neo4j_local_complement",
-            print_results=True,
+            db_query=ZXQueryStore()._local_complement_rewrite(),
+            db_name="memgraph_local_complement",
+            print_results=False,
         )
 
         self.assertNotEqual(run.db.return_value, [], "DB rewrite did not fire")
@@ -46,16 +44,16 @@ class TestLocalComplementFixture(Neo4jUnitTestCase):
             preserve_scalar=False,
             require_fired=True,
             check_boundary_counts=True,
-            print_results=True,
+            print_results=False,
         )
 
         self.assertTrue(report["db_vs_original"])
 
-    def test_current_query(self):
+    def test_local_complement_full_rewrite(self):
         qubits = 1
         pyzx_graph = make_lcomp_fixture()
 
-        load_simple_graph_into_neo4j(pyzx_graph, self.g)
+        load_simple_graph(pyzx_graph, self.g)
 
         marked = mark_lcomp_fixture_pattern(self.g)
         self.assertEqual(marked, 4, "Expected exactly 4 marked pattern nodes")
@@ -63,9 +61,9 @@ class TestLocalComplementFixture(Neo4jUnitTestCase):
         run = run_db_rule_only(
             original_graph=pyzx_graph,
             db_graph=self.g,
-            db_query=CypherRewrites.LOCAL_COMPLEMENT,
-            db_name="neo4j_local_complement",
-            print_results=True,
+            db_query=ZXQueryStore()._local_complement_full(),
+            db_name="memgraph_local_complement",
+            print_results=False,
         )
 
         self.assertNotEqual(run.db.return_value, [], "DB rewrite did not fire")
@@ -83,7 +81,7 @@ class TestLocalComplementFixture(Neo4jUnitTestCase):
             preserve_scalar=False,
             require_fired=True,
             check_boundary_counts=True,
-            print_results=True,
+            print_results=False,
         )
 
         self.assertTrue(report["db_vs_original"])

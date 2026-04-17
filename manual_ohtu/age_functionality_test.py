@@ -1,14 +1,20 @@
+#Scelaton
 from pyzx.graph.graph_AGE import GraphAGE
+
 from pyzx.utils import VertexType, EdgeType
+from tests.test_graph_age import test_add_vertices
 import networkx as nx
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from fractions import Fraction
-import pyzx as zx
-import os
 
 # connect to AGE database
+<<<<<<< HEAD
+g = GraphAGE()
+
+=======
+
+ 
+>>>>>>> dev
 print("Successfully connected to AGE database")
 
 # Minimal Cypher smoke test to verify AGE functionality
@@ -48,40 +54,20 @@ def delete_graph():
     print("\nGraph deleted")
 
 #is_there_smoke()
+<<<<<<< HEAD
+g.add_vertices(3)
+print("vertices added")
+g.delete_graph()
+=======
 g = GraphAGE()
-
+#vertices = g.add_vertices(3)
 def manually_constructing():
     i = g.add_vertex(0,0,0)
     v = g.add_vertex(1,0,1, Fraction(1,2))
     w = g.add_vertex(2,0,2, Fraction(-1,2))
-    o = g.add_vertex(0,0,3)
-    g.add_edges([(i,v),(v,w),(w,o)])
+    o = g.add_verte(0,0,3)
+    g.add_edges([(i,v), (v,w),(w,o)])
 
-def draw_graph(g):
-    vertices = g.get_vertices()
-    edges = g.get_edges()
-    G = nx.Graph()
-    G.add_nodes_from(vertices)
-    G.add_edges_from(edges)
-    return G
-
-def plt_graph(G):
-    G_nx = nx_from_age(G)
-    plt.figure()
-    pos = nx.spring_layout(G_nx)
-    nx.draw(G_nx, pos, with_labels=True, node_color='skyblue', node_size=600, font_size=12, edge_color='gray')
-    plt.savefig(os.path.abspath("AGE_graphs/graph.png"))
-    print("Graph saved to folder pyzx/AGE_graphs.")
-
-def nx_from_age(g):
-    G_nx = nx.Graph()
-    for v in g.vertices():    # call the method
-        G_nx.add_node(v)
-    for u, v in g.edges():    # call the method
-        G_nx.add_edge(u, v)
-    return G_nx
-    
-manually_constructing()
-plt_graph(g)
 
 g.delete_graph()
+>>>>>>> dev
