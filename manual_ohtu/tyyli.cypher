@@ -59,6 +59,14 @@ color-selected: Darker(#a0a0a0)
 size: 4
 }
 
+
+@NodeStyle HasLabel(node, "Output") {
+color: #1A1A1A // Near black for visibility
+border-width: 1.2
+color-hover: Darker(#1A1A1A)
+color-selected: Darker(#1A1A1A)
+}
+
 /* --- BASELINE EDGE STYLE --- */
 @EdgeStyle {
 // Logic for edge types (e.g., standard vs Hadamard)
