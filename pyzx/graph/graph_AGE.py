@@ -81,10 +81,6 @@ class GraphAGE(BaseGraph[VT, ET]):
                 print(f"Error: {e}")
                 self.conn.rollback()
 
-    def verify_db_connection(self)->bool:
-        """Verifies that the database connection is valid."""
-        return False if self.conn.close == 0 else True
-
     def _prepare_session(self) -> None:
         """Prepare AGE session once per DB connection."""
         if self._session_prepared:
@@ -1053,22 +1049,6 @@ class GraphAGE(BaseGraph[VT, ET]):
             cur.execute(query)
             row = cur.fetchone()
             self.conn.commit()
-
-        if not row:
-            return []
-
-        keys_raw = str(row[0]).split("::", 1)[0]
-        if keys_raw in ("", "null", "None"):
-            return []
-
-        try:
-            parsed = json.loads(keys_raw)
-            if not isinstance(parsed, list):
-                return []
-            builtin = {"id", "t", "ty", "phase", "qubit", "row"}
-            return [str(key) for key in parsed if str(key) not in builtin]
-        except json.JSONDecodeError:
-            return []
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.

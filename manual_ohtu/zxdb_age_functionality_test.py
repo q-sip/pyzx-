@@ -14,9 +14,9 @@ import sys
 import uuid
 
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if REPO_ROOT not in sys.path:
-	sys.path.insert(0, REPO_ROOT)
+#REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#if REPO_ROOT not in sys.path:
+#	sys.path.insert(0, REPO_ROOT)
 
 from pyzx.graph.zxdb_age.zxdb_age import ZXdbAge
 
@@ -27,7 +27,6 @@ def run_to_gh_manual_test() -> bool:
 
 	try:
 		db.clear_all_data()
-
 		db._execute_cypher(
 			"""
 			CREATE (a:Node {t: 2, graph_id: '""" + graph_id + """'})
@@ -143,6 +142,10 @@ def run_spider_fusion_manual_test() -> bool:
 			pass
 		db.close()
 
+def run_remove_identities(G):
+	#WIP
+    pass
+
 
 if __name__ == "__main__":
 	print("--- Running to_gh manual test ---")
@@ -152,4 +155,5 @@ if __name__ == "__main__":
 	spider_ok = run_spider_fusion_manual_test()
 
 	raise SystemExit(0 if (to_gh_ok and spider_ok) else 1)
+
 

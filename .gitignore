@@ -24,10 +24,10 @@ pyzx/graph/temp_random_metadata.json
 pyzx/graph/temp_simple_graph_metadata.json
 pyzx/graph/zxdb/run.py
 test_output.txt
-.gitignore.*
+pyzx/graph/zxdb/.gitignore.swp
 pyzx/graph/zxdb/.gitigone.swo
 pyzx/graph/zxdb/.gitigone.swp
-
+*metadata.json
 
 mutants
 true
