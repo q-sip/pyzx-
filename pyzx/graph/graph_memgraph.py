@@ -107,7 +107,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def remove_all_data(self) -> None:
         """Removes ALL nodes and relationships for this graph_id."""
-        query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
+        query = """MATCH (n:Node) DETACH DELETE n"""
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
 

@@ -12,7 +12,7 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-c = zx.generate.CNOT_HAD_PHASE_circuit(6, 50, seed=45)
+c = zx.generate.CNOT_HAD_PHASE_circuit(3, 40, seed=43)
 # g = zx.generate.cliffordT(3, 30, seed=8, backend='memgraph')
 # c = g.copy(backend='simple')
 c_local = c.to_graph(backend='simple')
@@ -45,6 +45,9 @@ g_local = g.copy(backend='simple')
 # print('started comparing')
 compare = zx.compare_tensors(g_local, c, preserve_scalar=False)
 print(f'Comparing: {compare}')
+# g = c.copy(backend="memgraph")
+
+
 # if False == False:
 #     print(f'False with seed {x}')
 #     break

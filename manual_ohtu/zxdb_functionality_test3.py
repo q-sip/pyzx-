@@ -35,14 +35,14 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
 
             break
 
-        for d in range(20, 100, 20):
+        for d in range(40, 100, 20):
 
 
             if stop_requested or found:
 
                 break
 
-            for s in range(3, 100, 20):
+            for s in range(40, 100):
 
                 g = zx.generate.CNOT_HAD_PHASE_circuit(q, d, seed=s)
                 g = g.to_graph(backend="memgraph")
@@ -91,8 +91,9 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
                     print(" ")
 
 
-                paause = input("s")
+                #paause = input("s")
                 zxdb.clear_all_data()
+                g.remove_all_data()
 
 
                 if not compare:

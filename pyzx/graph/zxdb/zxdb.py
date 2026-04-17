@@ -867,13 +867,20 @@ class ZXdb:
         """
         Perform the copy simp operation
         """
+        print("now working on copy simp                                                                     !!!!")
+
         graph_id = graph.graph_id
         with self.driver.session() as session:
             def apply_copy_simp(tx):
                 query = str(self.basic_rewrite_rule_queries["State copy"]["query"]["code"]["value"])
                 tx.run(query, graph_id=graph_id)
 
-            session.execute_write(apply_copy_simp)
+            d = session.execute_write(apply_copy_simp)
+            if d:
+                print(" ")
+                print(" ")
+                print("copy simp did something")
+                print(" ")
 
     def to_gh(self, graph) -> None:
         """
@@ -906,6 +913,8 @@ class ZXdb:
         Apply the supplementarity rule to the graph.
         Removes pairs of non-Clifford spiders that have the same set of neighbors.
         """
+
+        print("now working on supp simp                                                                     !!!!")
         graph_id = graph.graph_id
         count = 0
         with self.driver.session() as session:
@@ -939,6 +948,12 @@ class ZXdb:
                     return record["c"] if record else 0
 
                 c2 = session.execute_write(_supp_type_2)
+
+                if c1 or c2:
+                    print(" ")
+                    print(" ")
+                    print("sup simp did                                            1")
+                    print(" ")
                 
                 if c1 == 0 and c2 == 0:
                     break
@@ -978,14 +993,13 @@ class ZXdb:
         self._check_graph_like(graph)
         self.interior_clifford_simp(graph)
         self.pivot_gadget_rule(graph)
-        # while True:
-        #     self.clifford_simp(graph)
-        #     return
-        #     i = self.phase_gadget_fusion_rule(graph)
-        #     self.interior_clifford_simp(graph)
-        #     k = self.copy_simp(graph)
-        #     l = self.supplementarity_simp(graph)
-        #     j = self.pivot_gadget_rule(graph)
-        #     if not (i or k or j or l):
-        #         self.remove_isolated_vertices(graph)
-        #         break
+        while True:
+            zx.clifford_simp(graph)
+            i = self.phase_gadget_fusion_rule(graph)
+            self.interior_clifford_simp(graph)
+            k = self.copy_simp(graph)
+            l = self.supplementarity_simp(graph)
+            j = zx.pivot_gadget_simp(graph)
+            if not (i or k or j or l):
+                self.remove_isolated_vertices(graph)
+                break
