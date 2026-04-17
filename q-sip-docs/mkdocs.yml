@@ -1,0 +1,19 @@
+site_name: Q-sip
+nav:
+   - Home: index.md
+   - User: user.md
+   - Developer: dev.md
+   - Age: ohtu-muutokset_age.md
+   - Neo4j: ohtu-muutokset_neo4j.md
+   - Architecture: arch.md
+   - Benchmarks: benchmarks.md
+   - Queries: queries.md
+   - About: about.md
+theme: readthedocs
+markdown_extensions:
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

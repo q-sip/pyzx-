@@ -26,13 +26,7 @@ class MemgraphUnitTestCase(unittest.TestCase):
         self.graph_id = f"test_graph_{uuid.uuid4().hex}"
 
         self.backend_name = "memgraph"
-        self.g = GraphMemgraph(
-            uri=os.getenv("MEMGRAPH_URI"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database="memgraph",
-            graph_id=self.graph_id,
-        )
+        self.g = GraphMemgraph()
 
         # sanity-check connection
         try:
