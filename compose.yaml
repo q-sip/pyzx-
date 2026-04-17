@@ -1,26 +1,48 @@
 services:
+  # Apache AGE (PostgreSQL-pohjainen graafitietokanta)
   age:
     image: apache/age:latest
+    container_name: pyzx-age-db
     profiles: ["age", "all"]
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_PASSWORD: postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # Memgraph (In-memory graafitietokanta)
   memgraph:
     image: memgraph/memgraph-mage:latest
+    container_name: pyzx-memgraph-db
     profiles: ["mem", "all"]
     ports:
-      - "7445:7687"
+      - "7687:7687"
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'RETURN 1;' | mgcmd || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # Memgraph Lab (Käyttöliittymä Memgraphille)
   lab:
     image: memgraph/lab:latest
     profiles: ["mem", "all"]
     ports:
       - "3000:3000"
+    depends_on:
+      - memgraph
 
+  # Adminer (Käyttöliittymä AGE/Postgres-tietokannalle)
   adminer:
+    image: adminer:latest
     profiles: ["age", "all"]
-    image: adminer
     ports:
       - "8080:8080"
+    depends_on:
+      - age
