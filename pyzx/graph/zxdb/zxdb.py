@@ -610,6 +610,7 @@ class ZXdb:
         """
         graph_id = graph.graph_id
         with self.driver.session() as session:
+            active_graph_id = graph_id if graph_id is not None else self.graph_id
             #start_time = time.time()
 
             while True:

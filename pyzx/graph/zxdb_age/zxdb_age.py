@@ -208,9 +208,48 @@ class ZXdbAge:
         """TODO: implement AGE hadamard cancellation rewrite pipeline."""
         return 0
 
-    def remove_identities(self) -> int:
-        """TODO: implement AGE identity-removal rewrite."""
-        return 0
+    def remove_identities(self, G) -> int:
+        """
+        Collapse nodes with:
+        - attribute 'phase' even
+        - degree == 2
+        Replace them by directly connecting their neighbors.
+        
+        Parameters:
+            G (nx.Graph or nx.DiGraph): graph with node attributes
+            
+        Returns:
+            bool: True if any nodes were removed
+        """
+        nodes_to_remove = []
+
+        nodes = G.vertices
+
+        for node in list(nodes):
+            # Check node conditions
+            if (
+                nodes[node].get("phase") is not None and
+                nodes[node]["phase"] % 2 == 0 and
+                node.vertex_degree == 2
+            ):
+                neighbors = list(G.neighbors(node))
+                if len(neighbors) != 2:
+                    continue  # safety check
+                #Fix from here onwards
+                v1, v2 = neighbors
+
+                # Avoid creating duplicate edges if already connected
+                if not G.has_edge(v1, v2):
+                    G.add_edge(v1, v2, type="Wire")
+
+                nodes_to_remove.append(node)
+
+        # Remove nodes after iteration
+        for node in nodes_to_remove:
+            G.remove_node(node)
+
+        return len(nodes_to_remove) > 0
+
 
     def spider_fusion(self) -> int:
         """Apply spider-fusion."""
