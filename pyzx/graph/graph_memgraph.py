@@ -91,6 +91,19 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 self.uri, auth=(self.user, self.password)
             )
         return self._driver
+    
+
+    def verify_db_connection(self)->bool:
+        """Verifies that the database connection is valid."""
+        try:
+            self.driver.verify_connectivity()
+        except Exception as e:
+            print(f"Connection failed, e:\n{e}", end='\n')
+            return False
+        return True
+    
+    def __del__(self):
+        self.close()
 
     def remove_all_data(self) -> None:
         """Removes ALL nodes and relationships for this graph_id."""

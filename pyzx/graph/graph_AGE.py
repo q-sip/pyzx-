@@ -81,6 +81,10 @@ class GraphAGE(BaseGraph[VT, ET]):
                 print(f"Error: {e}")
                 self.conn.rollback()
 
+    def verify_db_connection(self)->bool:
+        """Verifies that the database connection is valid."""
+        return False if self.conn.close == 0 else True
+
     def _prepare_session(self) -> None:
         """Prepare AGE session once per DB connection."""
         if self._session_prepared:
