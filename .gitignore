@@ -9,6 +9,7 @@ doc/_build
 build
 dist
 pyzx.egg-info
+*.egg-info/
 *.pyc
 .vscode
 *.class

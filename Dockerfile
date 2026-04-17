@@ -2,22 +2,18 @@ FROM python AS pyzx-base
 
 WORKDIR /usr/src/app
 
-COPY requirements.txt .
+COPY . .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -e .
 
 FROM pyzx-base AS product
-COPY . .
-RUN pip install -e .
 
-CMD ["python", "-m", "manual_ohtu.main_switch"]
+CMD ["python", "-c", "import pyzx_db_addon"]
 
 FROM pyzx-base AS test-base
-COPY test_requirements.txt ./
-RUN pip install --no-cache-dir -r test_requirements.txt
+RUN pip install --no-cache-dir -e ".[test]"
 
 FROM test-base AS tester
-COPY . .
 
 ENTRYPOINT [ "/bin/sh", "-c" ]
 
