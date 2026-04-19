@@ -56,10 +56,24 @@ def disable_pyzx_backend_overrides() -> None:
 	pyzx.Graph = _original_top_level_graph
 
 
+def __getattr__(name: str) -> Any:
+	if name == "ZXdb":
+		from .zxdb import ZXdb
+
+		return ZXdb
+	if name == "ZXdbAge":
+		from .zxdb_age import ZXdbAge
+
+		return ZXdbAge
+	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
 	"GraphAGE",
 	"GraphNeo4j",
 	"GraphMemgraph",
+	"ZXdb",
+	"ZXdbAge",
 	"create_graph",
 	"enable_pyzx_backend_overrides",
 	"disable_pyzx_backend_overrides",
