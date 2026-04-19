@@ -14,9 +14,9 @@ Example usage:
 
 ```
 import pyzx
-import pyzx_db_addon
+import pyzx_db_addon as addon
 
-g = pyzx.Graph(backend="memgraph")
+g = addon.create_graph(backend="memgraph")
 ```
 
 After this, you can use the backend just like you would use PyZX normally, but everything is saved to memgraph.
