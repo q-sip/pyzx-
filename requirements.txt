@@ -1,8 +1,0 @@
-pyzx
-
-python-dotenv
-networkx
-quimb
-
-neo4j
-psycopg[binary]

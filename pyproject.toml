@@ -33,8 +33,6 @@ test = [
   "pytest",
   "coverage",
   "mutmut",
-  "qiskit~=1.0.0",
-  "qiskit_qasm3_import~=0.4.2"
 ]
 dev = [
   "mypy~=1.5.1",
@@ -42,12 +40,8 @@ dev = [
   "pylint"
 ]
 docs = [
-  "sphinx>=2.3,<7",
-  "sphinx_autodoc_typehints>=1.10",
-  "sphinx_rtd_theme>=0.4",
-  "nbsphinx~=0.9.3",
-  "ipykernel>=6",
-  "sphinxcontrib-svg2pdfconverter>=1.2.2"
+  "mkdocs",
+  "pymdown-extensions"
 ]
 
 [tool.setuptools]
