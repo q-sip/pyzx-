@@ -1,5 +1,12 @@
 ## Queries
 
+The ZX-calculus rules have two alternatives for implementation.
+They are either implemented via PyZX, where for each operation done by PyZX, there are corresponding DB operations to achieve the same thing.
+The other option are rewriting the ZX calculus rules, to perform an action in the DB with fewer DB transactions/queries.
+
+As this is pretty slow and inefficient, another alternative is rewriting some of the queries.
+These rewrites are located in file `graph/zxdb/query_collections/main_queries.json`
+
 A lot of this section is paraphrased from Romain Moyard's [article](https://pennylane.ai/qml/demos/tutorial_zx_calculus), published on Pennylane in 2023.
 The images in this section are also from Romain Moyard's article.
 
@@ -23,9 +30,9 @@ Commutatitivity is a property of an operation, where changing the order of the o
     The fuse rule can be applied when two spiders of the same type are connected by one or more wires. 
     The resulting fused part of the graph is a spider with the phase as the sum of the phases of the two spiders.
 
-    This rule is implemented by:
+    The rewrite for this rule is implemented by:
 
-    xxxx
+    
 
     ---
 
@@ -38,7 +45,7 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
     This rule is implemented by:
 
-    xxxx
+    "Pi commutation - one node"
 
     ---
 
@@ -53,7 +60,7 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
     This rule is implemented by:
 
-    xxxx
+    "State copy"
 
     ---
 
@@ -72,7 +79,7 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
     This rule is implemented by:
 
-    xxxx
+    "Remove identities", "Remove identities 2", "Remove identities with refactor"
 
     ---
 
@@ -85,7 +92,7 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
     This rule is implemented by:
 
-    xxxx
+    "Bialgebra"
 
     ---
 
@@ -99,7 +106,7 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
     This rule is implemented by:
 
-    xxxx
+    "Hopf", "Hopf rule"
 
     ---
 
@@ -109,3 +116,15 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
 There are some queries outside the ZX calculus rules.
 Most often these exist for computational reasons, like combining two queries that are very often used after another in a sequence.
+
+These queries are in the JSON listed as
+
+- Unfuse
+- change color
+- Turn Hadamard edges into Hadamard boxes
+- Turn Hadamard gates into Hadamard edges
+- Return all
+- Cancel Hadamard patterns
+- Remove extra edges
+- Get degree distribution
+- Bipartite cliques
