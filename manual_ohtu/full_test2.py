@@ -81,6 +81,6 @@ def comparison_2(seed: int, b1: str | None = None, b2: str | None = None):
 #print("Multigraph:", comparison_1(42, "multigraph"))
 # print("graph_tool", comparison_1(42, "graph_tool")) deprecated
 # print("quizx-vec", comparison_1(42, "quizx-vec"))
-#print("Memgraph-ZXdb:", comparison_1(42, "memgraph"))
+print("Memgraph-ZXdb:", comparison_1(42, "memgraph"))
 
-print("Memgraph-ZXdb vs simple:", comparison_2(42, "memgraph", "simple"))
+#print("Memgraph-ZXdb vs simple:", comparison_2(42, "memgraph", "simple"))

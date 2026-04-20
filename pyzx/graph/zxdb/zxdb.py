@@ -1,3 +1,5 @@
+# CURRENTLY WORKING ZXDB HÄSSÄKKÄ
+
 from fractions import Fraction
 from neo4j import GraphDatabase
 import json
