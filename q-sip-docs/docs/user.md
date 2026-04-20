@@ -201,82 +201,74 @@ net localgroup docker-users "%USERNAME%" /add
 </details>
 
 <br>
-In the section below, all Docker commands are run in the project's root directory.
-
--------
-
-### PostgreSQL + Age
-
-**1. Start the Database**
-To spin up the database using the `age` profile, run:
-```bash
-docker compose --profile age up
-```
-
-**2. Inspect the database contents by going to http://localhost:8080/?pgsql=age&username=postgres&db=postgres**
-- password is ``postgres``
-
-
-**3. Stop and Clean Up**
-Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
-```bash
-docker compose down --remove-orphans
-```
-
----
-
-### Memgraph + Memlab
-
-**1. Start the Database**
-To spin up the database using the `mem` profile, run:
-```bash
-docker compose --profile mem up
-```
-
-**2. Inspect the database contents by going to http://localhost:3000**
-First time:
-Manual connect --> New connection --> Memgraph instance
---> Fill field "Host" with ``memgraph``
---> Connect
-
-After first time:
-Click ``Connect now``
-
-**3. Stop and Clean Up**
-Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
-```bash
-docker compose down --remove-orphans
-```
-
----
-
-### Memgraph + postgres at the same time
-
-**1. Start the Database**
-To spin up the database using the `all` profile, run:
-```bash
-docker compose --profile all up
-```
-
-**2. Refer to previous section step 2 for UI access**
-Both adminer and memlab are up, so you can use either or both at the same time.
-
-
-**3. Stop and Clean Up**
-Because this database setup can leave orphaned containers behind, use the following command to stop services and clean them up:
-```bash
-docker compose down --remove-orphans
-```
-
-
 
 ## Usage
 
-See `example.py` in the project root:
+See `example.py` in the project root.
 
 Example usage:
 
+**1. Install the package** into a fresh virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install pyzx-db-addon
 ```
+
+**2. Start the database backend(s).** Grab the project's `compose.yaml`
+from the repo and, in a separate terminal from the same directory, pick
+a profile:
+
+```bash
+docker compose --profile age up      # Apache AGE (Postgres)
+docker compose --profile mem up      # Memgraph
+docker compose --profile neo4j up    # Neo4j
+docker compose --profile all up      # everything at once
+```
+
+If you already run your own Postgres/Neo4j/Memgraph, skip docker and
+just point `.env` at it.
+
+**3. Inspect the databases through their web UIs** (each profile ships a
+frontend, reachable once the stack is up):
+
+- AGE → Adminer at <http://localhost:8080/?pgsql=age&username=postgres&db=postgres> (password `postgres`)
+- Memgraph → Memgraph Lab at <http://localhost:3000> — first time: *Manual connect → New connection → Memgraph instance*, fill **Host** with `memgraph`, then *Connect*. Afterwards just click *Connect now*.
+- Neo4j → Neodash at <http://localhost:5005> (or Neo4j Browser at <http://localhost:7474>; user `neo4j` / password `password`)
+
+**4. Create a `.env`** next to your script with the connection details
+matching `compose.yaml`:
+
+```
+# Apache AGE / Postgres
+DB_HOST=localhost
+DB_PORT=5432
+POSTGRES_DB=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+
+# Neo4j (bolt remapped to 7688 in compose.yaml to avoid memgraph conflict)
+DB_URI_NEO4J=bolt://localhost:7688
+DB_USER_NEO4J=neo4j
+DB_PASSWORD_NEO4J=password
+
+# Memgraph (no auth by default)
+DB_URI_MEMGRAPH=bolt://localhost:7687
+DB_USER_MEMGRAPH=
+DB_PASSWORD_MEMGRAPH=
+```
+
+**5. Run the script below:**
+
+```
+import traceback
+
+import pyzx
+import pyzx_db_addon
+from pyzx.utils import VertexType, EdgeType
+
+
 def build_small_graph(g):
     v0 = g.add_vertex(VertexType.Z, qubit=0, row=0)
     v1 = g.add_vertex(VertexType.X, qubit=0, row=1)
@@ -320,10 +312,16 @@ for backend in BACKENDS:
       print(f"backend reported by graph: {getattr(g_rand, 'backend', '?')}")
   finally:
       pyzx_db_addon.restore_backend(undo)
-
 ```
 
-After this, you can use the backend just like you would use PyZX normally, but everything is saved to memgraph.
+After this, you can use the backend just like you would use PyZX normally, but everything is saved to the backend of your choice.
+
+**6. Stop and clean up.** The compose stack can leave orphaned containers
+behind, so when you're done tear it down with:
+
+```bash
+docker compose down --remove-orphans
+```
 
 
 ## Performance tips
