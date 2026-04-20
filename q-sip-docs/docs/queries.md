@@ -1,4 +1,4 @@
-## Queries
+# Queries
 
 The ZX-calculus rules have two alternatives for implementation.
 They are either implemented via PyZX, where for each operation done by PyZX, there are corresponding DB operations to achieve the same thing.
@@ -10,13 +10,112 @@ These rewrites are located in file `graph/zxdb/query_collections/main_queries.js
 A lot of this section is paraphrased from Romain Moyard's [article](https://pennylane.ai/qml/demos/tutorial_zx_calculus), published on Pennylane in 2023.
 The images in this section are also from Romain Moyard's article.
 
-| Query  | Status |   Description   |
-|--------|--------|-----------------|
-| query1 |  ✅ | Proven valid |
-| query2 | ⚠️   |  Sometimes fails   |
-| query3 | ❌ | Does not work |
+<details markdown="1">
+<summary>Table overview of all query rewrites</summary>
 
-**ZX calculus rules:**
+| Query  | Status | Location |
+|--------|--------|----------|
+| I/O node Hadamard wires -> wires with Hadamard gates | TBD | `collection-circuit-extraction.json` |
+| Find frontier | TBD | `collection-circuit-extraction.json` |
+| Frontier nodes with degree two | TBD | `collection-circuit-extraction.json` |
+| Pull CZ gates through | TBD | `collection-circuit-extraction.json` |
+| Hadamard cancellation labeling query | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Spider labeling query green | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Spider labeling query red | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Spider labeling query green and red | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Local complement labeling | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Bialgebra labeling | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Spider labeling query green 2 | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Spider labeling query | TBD | `collection-Labeling-queries-ZXdb.json` |
+| Hadamard edge cancellation | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Spider fusion rewrite | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Pivot rule - two interior Pauli spiders | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Pivot rule - single interior Pauli spider | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Local complement rewrite | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Gadget fusion red green | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Gadget fusion Hadamard | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Pivot gadget | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Pivot boundary | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Bialgebra red-green | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Bialgebra Hadamard | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Bialgebra simplification | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Local complement full | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Gadget fusion both | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Spider fusion rewrite 2 | TBD | `collection-Rewrite-queries-ZXdb.json` |
+| Spider fusion | TBD | `main_queries.json` |
+| Hopf | TBD | `main_queries.json` |
+| Remove identities with refactor | TBD | `main_queries.json` |
+| Local complement | TBD | `main_queries.json` |
+| Gadget fusion | TBD | `main_queries.json` |
+| Get degree distribution | TBD | `main_queries.json` |
+| Self loop query | TBD | `main_queries.json` |
+| Remove isolated vertices | TBD | `main_queries.json` |
+| Supplementarity simp 1 | TBD | `main_queries.json` |
+| Supplementarity simp 2 | TBD | `main_queries.json` |
+| Remove identities | TBD | `memgraph-collection-zxdb.json` |
+| Bialgebra | TBD | `memgraph-collection-zxdb.json` |
+| Unfuse | TBD | `memgraph-collection-zxdb.json` |
+| Pi commutation - one node | TBD | `memgraph-collection-zxdb.json` |
+| State copy | TBD | `memgraph-collection-zxdb.json` |
+| Change color | TBD | `memgraph-collection-zxdb.json` |
+| Turn Hadamard edges into Hadamard boxes | TBD | `memgraph-collection-zxdb.json` |
+| Turn Hadamard gates into Hadamard edges | TBD | `memgraph-collection-zxdb.json` |
+| Return all | TBD | `memgraph-collection-zxdb.json` |
+| Cancel Hadamard patterns | TBD | `memgraph-collection-zxdb.json` |
+| Hopf rule | TBD | `memgraph-collection-zxdb.json` |
+| Remove extra edges | TBD | `memgraph-collection-zxdb.json` |
+| Bipartite cliques | TBD | `memgraph-collection-zxdb.json` |
+| Remove identities 2 | TBD | `memgraph-collection-zxdb.json` |
+| Change color age - mark | TBD | `age-specific-queries.json` |
+| Change color age - recolor | TBD | `age-specific-queries.json` |
+| Change color age - toggle wires | TBD | `age-specific-queries.json` |
+| Change color age - cleanup | TBD | `age-specific-queries.json` |
+| Spider fusion age | TBD | `age-specific-queries.json` |
+| Spider fusion age reverse | TBD | `age-specific-queries.json` |
+| Spider fusion age - normalize | TBD | `age-specific-queries.json` |
+| Spider fusion age - self loops | TBD | `age-specific-queries.json` |
+| Spider fusion age - cleanup merged mark | TBD | `age-specific-queries.json` |
+| Local complementation age | TBD | `age-specific-queries.json` |
+| Local complementation age - batch process pairs | TBD | `age-specific-queries.json` |
+| Local complementation age - delete hadamard edges | TBD | `age-specific-queries.json` |
+| Local complementation age - toggle mixed edges | TBD | `age-specific-queries.json` |
+| Local complementation age - batch apply center phase | TBD | `age-specific-queries.json` |
+| Spider fusion (A) | TBD | `main_queries.json` |
+| Hopf (A) | TBD | `main_queries.json` |
+| Bialgebra labeling (A) | TBD | `main_queries.json` |
+| Bialgebra simplification (A) | TBD | `main_queries.json` |
+| Hadamard cancellation labeling query (A) | TBD | `main_queries.json` |
+| Hadamard edge cancellation (A) | TBD | `main_queries.json` |
+| Remove identities with refactor (A) | TBD | `main_queries.json` |
+| Local complement (A) | TBD | `main_queries.json` |
+| Gadget fusion (A) | TBD | `main_queries.json` |
+| Pivot boundary (A) | TBD | `main_queries.json` |
+| Pivot gadget (A) | TBD | `main_queries.json` |
+| Pivot rule - two interior Pauli spiders (A) | TBD | `main_queries.json` |
+| Pivot rule - single interior Pauli spider (A) | TBD | `main_queries.json` |
+| Get degree distribution (A) | TBD | `main_queries.json` |
+| Remove identities (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Bialgebra (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Unfuse (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Pi commutation - one node (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| State copy (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Change color (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Hadamard edges -> Hadamard boxes (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Hadamard gates -> Hadamard edges (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Return all (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Cancel Hadamard patterns (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Hopf rule (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Remove extra edges (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Get degree distribution (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Bipartite cliques (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Remove identities 2 (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+| Remove identities with refactor (A/M) | TBD | `memgraph-collection-zxdb-age.json` |
+
+</details>
+
+<br>
+
+## ZX calculus rules:
 
 As the X-gate and Z-gate are not commutative, vertices without a phase that have a different color, do not commute.
 Commutatitivity is a property of an operation, where changing the order of the operands does not affect the result, like $5 + 2 = 2 + 5$, but $\frac{2}{5} \neq \frac{5}{2}$.
@@ -32,7 +131,7 @@ Commutatitivity is a property of an operation, where changing the order of the o
 
     The rewrite for this rule is implemented by:
 
-    
+    "Spider fusion rewrite", "gadget fusion red green", "gadget fusion hadamard", "gadget fusion both"
 
     ---
 
