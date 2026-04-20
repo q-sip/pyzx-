@@ -1,8 +1,3 @@
-# Extra information for developers
-
-
-
-
 ## Development
 
 
@@ -91,7 +86,7 @@ Possible, but you would have to run the databases on your host.
 This should work as long as you configure all the parameters correctly in your `.env` file in the project root.
 Check the `compose.yaml` to see the most relevant parameters and `pyzx_db_addon/graph_*.py`
 
-## Code quality
+### Code quality
 
 - Formatting: Black
 - Style: pylint score >= 9.5
