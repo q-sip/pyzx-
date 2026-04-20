@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import sys
+from typing import Any, List, Optional, Tuple
 
 import pyzx
 import pyzx.graph.graph as pyzx_graph
+# Preload submodules that do `from .graph import Graph`, so force_backend()
+# can rebind their already-resolved `Graph` attribute.
+import pyzx.generate  # noqa: F401
+import pyzx.simplify  # noqa: F401
+import pyzx.circuit  # noqa: F401
 
 from .graph_AGE import GraphAGE
 from .graph_memgraph import GraphMemgraph
@@ -56,6 +62,38 @@ def disable_pyzx_backend_overrides() -> None:
 	pyzx.Graph = _original_top_level_graph
 
 
+def force_backend(backend: Any) -> List[Tuple[Any, str, Any]]:
+	"""Rebind every `Graph` attribute in loaded pyzx.* modules that points
+	at PyZX's original Graph to the chosen backend class, so calls like
+	`pyzx.generate.cliffordT(...)` produce graphs in that backend.
+
+	Returns an undo list to pass to `restore_backend`.
+	"""
+	normalized = _normalize_backend(backend)
+	factory = _BACKEND_FACTORIES.get(normalized or "")
+	if factory is None:
+		raise ValueError(f"unknown backend: {backend!r}")
+	undo: List[Tuple[Any, str, Any]] = []
+	for name, mod in list(sys.modules.items()):
+		if not name.startswith("pyzx") or mod is None:
+			continue
+		for attr in vars(mod):
+			try:
+				val = getattr(mod, attr)
+			except Exception:
+				continue
+			if val is _original_module_graph:
+				setattr(mod, attr, factory)
+				undo.append((mod, attr, val))
+	return undo
+
+
+def restore_backend(undo: List[Tuple[Any, str, Any]]) -> None:
+	"""Undo a previous `force_backend` call."""
+	for mod, attr, old in undo:
+		setattr(mod, attr, old)
+
+
 def __getattr__(name: str) -> Any:
 	if name == "ZXdb":
 		from .zxdb import ZXdb
@@ -77,4 +115,6 @@ __all__ = [
 	"create_graph",
 	"enable_pyzx_backend_overrides",
 	"disable_pyzx_backend_overrides",
+	"force_backend",
+	"restore_backend",
 ]
