@@ -46,3 +46,27 @@ services:
       - "8080:8080"
     depends_on:
       - age
+
+  # Neo4j (Graafitietokanta)
+  neo4j:
+    image: neo4j:latest
+    container_name: pyzx-neo4j-db
+    profiles: ["neo4j", "all"]
+    ports:
+      - "7688:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Neodash (Käyttöliittymä Neo4j-tietokannalle)
+  neodash:
+    image: neo4jlabs/neodash:latest
+    profiles: ["neo4j", "all"]
+    ports:
+      - "5005:5005"
+    depends_on:
+      - neo4j
