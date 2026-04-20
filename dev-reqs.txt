@@ -1,0 +1,12 @@
+pre-commit
+pylint
+
+pytest
+coverage
+mutmut
+
+mypy #do we need this?
+
+
+mkdocs
+pymdown-extensions
