@@ -42,6 +42,8 @@ def merge_phase_gadgets_for_simp(g: BaseGraph[VT,ET]) -> bool:
 
 def merge_phase_gadgets_for_apply(g: BaseGraph[VT,ET], vertices: List[VT]) -> bool:
     """Runs :func:`match_phase_gadgets` on the input vertices and if any matches are found runs :func:`merge_phase_gadgets`"""
+    # breakpoint()
+    print(f"noutaja", end='\n')
     checked_vertices = list([v for v in g.vertices() if (v in vertices)])
     matches = match_phase_gadgets(g, checked_vertices)
     if len(matches) == 0: return False
@@ -104,8 +106,9 @@ def match_phase_gadgets(g: BaseGraph[VT,ET], vertices:Optional[List[VT]]=None) -
 def merge_phase_gadgets(g: BaseGraph[VT,ET], matches: List[MatchGadgetType[VT]]) -> bool:
     """Given the output of :func:``match_phase_gadgets``, removes phase gadgets that act on the same set of targets."""
     rem: List[VT] = []
-
-
+    # print(f"loooohiiii", end='\n')
+    # raise IndexError
+    # breakpoint()
     for v, n, phase, othergadgets, othertargets in matches:
         g.set_phase(v, phase)
         g.set_phase(n, 0)

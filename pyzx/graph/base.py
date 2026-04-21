@@ -1320,6 +1320,8 @@ class BaseGraph(Generic[VT, ET], metaclass=DocstringMeta):
         edge_type: EdgeType = EdgeType.HADAMARD,
         vertex_type: VertexType = VertexType.Z
     ) -> Tuple[VT, VT]:
+        print(f"AAAAAAAAAAAAAAAAA kipua", end='\n')
+        breakpoint()
         """Add a phase gadget acting on the given target vertices.
         Returns a tuple (hub, phase_vertex) of the created vertices."""
         target_list = list(targets)

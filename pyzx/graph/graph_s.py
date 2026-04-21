@@ -394,3 +394,7 @@ class GraphS(BaseGraph[int,Tuple[int,int]]):
             self._edata[edge][key] = val
         else:
             self._edata[edge] = {key: val}
+
+    def torni(self):
+        breakpoint()
+        pass

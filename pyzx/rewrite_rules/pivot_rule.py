@@ -376,7 +376,9 @@ def pivot_NOT_REWORKED(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -
     rem_verts: List[VT] = []
     rem_edges: List[ET] = []
     etab: Dict[Tuple[VT,VT],List[int]] = dict()
-
+    # print(f"boundaryyyy", end='\n')
+    # raise ValueError
+    # breakpoint()
     for m in matches:
         # compute:
         #  n[0] <- non-boundary neighbors of m[0] only
@@ -436,10 +438,15 @@ def pivot_NOT_REWORKED(g: BaseGraph[VT,ET], matches: List[MatchPivotType[VT]]) -
         for e in es:
             nhe = etab.get(e, (0,0))[1]
             etab[e] = [0,nhe+1]
-
+    # breakpoint()
     g.add_edge_table(etab)
     g.remove_edges(rem_edges)
     g.remove_vertices(rem_verts)
     g.remove_isolated_vertices()
-
+    # if len(rem_verts) != 0 or len(rem_edges) != 0 or len(etab) != 0:
+    #     print(f"wad?", end='\n')
+        # raise ValueError
+    # raise ValueError
+        # breakpoint()
+    # breakpoint()
     return True

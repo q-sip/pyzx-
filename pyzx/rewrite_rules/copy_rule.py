@@ -140,6 +140,8 @@ def unsafe_copy(
     rem = []
     types = g.types()
 
+    print(f"Hurraa", end='\n')
+
     w = list(g.neighbors(v))[0]
     a = g.phases()[v]
     alpha = g.phases()[w]
@@ -180,6 +182,7 @@ def unsafe_copy(
         g.add_edge((n,u), et)
 
     g.remove_vertices(rem)
+    print(f"Done", end='\n')
     return True
 
 

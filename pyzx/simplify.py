@@ -213,12 +213,14 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
     if any(g.types()[h] == VertexType.H_BOX for h in g.vertices()):
         raise ValueError("Input graph is not a ZX-diagram as it contains an H-box. "
                          "Maybe call pyzx.hsimplify.from_hypergraph_form(g) first?")
+    # breakpoint()
     interior_clifford_simp(g)
     pivot_gadget_simp(g)
     iteration = 0
     while True:
         iteration += 1
         clifford_simp(g)
+        # breakpoint()
         i = gadget_simp(g)
         interior_clifford_simp(g)
         k = copy_simp(g)
