@@ -66,20 +66,20 @@ The images in this section are also from Romain Moyard's article.
 | Remove extra edges | TBD | `memgraph-collection-zxdb.json` |
 | Bipartite cliques | TBD | `memgraph-collection-zxdb.json` |
 | Remove identities 2 | TBD | `memgraph-collection-zxdb.json` |
-| Change color age - mark | TBD | `age-specific-queries.json` |
-| Change color age - recolor | TBD | `age-specific-queries.json` |
-| Change color age - toggle wires | TBD | `age-specific-queries.json` |
-| Change color age - cleanup | TBD | `age-specific-queries.json` |
-| Spider fusion age | TBD | `age-specific-queries.json` |
-| Spider fusion age reverse | TBD | `age-specific-queries.json` |
-| Spider fusion age - normalize | TBD | `age-specific-queries.json` |
-| Spider fusion age - self loops | TBD | `age-specific-queries.json` |
-| Spider fusion age - cleanup merged mark | TBD | `age-specific-queries.json` |
-| Local complementation age | TBD | `age-specific-queries.json` |
-| Local complementation age - batch process pairs | TBD | `age-specific-queries.json` |
-| Local complementation age - delete hadamard edges | TBD | `age-specific-queries.json` |
-| Local complementation age - toggle mixed edges | TBD | `age-specific-queries.json` |
-| Local complementation age - batch apply center phase | TBD | `age-specific-queries.json` |
+| Change color age - mark | Working | `age-specific-queries.json` |
+| Change color age - recolor | Working | `age-specific-queries.json` |
+| Change color age - toggle wires | Working | `age-specific-queries.json` |
+| Change color age - cleanup | Working | `age-specific-queries.json` |
+| Spider fusion age | Mostly working | `age-specific-queries.json` |
+| Spider fusion age reverse | Mostly working | `age-specific-queries.json` |
+| Spider fusion age - normalize | Mostly working | `age-specific-queries.json` |
+| Spider fusion age - self loops | Mostly working | `age-specific-queries.json` |
+| Spider fusion age - cleanup merged mark | Mostly working | `age-specific-queries.json` |
+| Local complementation age | Not working | `age-specific-queries.json` |
+| Local complementation age - batch process pairs | Not working | `age-specific-queries.json` |
+| Local complementation age - delete hadamard edges | Not working | `age-specific-queries.json` |
+| Local complementation age - toggle mixed edges | Not working | `age-specific-queries.json` |
+| Local complementation age - batch apply center phase | Not working | `age-specific-queries.json` |
 | Spider fusion (A) | TBD | `main_queries.json` |
 | Hopf (A) | TBD | `main_queries.json` |
 | Bialgebra labeling (A) | TBD | `main_queries.json` |

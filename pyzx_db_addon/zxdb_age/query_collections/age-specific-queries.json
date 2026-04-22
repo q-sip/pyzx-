@@ -98,7 +98,7 @@
             "description": "AGE-compatible local complementation candidate selection (center and neighbor ids)",
             "query": {
                 "code": {
-                    "value": "MATCH (center:Node)\nWHERE center.t = 1\n  AND coalesce(center.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\n  AND coalesce(center.phase, 0) IN [0.5, -0.5, 1.5, -1.5]\nWITH center\nOPTIONAL MATCH (center)-[bad_edge]-(bad_neighbor:Node)\nWHERE NOT (bad_neighbor.t = 1 AND coalesce(bad_edge.t, 1) = 2)\nWITH center, count(bad_neighbor) AS bad_connections\nWHERE bad_connections = 0\nMATCH (center)-[:Wire {t: 2}]-(nbr:Node)\nWHERE nbr.t = 1\n  AND coalesce(nbr.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\nWITH center, collect(DISTINCT id(nbr)) AS neighbor_ids, coalesce(center.phase, 0) AS center_phase\nWHERE size(neighbor_ids) > 0\nRETURN id(center) AS center_id, center_phase, neighbor_ids"
+                    "value": "MATCH (center:Node)\nWHERE center.t = 1\n  AND coalesce(center.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\n  AND coalesce(center.phase, 0) IN [0.5, -0.5, 1.5, -1.5]\nWITH center\nOPTIONAL MATCH (center)-[bad_edge]-(bad_neighbor:Node)\nWHERE NOT (bad_neighbor.t = 1 AND coalesce(bad_edge.t, 1) = 2)\nWITH center, count(bad_neighbor) AS bad_connections\nWHERE bad_connections = 0\nMATCH (center)-[:Wire {t: 2}]-(nbr:Node)\nWHERE nbr.t = 1\n  AND coalesce(nbr.graph_id, '__GRAPH_ID__') = '__GRAPH_ID__'\nWITH center, collect(DISTINCT coalesce(nbr.id, id(nbr))) AS neighbor_ids, coalesce(center.phase, 0) AS center_phase\nWHERE size(neighbor_ids) > 0\nRETURN coalesce(center.id, id(center)) AS center_id, center_phase, neighbor_ids"
                 },
                 "params": {}
             }
@@ -108,7 +108,7 @@
             "description": "Process all neighbor pairs: create missing edges via UNWIND + MERGE",
             "query": {
                 "code": {
-                    "value": "MATCH (left:Node {graph_id: '__GRAPH_ID__'}), (right:Node {graph_id: '__GRAPH_ID__'})\nWHERE left.id IN __LEFT_IDS__ AND right.id IN __RIGHT_IDS__ AND id(left) < id(right)\nMERGE (left)-[e:Wire]-(right)\nON CREATE SET e.t = 2, e.graph_id = '__GRAPH_ID__'\nRETURN count(e) AS processed"
+                    "value": "MATCH (left:Node {graph_id: '__GRAPH_ID__'}), (right:Node {graph_id: '__GRAPH_ID__'})\nWHERE left.id IN __LEFT_IDS__ AND right.id IN __RIGHT_IDS__ AND id(left) < id(right)\nOPTIONAL MATCH (left)-[existing:Wire]-(right)\nWITH left, right, existing\nWHERE existing IS NULL\nCREATE (left)-[e:Wire {t: 2, graph_id: '__GRAPH_ID__'}]->(right)\nRETURN count(e) AS processed"
                 },
                 "params": {}
             }

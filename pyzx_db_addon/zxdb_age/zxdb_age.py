@@ -125,9 +125,9 @@ class ZXdbAge:
     def _execute_cypher(self, cypher_query: str, return_signature: str = "result agtype") -> list:
         """Execute raw Cypher wrapped for AGE and return fetched rows."""
         sql = self._wrap_cypher(cypher_query, return_signature=return_signature)
-        max_attempts = int(os.getenv("ZXDB_AGE_MAX_RETRIES", "3"))
-        base_sleep = float(os.getenv("ZXDB_AGE_RETRY_BASE_SLEEP", "0.25"))
-        max_sleep = float(os.getenv("ZXDB_AGE_RETRY_MAX_SLEEP", "1.5"))
+        max_attempts = int(os.getenv("ZXDB_AGE_MAX_RETRIES", "8"))
+        base_sleep = float(os.getenv("ZXDB_AGE_RETRY_BASE_SLEEP", "0.5"))
+        max_sleep = float(os.getenv("ZXDB_AGE_RETRY_MAX_SLEEP", "5.0"))
         last_error: Exception | None = None
 
         for attempt in range(1, max_attempts + 1):
@@ -294,10 +294,19 @@ class ZXdbAge:
             return float(text)
 
         total_patterns = 0
+        max_iterations = int(os.getenv("ZXDB_AGE_LCOMP_MAX_ITERS", "2000"))
+        iteration_count = 0
         while True:
+            iteration_count += 1
+            if iteration_count > max_iterations:
+                print(
+                    f"Local Complementation(age): Stopped after reaching max iterations ({max_iterations})."
+                )
+                break
             # Query 1: Find valid center and neighbors
+            query_find = self._get_named_query("Local complementation age").replace("__GRAPH_ID__", self.graph_id)
             rows = self._execute_cypher(
-                self._get_named_query("Local complementation age"),
+                query_find,
                 return_signature="center_id agtype, center_phase agtype, neighbor_ids agtype",
             )
             if not rows or not rows[0]:
@@ -324,6 +333,7 @@ class ZXdbAge:
                 query_merge = self._get_named_query(
                     "Local complementation age - batch process pairs"
                 )
+                query_merge = query_merge.replace("__GRAPH_ID__", self.graph_id)
                 query_merge = query_merge.replace("__LEFT_IDS__", str(left_ids))
                 query_merge = query_merge.replace("__RIGHT_IDS__", str(right_ids))
                 self._execute_cypher(
@@ -335,6 +345,7 @@ class ZXdbAge:
                 query_delete = self._get_named_query(
                     "Local complementation age - delete hadamard edges"
                 )
+                query_delete = query_delete.replace("__GRAPH_ID__", self.graph_id)
                 query_delete = query_delete.replace("__LEFT_IDS__", str(left_ids))
                 query_delete = query_delete.replace("__RIGHT_IDS__", str(right_ids))
                 self._execute_cypher(
@@ -346,6 +357,7 @@ class ZXdbAge:
                 query_toggle = self._get_named_query(
                     "Local complementation age - toggle mixed edges"
                 )
+                query_toggle = query_toggle.replace("__GRAPH_ID__", self.graph_id)
                 query_toggle = query_toggle.replace("__LEFT_IDS__", str(left_ids))
                 query_toggle = query_toggle.replace("__RIGHT_IDS__", str(right_ids))
                 self._execute_cypher(
@@ -357,6 +369,7 @@ class ZXdbAge:
             query_phase = self._get_named_query(
                 "Local complementation age - batch apply center phase"
             )
+            query_phase = query_phase.replace("__GRAPH_ID__", self.graph_id)
             query_phase = query_phase.replace("__NEIGHBOR_IDS__", str(neighbor_ids))
             query_phase = query_phase.replace("__CENTER_PHASE__", str(center_phase))
             self._execute_cypher(
@@ -373,7 +386,7 @@ class ZXdbAge:
             )
             total_patterns += 1
 
-        print(f"Local Complementation")
+        print(f"Local Complementation(age): Processed {total_patterns} patterns.")
         return total_patterns
 
     def phase_gadget_fusion_rule(self) -> int:
