@@ -16,7 +16,11 @@ dependencies = [
   "pyzx>=0.10.0",
   "neo4j>=5.0.0",
   "psycopg[binary]>=3.1.0",
-  "python-dotenv>=1.0.0"
+  "python-dotenv>=1.0.0",
+  "numpy",
+  "networkx",
+  "qiskit",
+  "quimb"
 ]
 classifiers = [
   "License :: OSI Approved :: Apache Software License",

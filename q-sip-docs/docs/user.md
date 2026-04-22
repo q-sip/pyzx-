@@ -1,7 +1,8 @@
 ## Backend selection
 
 If you aren't familiar with PyZX beforehand, try first using the vanilla pyzx backend to get yourself familiar.
-Then after that, you can select your backend. Neo4j is the slowest, and x is the fastests.
+Then after that, you can select your backend. Neo4j is the slowest of the three database backends; relative
+performance of AGE and Memgraph depends on the workload.
 
 ## General instructions for usage
 
@@ -217,8 +218,8 @@ python -m pip install pyzx-db-addon
 ```
 
 **2. Start the database backend(s).** Grab the project's `compose.yaml`
-from the repo and, in a separate terminal from the same directory, pick
-a profile:
+from the [repo](https://github.com/q-sip/pyzx-/blob/dev/compose.yaml) and,
+in a separate terminal from the same directory, pick a profile:
 
 ```bash
 docker compose --profile age up      # Apache AGE (Postgres)
@@ -297,8 +298,7 @@ BACKENDS = ["age", "neo4j", "memgraph"]
 
 for backend in BACKENDS:
   print(f"\n=== {backend} ===")
-  is_vanilla = backend == "vanilla"
-  undo = [] if is_vanilla else pyzx_db_addon.force_backend(backend)
+  undo = pyzx_db_addon.force_backend(backend)
   try:
       g = pyzx_db_addon.create_graph(backend)
       build_small_graph(g)
@@ -326,9 +326,10 @@ docker compose down --remove-orphans
 
 ## Performance tips
 
-As memgraph and Age stay in memory, it is very performant.
-For both of the backends, all the ZX query rewrite implementations are not yet done(?).
-Thus any workflow that uses heavily a ZX calculus logic that is not implemented, will see least improvements, and vice versa.
+As Memgraph and AGE stay in memory, they are very performant.
+Not all ZX rewrite rules have been ported to the database backends yet, so
+a workflow that leans heavily on rules that are not yet implemented will
+see the smallest improvements, and vice versa.
 
 ## Transitioning from vanilla PyZX
 

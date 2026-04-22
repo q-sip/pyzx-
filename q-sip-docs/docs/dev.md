@@ -1,5 +1,25 @@
 ## Development
 
+### Initial setup
+
+Clone the repo and install the package in editable mode with the optional
+dependency groups you need. `test`, `dev`, and `docs` are declared in
+`pyproject.toml`:
+
+```bash
+git clone https://github.com/q-sip/pyzx-.git
+cd pyzx-
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[test,dev,docs]"
+```
+
+- `test` — pytest, coverage, mutmut
+- `dev` — mypy, pre-commit, pylint
+- `docs` — mkdocs, pymdown-extensions
+
+Install only the subset you need, e.g. `pip install -e ".[dev]"` if you
+aren't touching docs or running mutation tests.
 
 ### Pre-commit Hooks
 
