@@ -2,10 +2,12 @@ import os
 from dotenv import load_dotenv
 import pyzx as zx
 from pyzx.simplify import spider_simp, to_gh
+import pyzx_db_addon
+pyzx_db_addon.enable_pyzx_backend_overrides()
 from pyzx_db_addon.zxdb.zxdb import ZXdb
 
 # import random
-# from pyzx_db_addon.graph_memgraph import GraphMemgraph
+# from pyzx.graph.graph_memgraph import GraphMemgraph
 
 load_dotenv()
 URI = os.getenv("MEMGRAPH_URI")

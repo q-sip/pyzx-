@@ -51,10 +51,22 @@ def _patched_graph(backend: Any = None, **kwargs: Any) -> Any:
 
 
 def enable_pyzx_backend_overrides() -> None:
-	"""Patch PyZX so Graph(..., backend='age'|'neo4j'|'memgraph') uses addon backends."""
-	pyzx_graph.Graph = _patched_graph
-	pyzx.Graph = _patched_graph
-
+        """Patch PyZX so Graph(..., backend='age'|'neo4j'|'memgraph') uses addon backends."""
+        import pyzx
+        import pyzx.graph.graph as pyzx_graph
+        pyzx_graph.Graph = _patched_graph
+        pyzx.Graph = _patched_graph
+        
+        # Explicit patching for known PyZX module paths that hard-import Graph
+        import pyzx.circuit.graphparser
+        import pyzx.simplify
+        pyzx.circuit.graphparser.Graph = _patched_graph
+        if hasattr(pyzx.simplify, "Graph"):
+            pyzx.simplify.Graph = _patched_graph
+            
+        if hasattr(pyzx_graph, "backends"):
+            for b in _BACKEND_FACTORIES.keys():
+                pyzx_graph.backends[b] = True
 
 def disable_pyzx_backend_overrides() -> None:
 	"""Restore PyZX's original Graph factory/class."""
