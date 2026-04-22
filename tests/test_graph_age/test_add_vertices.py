@@ -2,7 +2,7 @@
 import unittest
 import io
 
-from pyzx.graph.graph_AGE import GraphAGE
+from pyzx_db_addon.graph_AGE import GraphAGE
 
 
 stream = io.StringIO()

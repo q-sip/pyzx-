@@ -1,5 +1,5 @@
 """
-Docstring for pyzx.graph.graph_memgraph.py
+Docstring for pyzx_db_addon.graph_memgraph.py
 """
 
 import os

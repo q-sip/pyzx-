@@ -1,5 +1,5 @@
 """
-Docstring for pyzx.graph.graph_neo4j
+Docstring for pyzx_db_addon.graph_neo4j
 """
 
 import os

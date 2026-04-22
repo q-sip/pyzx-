@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 import pyzx
-from pyzx.graph.graph_AGE import GraphAGE
+from pyzx_db_addon.graph_AGE import GraphAGE
 
 
 TEST_DIRS = (

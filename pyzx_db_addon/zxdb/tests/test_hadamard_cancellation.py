@@ -3,7 +3,7 @@ import unittest
 import pyzx as zx
 
 from utils import benchmark_rule, zx_graph_to_db
-from zxdb.zxdb import ZXdb
+from pyzx_db_addon.zxdb.zxdb import ZXdb
 
 SEED = 0
 random.seed(SEED)

@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 import pyzx
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx_db_addon.graph_neo4j import GraphNeo4j
 
 
 TEST_DIRS = (

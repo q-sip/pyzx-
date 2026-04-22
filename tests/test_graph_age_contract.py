@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from pyzx.graph.graph_AGE import GraphAGE
+from pyzx_db_addon.graph_AGE import GraphAGE
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
 if GraphAGE().verify_db_connection():

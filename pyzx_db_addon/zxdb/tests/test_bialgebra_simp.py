@@ -3,8 +3,8 @@ import unittest
 import pyzx as zx
 import json
 from utils import benchmark_rule, zx_graph_to_db
-from zxdb.generate import CNOT_HAD_PHASE_graph
-from zxdb.zxdb import ZXdb
+from pyzx_db_addon.zxdb.generate import CNOT_HAD_PHASE_graph
+from pyzx_db_addon.zxdb.zxdb import ZXdb
 
 SEED = 42
 random.seed(SEED)

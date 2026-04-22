@@ -3,7 +3,7 @@ import os
 import uuid
 from dotenv import load_dotenv
 from tests.test_graph_neo4j._base_unittest import Neo4jUnitTestCase
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx_db_addon.graph_neo4j import GraphNeo4j
 
 
 class ConfigurationTest(Neo4jUnitTestCase):

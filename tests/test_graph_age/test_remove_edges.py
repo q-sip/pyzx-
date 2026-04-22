@@ -7,7 +7,7 @@ if __name__ == '__main__':
     sys.path.append('../..')
     sys.path.append('.')
 
-from pyzx.graph.graph_AGE import GraphAGE
+from pyzx_db_addon.graph_AGE import GraphAGE
 from pyzx.utils import EdgeType, VertexType
 
 

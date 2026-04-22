@@ -7,8 +7,8 @@ import matplotlib
 from utils import benchmark_rule, zx_graph_to_db
 matplotlib.use('Agg')
 
-from zxdb.pyzx_utils import compose_zx_graphs
-from zxdb.zxdb import ZXdb
+from pyzx_db_addon.zxdb.pyzx_utils import compose_zx_graphs
+from pyzx_db_addon.zxdb.zxdb import ZXdb
 
 SEED = 1337
 random.seed(SEED)

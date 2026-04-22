@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 import pyzx
-from pyzx.graph.graph_memgraph import GraphMemgraph
+from pyzx_db_addon.graph_memgraph import GraphMemgraph
 
 
 TEST_DIRS = (

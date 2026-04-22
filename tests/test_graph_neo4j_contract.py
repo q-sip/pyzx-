@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx_db_addon.graph_neo4j import GraphNeo4j
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
 if GraphNeo4j().verify_db_connection():

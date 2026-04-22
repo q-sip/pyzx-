@@ -1,5 +1,5 @@
 """
-Docstring for pyzx.graph.graph_AGE
+Docstring for pyzx_db_addon.graph_AGE
 """
 
 # pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments,duplicate-code

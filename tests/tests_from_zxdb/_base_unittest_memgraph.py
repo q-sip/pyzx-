@@ -3,7 +3,7 @@ import os
 import unittest
 import uuid
 from dotenv import load_dotenv
-from pyzx.graph.graph_memgraph import GraphMemgraph
+from pyzx_db_addon.graph_memgraph import GraphMemgraph
 load_dotenv()
 
 

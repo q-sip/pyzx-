@@ -3,9 +3,9 @@ import unittest
 import pyzx as zx
 import json
 from utils import benchmark_rule, zx_graph_to_db
-from zxdb.generate import PHASE_GADGET_GRAPH
-from zxdb.pyzx_utils import qubit_count
-from zxdb.zxdb import ZXdb
+from pyzx_db_addon.zxdb.generate import PHASE_GADGET_GRAPH
+from pyzx_db_addon.zxdb.pyzx_utils import qubit_count
+from pyzx_db_addon.zxdb.zxdb import ZXdb
 
 SEED = 1337
 random.seed(SEED)

@@ -3,7 +3,7 @@ import os
 import unittest
 import uuid
 
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx_db_addon.graph_neo4j import GraphNeo4j
 from pyzx.utils import VertexType
 
 

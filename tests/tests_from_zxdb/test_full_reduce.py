@@ -1,8 +1,8 @@
 from dotenv import load_dotenv
 import os
 import pyzx as zx
-from pyzx.graph.zxdb.zxdb import ZXdb
-from pyzx.graph.graph_memgraph import GraphMemgraph
+from pyzx_db_addon.zxdb.zxdb import ZXdb
+from pyzx_db_addon.graph_memgraph import GraphMemgraph
 from pyzx.utils import EdgeType, VertexType
 from tests.tests_from_zxdb._base_unittest_memgraph import MemgraphUnitTestCase
 

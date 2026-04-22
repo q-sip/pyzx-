@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from pyzx.graph.graph_memgraph import GraphMemgraph
+from pyzx_db_addon.graph_memgraph import GraphMemgraph
 from tests.test_graph import TestGraphBasicMethods, TestGraphCircuitMethods, TestPhaseGadget, TestGraphSaveLoad
 
 

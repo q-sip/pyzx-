@@ -4,7 +4,7 @@ import unittest
 import uuid
 from typing import Any, Callable, Dict, List, Tuple
 
-from pyzx.graph.graph_neo4j import GraphNeo4j
+from pyzx_db_addon.graph_neo4j import GraphNeo4j
 from typing_extensions import Literal
 
 

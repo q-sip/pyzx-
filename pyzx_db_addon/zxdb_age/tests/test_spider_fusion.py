@@ -13,7 +13,7 @@ for p in (REPO_ROOT, PYZX_GRAPH_ROOT):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from zxdb_age.zxdb_age import ZXdbAge
+from pyzx_db_addon.zxdb_age.zxdb_age import ZXdbAge
 
 
 class TestSpiderFusion(unittest.TestCase):
