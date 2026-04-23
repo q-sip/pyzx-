@@ -32,6 +32,10 @@ from pyzx.utils import (
     vertex_is_z_like,
     set_z_box_label,
     get_z_box_label,
+    hbox_has_complex_label,
+    get_h_box_label,
+    set_h_box_label,
+    assert_phase_real
 )
 from pyzx.graph.base import BaseGraph, upair
 
@@ -62,7 +66,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self.database = database
         self._driver = None
 
-        self.graph_id = graph_id if graph_id is not None else f"graph_{uuid.uuid4().hex[:8]}"
+        self.graph_id = graph_id if graph_id is not None else f"graph_{int(time.time() * 1000000) % 1000000}"
         # Clear any existing data for this ID to be safe (id reuse)
         if graph_id is None:
             self.remove_all_data()
@@ -756,6 +760,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def set_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Sets the phase of the vertex to the given value."""
+        assert_phase_real(phase)
         try:
             phase = phase % 2
             if hasattr(phase, "terms"):
@@ -959,6 +964,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
     def run_cypher_rewrite(
         self,
         rule_name: str,
+        measure_time: bool = False,
     ) -> Tuple[Optional[int], Optional[float]]:
         """Run a named Cypher rewrite with this graph's session and graph_id.
         See graph_db_rewrite_runner for rule names and usage."""
@@ -1368,6 +1374,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 if vertex_type == VertexType.Z_BOX:
                     label = get_z_box_label(cpy, v)
                     set_z_box_label(cpy, v, label.conjugate())
+                if vertex_type == VertexType.H_BOX and hbox_has_complex_label(cpy, v):
+                    label = get_h_box_label(cpy, v)
+                    set_h_box_label(cpy, v, label.conjugate())
         for v in cpy.grounds():
             cpy.set_ground(v, True)
 
