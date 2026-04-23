@@ -704,9 +704,11 @@ class ZXdb:
             
             #while True:
             def apply_phase_gadget_fusion_rewrite(tx):
-                pgf_query = str(self.basic_rewrite_rule_queries["Gadget fusion both"]["query"]["code"]["value"])
-                result = tx.run(pgf_query, graph_id=graph_id)
-                return result.single()["fusions_performed"]
+                pgf_query = str(self.basic_rewrite_rule_queries["Gadget fusion"]["query"]["code"]["value"])
+                result = (tx.run(pgf_query, graph_id=graph_id)).single()
+
+                print(f'result: {result}')
+                return result["fusions_performed"] if result else 0
             
             changed = session.execute_write(apply_phase_gadget_fusion_rewrite)
                 #if changed == 0:
