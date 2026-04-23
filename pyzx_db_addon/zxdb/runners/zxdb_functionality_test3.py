@@ -44,7 +44,7 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
 
                 break
 
-            for s in range(40, 100):
+            for s in range(52, 100, 10):
 
                 g = zx.generate.CNOT_HAD_PHASE_circuit(q, d, seed=s)
                 g = g.to_graph(backend="memgraph")
@@ -62,6 +62,13 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
 
 
                 nodes = g.num_vertices()
+
+                print("inputs:", list(g.inputs()))
+                print("outputs:", list(g.outputs()))
+                for v in g.inputs():
+                    print("input", v, "degree", g.vertex_degree(v), "neighbors", list(g.neighbors(v)))
+                for v in g.outputs():
+                    print("output", v, "degree", g.vertex_degree(v), "neighbors", list(g.neighbors(v)))
 
                 g.normalize()
 
@@ -98,13 +105,13 @@ with ZXdb(URI, AUTH[0], AUTH[1]) as zxdb:
                 g.remove_all_data()
 
 
-                if not compare:
+                # if not compare:
 
-                    print('Comparison failed, stopping loop.')
+                #     print('Comparison failed, stopping loop.')
 
-                    print(f"{q,d,s} failed")
-                    stop_requested = True
-                    break
+                #     print(f"{q,d,s} failed")
+                #     stop_requested = True
+                #     break
 
 
 
