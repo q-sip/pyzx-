@@ -25,7 +25,7 @@ if __name__ == "__main__":
         #from . import memgraph_functionality_test
         # from . import full_test
         #from . import full_test2
-        import zxdb_functionality_test
+        from . import zxdb_functionality_test
         # from . import demo
         print("mem done")
 
