@@ -1,3 +1,5 @@
+# currently working implementation of memgraph
+
 # COMPLETELY WORKING IMPLEMENTATION FOR ALL THREE DEPTHS!!!!!
 
 #WORKING IMPLEMENTATION!!!
@@ -7,7 +9,6 @@ Docstring for pyzx.graph.graph_memgraph.py
 """
 
 import os
-import time
 import uuid
 from fractions import Fraction
 from typing import (
@@ -40,7 +41,7 @@ from ..utils import (
     hbox_has_complex_label,
     get_h_box_label,
     set_h_box_label,
-    assert_phase_real
+    assert_phase_real,
 )
 from .base import BaseGraph, upair
 
@@ -71,7 +72,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self.database = database
         self._driver = None
 
-        self.graph_id = graph_id if graph_id is not None else f"graph_{int(time.time() * 1000000) % 1000000}"
+        self.graph_id = graph_id if graph_id is not None else "graph_" + str(id(self))
         # Clear any existing data for this ID to be safe (id reuse)
         if graph_id is None:
             self.remove_all_data()
@@ -81,7 +82,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
         self._grounds: Set[int] = set()
-
+        # self.init_indices()
     # Avaa ja sulkee neo4j driverin, suoraan Valterin reposta
     @property
     def driver(self):
@@ -91,25 +92,23 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 self.uri, auth=(self.user, self.password)
             )
         return self._driver
-    
 
-    def verify_db_connection(self)->bool:
-        """Verifies that the database connection is valid."""
-        try:
-            self.driver.verify_connectivity()
-        except Exception as e:
-            print(f"Connection failed, e:\n{e}", end='\n')
-            return False
-        return True
-    
-    def __del__(self):
-        self.close()
+
+    def init_indices(self) -> None:
+        "Sets id properties to nodes"
+        query = """CREATE INDEX ON :Node(graph_id)"""
+        with self._get_session() as session:
+            session.execute_write(lambda tx: tx.run(query))
 
     def remove_all_data(self) -> None:
         """Removes ALL nodes and relationships for this graph_id."""
-        query = """MATCH (n:Node) DETACH DELETE n"""
+        # Memgraph supports DETACH DELETE. Scoping by graph_id is correct.
+        query = """MATCH (n:Node {graph_id: $graph_id}) DETACH DELETE n"""
         with self._get_session() as session:
             session.execute_write(lambda tx: tx.run(query, graph_id=self.graph_id))
+
+    def session_get(self):
+        return self._get_session()
 
     def _get_session(self):
         """Returns driver session"""
@@ -123,9 +122,31 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             self._driver.close()
             self._driver = None
 
+    def get_graph_id(self):
+        return self.graph_id
+    
+    def clear_clones(self):
+        query = """
+        MATCH (n:Node)
+        WHERE n.graph_id CONTAINS "clone"
+        DETACH DELETE n
+        """
+
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query)
+            )
+
+    def clear_graph(self):
+        query = """MATCH (n) DETACH DELETE n"""
+        with self._get_session() as session:
+            session.execute_write(
+                lambda tx: tx.run(query)
+            )
+
     @classmethod
     def from_json(cls, js: Any) -> BaseGraph[VT, ET]:
-        """Load JSON/.qgraph data into a Neo4j-backed graph."""
+        """Load JSON/.qgraph data into a Memgraph-backed graph."""
         from .jsonparser import json_to_graph
 
         return json_to_graph(js, backend=cls.backend)
@@ -153,19 +174,19 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 try:
                     phase = phase % 2
                     if hasattr(phase, "terms"):
-                        phase.terms = [(c,t) for c,t in phase.terms if c != 0]
-                except Exception as e:
-                    print(f"Error occurred while processing phase: {e}")
-            phase_str = self._phase_to_str(phase) if phase is not None else 0.0
-            input(f'{phase_str} is {type(phase_str)}')
+                        phase.terms = [(c, t) for c, t in phase.terms if c != 0]
+                except Exception:
+                    pass
+            phase_float = self._phase_to_float(phase) if phase is not None else 0.0
+
             all_vertices.append(
                 {
                     "id": v_id,
                     "t": ty.value,
-                    "phase": phase_str,
+                    "phase": phase_float,
                     "qubit": data.get("qubit", -1),
                     "row": data.get("row", -1),
-                    "ground": ground
+                    "ground": ground,
                 }
             )
 
@@ -194,9 +215,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         with self._get_session() as session:
 
             def create_full_graph(tx):
-                # Luodaan kaikki nodet
-                tx.run(
-                    """
+                tx.run("""
                     UNWIND $vertices AS v
                     CREATE (n:Node {
                         graph_id: $graph_id,
@@ -204,37 +223,28 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                         t: v.t,
                         phase: v.phase,
                         qubit: v.qubit,
-                        row: v.row
+                        row: v.row,
+                        ground: v.ground
                     })
-                """,
-                    graph_id=self.graph_id,
-                    vertices=all_vertices,
-                )
-
+                """, graph_id=self.graph_id, vertices=all_vertices)
                 # Luodaan kaikki relationshipit nodeille
+
                 if all_edges:
-                    tx.run(
-                        """
+                    # MATCH and CREATE relationship
+                    tx.run("""
                         UNWIND $edges AS e
                         MATCH (n1:Node {graph_id: $graph_id, id: e.s})
                         MATCH (n2:Node {graph_id: $graph_id, id: e.t})
                         CREATE (n1)-[:Wire {t: e.et, id: e.id}]->(n2)
-                    """,
-                        graph_id=self.graph_id,
-                        edges=all_edges,
-                    )
+                    """, graph_id=self.graph_id, edges=all_edges)
 
                 # Merkitään input nodet
                 if input_ids:
-                    tx.run(
-                        """
+                    tx.run("""
                         UNWIND $ids AS vid
                         MATCH (n:Node {graph_id: $graph_id, id: vid})
                         SET n:Input
-                    """,
-                        graph_id=self.graph_id,
-                        ids=input_ids,
-                    )
+                    """, graph_id=self.graph_id, ids=input_ids)
 
                 # Merkitään output nodet
                 if output_ids:
@@ -299,8 +309,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         n = self.num_edges()
         ids = [i + n for i in range(len(edges))]
         # Edgejen id:t tallennetaan nyt aina pienemmästä vertex id:stä suurempaan.
-        # Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta
-        # pysyy aina samana. Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee:
+        # Tälleen voidaan pitää edgejen id:t järjestyksessä ja relationshippien suunta pysyy aina samana
+        # Ei siis pitäisi ilmestyä enää edgejä, jotka kulkee:
         # src --> tgt ja vielä uusi edge, joka tgt --> src.
         edges_payload = [
             {"s": min(s, t), "t": max(s, t), "et": et.value, "id": eid}
@@ -336,17 +346,46 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             self._maxr = int(rec["maxr"]) if rec and rec["maxr"] is not None else -1
             return self._maxr
 
-    def _phase_to_str(self, phase):
+    def _phase_to_float(self, phase):
+        """Convert phase to float for database storage.
+
+        Note: Symbolic phases are not fully supported in Cypher rewrites.
+        """
         if phase is None:
             return 0.0
+        if isinstance(phase, (int, float)):
+            return float(phase)
+        if isinstance(phase, Fraction):
+            return float(phase)
+        # Fallback for symbolic phases
         try:
             return float(phase)
-        except Exception:
-            return str(phase)
+        except (TypeError, ValueError):
+            return str(phase)  # Preserve string for symbolic phases
 
     def vindex(self) -> int:
         """returns private variable _vindex (int)"""
         return self._vindex
+
+    def _sync_vindex_from_db(self) -> None:
+        """Ensure _vindex is at least max(node.id)+1 for this graph.
+
+        Some rewrite queries create nodes directly in the database and bypass
+        add_vertices(), which can leave _vindex stale. Any subsequent call to
+        add_vertices() must allocate ids above the current DB maximum.
+        """
+        query = """
+        MATCH (n:Node {graph_id: $graph_id})
+        RETURN coalesce(max(n.id), -1) AS max_id
+        """
+        with self._get_session() as session:
+            rec = session.execute_read(
+                lambda tx: tx.run(query, graph_id=self.graph_id).single()
+            )
+        max_id = int(rec["max_id"]) if rec and rec["max_id"] is not None else -1
+        next_id = max_id + 1
+        if self._vindex < next_id:
+            self._vindex = next_id
 
     def num_vertices(self):
         query = "MATCH (n:Node {graph_id: $graph_id}) RETURN n.id as id"
@@ -517,11 +556,11 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         Nyt myös seuraten paremmin ZX-calculuksen sääntöjä
         """
         s, t = edge_pair[0], edge_pair[1]
+        t1 = self.type(s)
+        t2 = self.type(t)
 
         #Pidetään huoli, että self-looppeja ei voida lisätä
         if s == t:
-            t1 = self.type(s)
-            t2 = self.type(t)
             if not vertex_is_zx_like(t1) or not vertex_is_zx_like(t2):
                 raise ValueError(
                     "Unexpected vertex type, it should be either z or x "
@@ -537,11 +576,10 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
         #Tarkastetaan jos edge on jo olemassa
         if not self.connected(s, t):
-            # Edgeä ei ollut olemassa, joten lisätään edge ja pidetään taas huoli,
-            # että edge lisätään pienemmästä id:stä suurempaan.
+            #Edgeä ei ollut olemassa, joten lisätään edge ja pidetään taas huoli, että edge lisätään pienemmästä id:stä suurempaan.
             src, tgt = upair(s, t)
             edge_id = self.num_edges()
-            type_value = edgetype.value if hasattr(edgetype, "value") else edgetype
+
             query = """
             MATCH (n1:Node {graph_id: $graph_id, id: $s})
             MATCH (n2:Node {graph_id: $graph_id, id: $t})
@@ -554,30 +592,24 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                         graph_id=self.graph_id,
                         s=src,
                         t=tgt,
-                        et=type_value,
+                        et=edgetype.value,
                         eid=edge_id,
                     )
                 )
         else:
             #Jos edge oli jo olemassa, käytetään ZX-calculuksen rewrite sääntöjä edgejen yhdistämiseen
-            t1 = self.type(s)
-            t2 = self.type(t)
             if vertex_is_zx_like(t1) and vertex_is_zx_like(t2):
                 et1 = self.edge_type(self.edge(s, t))
 
-                # Määritetään vertexien tyyppien perustella, mitä sääntöjä sovelletaan
-                # mihinkin
+                #Määritetään vertexien tyyppien perustella, mitä sääntöjä sovelletaan mihinkin
                 if vertex_is_z_like(t1) == vertex_is_z_like(t2):  # same colour
                     fuse, hopf = (EdgeType.SIMPLE, EdgeType.HADAMARD)
                 else:
                     fuse, hopf = (EdgeType.HADAMARD, EdgeType.SIMPLE)
 
-                # Käsittele parellel edgejä kaikilla eri fuse/hopf sääntöjäen
-                # yhdistelmillä
+                #Käsittele parellel edgejä kaikilla eri fuse/hopf sääntöjäen yhdistelmillä
                 if edgetype == fuse and et1 == fuse:
-                    # Tämän edgen lisääminen aiheuttaisi parallel edgen, jolla on sama
-                    # tyyppi, joten mitään ei tehdä
-                    pass
+                    pass  #Tämän edgen lisääminen aiheuttaisi parallel edgen, jolla on sama tyyppi, joten mitään ei tehdä
                 elif (edgetype == fuse and et1 == hopf) or (
                     edgetype == hopf and et1 == fuse
                 ):
@@ -590,8 +622,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                         self.add_to_phase(s, 1)
                     self.scalar.add_power(-1)
                 elif edgetype == hopf and et1 == hopf:
-                    # Poistetaan edge, joka on tyypiltään hopf, joka oli myös jo olemassa,
-                    # vähennetään phasesta mod 2
+                    #Poistetaan edge, joka on tyypiltään hopf, joka oli myös jo olemassa, vähennetään phasesta mod 2
                     self.remove_edge(self.edge(s, t))
                     self.scalar.add_power(-2)
                 else:
@@ -629,8 +660,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
     def vertices(self) -> Iterable[VT]:
         """Iterator over all the vertices."""
-
-        query = """MATCH (n:Node {graph_id: $graph_id}) WHERE n.id IS NOT NULL RETURN n.id AS id"""
+        # TODO: types() method can't read the vertex types from this type of return
+        query = """MATCH (n:Node {graph_id: $graph_id}) RETURN n.id AS id ORDER BY id"""
         with self._get_session() as session:
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id).data()
@@ -648,7 +679,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             query = """
             UNWIND $vertices as v
             MATCH (n1:Node {graph_id: $graph_id, id: v.s})-[r:Wire]-(n2:Node {graph_id: $graph_id, id: v.t})
-            RETURN startNode(r).id AS src, endNode(r).id AS tgt"""
+            RETURN startNode(r).id AS src, endNode(r).id AS tgt
+            ORDER BY src, tgt"""
             with self._get_session() as session:
                 result = session.execute_read(
                     lambda tx: tx.run(
@@ -657,14 +689,15 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 )
             return [(item["src"], item["tgt"]) for item in result]
 
+        # Use an undirected match to find all edges, then canonicalize by ID to avoid duplicates
         query = "MATCH (n1:Node {graph_id: $graph_id})-[r:Wire]-(n2:Node {graph_id: $graph_id})"
         query += " WHERE n1.id <= n2.id"
-        query += " RETURN n1.id, n2.id"
+        query += " RETURN n1.id AS s, n2.id AS t ORDER BY s, t"
         with self._get_session() as session:
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id).data()
             )
-        return [(item["n1.id"], item["n2.id"]) for item in result]
+        return [(item["s"], item["t"]) for item in result]
 
     def edge_st(self, edge: ET) -> Tuple[VT, VT]:
         """Returns a tuple of source/target of the given edge."""
@@ -676,6 +709,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         query = """
         MATCH (n:Node {graph_id: $graph_id, id: $vertex})-[r:Wire]-(m:Node {graph_id: $graph_id})
         RETURN startNode(r).id AS src, endNode(r).id AS tgt
+        ORDER BY src, tgt
         """
 
         with self._get_session() as session:
@@ -725,6 +759,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         VertexType.BOUNDARY if it is a boundary, VertexType.Z if it is a Z node,
         VertexType.X if it is a X node, VertexType.H_BOX if it is an H-box."""
 
+        # print(f'vertex === {vertex}')
+
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) RETURN n.t"""
         with self._get_session() as session:
             result = session.execute_read(
@@ -741,7 +777,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.t = $type"""
         with self._get_session() as session:
             session.execute_write(
-                lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex, type=type_value)
+                lambda tx: tx.run(
+                    query, graph_id=self.graph_id, id=vertex, type=type_value
+                )
             )
 
     def phase(self, vertex: VT) -> FractionLike:
@@ -756,6 +794,10 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         p = result[0]["n.phase"]
         if p is None:
             return 0
+        # Handle float storage - convert back to Fraction for precision
+        if isinstance(p, (int, float)):
+            return Fraction(p).limit_denominator(1000)
+        # Fallback for string (symbolic phases)
         try:
             return Fraction(p)
         except ValueError:
@@ -770,9 +812,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         try:
             phase = phase % 2
             if hasattr(phase, "terms"):
-                phase.terms = [(c,t) for c,t in phase.terms if c != 0]
+                phase.terms = [(c, t) for c, t in phase.terms if c != 0]
         except Exception:
-            self.phase[vertex] = phase
+            pass
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id}) SET n.phase = $phase"""
         with self._get_session() as session:
             session.execute_write(
@@ -780,7 +822,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                     query,
                     graph_id=self.graph_id,
                     id=vertex,
-                    phase=self._phase_to_str(phase),
+                    phase=self._phase_to_float(phase),
                 )
             )
 
@@ -793,7 +835,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single())
         #Muutetaan .datasta .singleksi, kun tarkastellaan vain yhtä vertexiä kuitenkin kerralla
-        return result["qubit"] if result else -1
+        return result["qubit"] if result and result["qubit"] is not None else -1
 
     def set_qubit(self, vertex: VT, q: FloatInt) -> None:
         """Sets the qubit index associated to the vertex."""
@@ -834,7 +876,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Removes all vdata associated to a vertex"""
         query = """MATCH (n:Node {graph_id: $graph_id, id: $id})
         SET n = {id: $id, t: n.t, phase: n.phase, qubit: n.qubit,
-        row: n.row, graph_id: $graph_id}"""
+        row: n.row, ground: n.ground, graph_id: $graph_id}"""
 
         with self._get_session() as session:
             session.execute_write(
@@ -852,10 +894,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             result = session.execute_read(
                 lambda tx: tx.run(query, graph_id=self.graph_id, id=vertex).single()
             )
-        #Muutetaan taas .singleksi, koska vain yksi vertex tarkastelussa
         if not result or not result["keys"]:
             return []
-        
         internal_keys = {"graph_id", "id", "t", "phase", "qubit", "row", "ground"}
         return [k for k in result["keys"] if k not in internal_keys]
 
@@ -879,8 +919,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                     return complex(val)
                 except ValueError:
                     pass
-
-        return result[0]["value"] if result and result[0]["value"] is not None else default
+        return val
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
@@ -921,14 +960,10 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                     query, graph_id=self.graph_id, node1=edge[0], node2=edge[1]
                 ).data()
             )
-
         if len(result) > 1:
-            raise ValueError(
-                f"Expected single Wire between {edge}, found {len(result)}"
-            )
+            raise ValueError(f"Expected single Wire between {edge}, found {len(result)}")
         if not result or not result[0]["propertyKey"]:
             return []
-        
         internal_edge_keys = {"id", "t"}
         return [k for k in result[0]["propertyKey"] if k not in internal_edge_keys]
 
@@ -970,14 +1005,18 @@ class GraphMemgraph(BaseGraph[VT, ET]):
     def run_cypher_rewrite(
         self,
         rule_name: str,
+        variant_id: Optional[str] = None,
+        query_config: Optional[Mapping[str, str]] = None,
         measure_time: bool = False,
-    ) -> Tuple[Optional[int], Optional[float]]:
-        """Run a named Cypher rewrite with this graph's session and graph_id.
-        See graph_db_rewrite_runner for rule names and usage."""
+    ) -> Tuple[Optional[Mapping[str, Any]], Optional[float]]:
+        """Run a named Cypher rewrite from neo4j_queries with this graph's session and graph_id.
+        See neo4j_rewrite_runner for rule names and variant selection (env/config)."""
         return run_rewrite(
             self._get_session,
             self.graph_id,
             rule_name,
+            variant_id=variant_id,
+            query_config=dict(query_config) if query_config else None,
             measure_time=measure_time,
         )
 
@@ -1002,8 +1041,6 @@ class GraphMemgraph(BaseGraph[VT, ET]):
     def set_ground(self, vertex: VT, flag: bool = True) -> None:
         """Connect or disconnect the vertex to a ground."""
         self.set_vdata(vertex, "ground", flag)
-
-        
 
     def is_hybrid(self) -> bool:
         """Returns whether this is a hybrid quantum-classical graph,
@@ -1116,7 +1153,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             t: $t,
             phase: $phase,
             qubit: $qubit,
-            row: $row
+            row: $row,
+            ground: $ground
         })
         """
         with self._get_session() as session:
@@ -1129,6 +1167,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                     phase=0.0,
                     qubit=-1,
                     row=-1,
+                    ground=False,
                 )
             )
 
@@ -1143,7 +1182,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
 
         Default values:
             t = VertexType.BOUNDARY
-            phase = "0"
+            phase = 0.0
             qubit = -1
             row = -1
         """
@@ -1151,6 +1190,9 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             raise ValueError("Amount of vertices added must be >= 0")
         if amount == 0:
             return []
+
+        # Keep id allocation consistent even after DB-side rewrites created nodes.
+        self._sync_vindex_from_db()
 
         vertex_ids: List[VT] = list(range(self._vindex, self._vindex + amount))
         payload = [
@@ -1160,6 +1202,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                 "phase": 0.0,
                 "qubit": -1,
                 "row": -1,
+                "ground": False,
             }
             for v_id in vertex_ids
         ]
@@ -1172,7 +1215,8 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             t: v.t,
             phase: v.phase,
             qubit: v.qubit,
-            row: v.row
+            row: v.row,
+            ground: v.ground
         })
         """
 
@@ -1218,14 +1262,14 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Gets the outputs of the graph.
 
         Behaviour:
-        - Returns the in-memory outputs tuple (`self._outputs`) if it is non-empty.
-        - Otherwise attempts to read outputs from Neo4j labels (:Output) for this graph_id,
-          returns them ordered by vertex id.
-        - If neither exists, returns an empty tuple.
-        """
-        if getattr(self, "_outputs", None):
-            return self._outputs
+                - Reads outputs from Neo4j labels (:Output) for this graph_id,
+                    returns them ordered by vertex id.
 
+                Notes:
+                - We intentionally refresh from DB on every call because rewrite passes
+                    in `ZXdb` can mutate the graph out-of-band (outside this instance),
+                    which would make cached `_outputs` stale and break `normalize()`.
+        """
         query = """
         MATCH (n:Output {graph_id: $graph_id})
         RETURN n.id AS id
@@ -1301,7 +1345,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         for e in self.incident_edges(vertex):
             s, t = self.edge_st(e)
             vs.add(s if t == vertex else t)
-        return list(vs)
+        return sorted(vs)
 
     def vertex_degree(self, vertex: VT) -> int:
         """Returns the degree of the given vertex."""
@@ -1330,14 +1374,14 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Gets the inputs of the graph.
 
         Behaviour:
-        - Returns the in-memory inputs tuple (`self._inputs`) if it is non-empty.
-        - Otherwise attempts to read inputs from Neo4j labels (:Input) for this graph_id,
-          returns them ordered by vertex id.
-        - If neither exists, returns an empty tuple.
-        """
-        if getattr(self, "_inputs", None):
-            return self._inputs
+                - Reads inputs from Neo4j labels (:Input) for this graph_id,
+                    returns them ordered by vertex id.
 
+                Notes:
+                - We intentionally refresh from DB on every call because rewrite passes
+                    in `ZXdb` can mutate the graph out-of-band (outside this instance),
+                    which would make cached `_inputs` stale and break `normalize()`.
+        """
         query = """
         MATCH (n:Input {graph_id: $graph_id})
         RETURN n.id AS id
@@ -1358,29 +1402,28 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         """Tällä metodilla saa luotua kopion neo4j graafista.
         Käytetään BaseGraph copy metodia.
         """
-        # Jos halutaan graafista kopio mahdollisesti johonkin toisen backendiin
-        # voi käyttää perus copy metodia
-        if backend is not None and backend != "memgraph":
+        # Copy into a different backend: fall back to backend-agnostic BaseGraph.copy.
+        if backend is not None and backend != self.backend:
             return super().copy(adjoint=adjoint, backend=backend)
 
         cpy = self.clone()
         maxdepth = cpy.depth()
         if not adjoint:
             return cpy
-        else:
-            cpy.scalar = cpy.scalar.copy(conjugate=adjoint)            
-            for v in cpy.vertices():
-                cpy.set_phase(v, -cpy.phase(v))
-                cpy.set_row(v, maxdepth - cpy.row(v))
-            
-                vertex_type = cpy.type(v)
 
-                if vertex_type == VertexType.Z_BOX:
-                    label = get_z_box_label(cpy, v)
-                    set_z_box_label(cpy, v, label.conjugate())
-                if vertex_type == VertexType.H_BOX and hbox_has_complex_label(cpy, v):
-                    label = get_h_box_label(cpy, v)
-                    set_h_box_label(cpy, v, label.conjugate())
+        cpy.scalar = cpy.scalar.copy(conjugate=adjoint)
+        for v in cpy.vertices():
+            cpy.set_phase(v, -cpy.phase(v))
+            cpy.set_row(v, maxdepth - cpy.row(v))
+
+            vertex_type = cpy.type(v)
+            if vertex_type == VertexType.Z_BOX:
+                label = get_z_box_label(cpy, v)
+                set_z_box_label(cpy, v, label.conjugate())
+            if vertex_type == VertexType.H_BOX and hbox_has_complex_label(cpy, v):
+                label = get_h_box_label(cpy, v)
+                set_h_box_label(cpy, v, label.conjugate())
+
         for v in cpy.grounds():
             cpy.set_ground(v, True)
 
@@ -1388,10 +1431,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         new_outputs = cpy.inputs()
         cpy.set_inputs(new_inputs)
         cpy.set_outputs(new_outputs)
-
         return cpy
-
-
 
     def clone(self) -> "GraphMemgraph":
         """Return an identical copy of the graph without relabeling vertices/edges.
@@ -1411,6 +1451,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
             graph_id=new_graph_id,
             database=self.database,
         )
+
         # Copy BaseGraph-level state that is not stored in the DB.
         cpy.scalar = self.scalar.copy()
         cpy.track_phases = self.track_phases
@@ -1423,6 +1464,7 @@ class GraphMemgraph(BaseGraph[VT, ET]):
         # Preserve backend bookkeeping.
         cpy._vindex = self._vindex
         cpy._maxr = self._maxr
+
         # Snapshot the current graph from Neo4j.
         q_nodes = """
         MATCH (n:Node {graph_id: $graph_id})
@@ -1480,7 +1522,6 @@ class GraphMemgraph(BaseGraph[VT, ET]):
                     "props": dict(r.get("props") or {}),
                 }
                 for r in (edges_rows or [])
-                if r.get("s") is not None and r.get("t") is not None
             ]
 
             q_create_nodes = """

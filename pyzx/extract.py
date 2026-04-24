@@ -23,8 +23,9 @@ from typing_extensions import deprecated
 
 from .utils import EdgeType, VertexType, toggle_edge
 from .linalg import Mat2, Z2
-from .simplify import id_simp, tcount, full_reduce, is_graph_like, pivot_simp
+from .simplify import id_simp, tcount, full_reduce, is_graph_like
 from .rewrite_rules import *
+from .rewrite_rules.pivot_rule import pivot_NOT_REWORKED
 from .circuit import Circuit
 from .circuit.gates import Gate, ParityPhase, CNOT, HAD, ZPhase, XPhase, CZ, XCX, SWAP, InitAncilla
 
@@ -582,8 +583,14 @@ def remove_gadget(g: BaseGraph[VT, ET], frontier: List[VT], qubit_map: Dict[VT, 
         if w not in gadgets: continue
         for v in g.neighbors(w):
             if v in frontier:
-                # apply_rule(g, pivot, [((w, v), ([], [o for o in g.neighbors(v) if o in outputs]))])  # type: ignore
-                pivot_simp.apply(g, w,v)
+                out_neighbors = [o for o in g.neighbors(v) if o in outputs]
+                if len(out_neighbors) != 1:
+                    continue
+                # Pakota pivot ulostulo-node olemaan v:n tämän hetkinen output-naapuri.
+                # Tällä säilytetään nodejen extraction frontier invariantti eri backendeillä.
+                ok = pivot_NOT_REWORKED(g, [((w, v), ([], [out_neighbors[0]]))])
+                if not ok:
+                    continue
                 frontier.remove(v)
                 del gadgets[w]
                 frontier.append(w)
