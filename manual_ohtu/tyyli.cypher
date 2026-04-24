@@ -92,6 +92,16 @@ color-selected: Darker(#0000ff)
 width: 0.5
 }
 
+@EdgeStyle Equals(Property(edge, "kala"), 1) {
+color: #e7e7feff
+width: 0
+}
+@NodeStyle Equals(Property(node, "kala"), 1) {
+color: #fffdfdff // Near black for visibility
+border-width: 0
+size: 0
+}
+
 /* --- VIEW SETTINGS --- */
 @ViewStyle {
 view: "tree"
