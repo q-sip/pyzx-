@@ -41,8 +41,9 @@ from .base import BaseGraph, upair
 
 load_dotenv()
 
-VT = int
-ET = Tuple[int, int]
+# VT = int
+# ET = Tuple[int, int]
+from pyzx.graph.base import VT, ET
 
 
 class GraphMemgraph(BaseGraph[VT, ET]):

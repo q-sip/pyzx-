@@ -1,4 +1,9 @@
+from types import NoneType
+
+from numba import typeof
+
 import pyzx as px
+import pyzx as zx
 from pyzx.graph.graph_memgraph import GraphMemgraph
 
 
@@ -20,6 +25,56 @@ def arb_write(g: GraphMemgraph):
     g.arb_quer_write(query=query, kala="koira", kissa="mieto")
 
 
+from functools import wraps
+
+# 1. Global registry to hold your 10k graph data
+stats = {}
+
+
+def track_rule(func, name):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # PyZX rewrite functions return the number of successful matches applied
+        count = func(*args, **kwargs)
+        try:
+            if count > 0:
+                stats[name] = stats.get(name, 0) + count
+        except:
+            pass
+        return count
+
+    return wrapper
+
+
+# 2. Identify the core sub-rules used by full_reduce
+# In PyZX, full_reduce is a loop of these specific functions:
+rules_to_count = [
+    'spider_simp', 'id_simp', 'pivot_simp',
+    'lcomp_simp', 'gadget_simp', 'pivot_gadget_simp',
+    'pivot_boundary_simp'
+]
+
+rules_to_count = [
+    'interior_clifford_simp', 'pivot_gadget_simp', 'clifford_simp',
+    'gadget_simp', 'copy_simp', 'supplementarity_simp',
+    'remove_isolated_vertices'
+]
+
+rules_to_count = [
+    'spider_simp', 'to_gh', 'id_simp',
+    'pivot_simp', 'lcomp_simp', 'pivot_simp',
+    'pivot_gadget_simp', 'pivot_boundary_simp', 'lcomp_simp', 'bialg_simp', 'bialg_op_simp', 'fuse_simp',
+    'remove_self_loop_simp', 'id_simp', 'add_identity_rewrite',
+    'gadget_simp', 'supplementarity_simp', 'copy_simp', 'color_change_rewrite', 'hopf_simp', 'z_to_z_box_simp',
+    'gadget_phasepoly_simp', 'push_pauli_rewrite', 'euler_expansion_rewrite', 'pi_commute_rewrite', 'phase_free_simp', 'basic_simp', 'reduce_scalar'
+]
+
+# 3. Patch the simplify module directly
+for rule_name in rules_to_count:
+    if hasattr(zx.simplify, rule_name):
+        original = getattr(zx.simplify, rule_name)
+        setattr(zx.simplify, rule_name, track_rule(original, rule_name))
+
 current_iteration = 0
 qubit = 1
 depth = 1
@@ -34,10 +89,10 @@ internal = 0
 
 g = GraphMemgraph()
 try:
-    for qubit in range(2, 10):
-        for depth in range(1, 50):
-            for seed in range(0, 40):
-                for internal in range(0, 3):
+    for qubit in range(2, 15):
+        for depth in range(1, 80):
+            for seed in range(0, 50):
+                for internal in range(0, 4):
                     # delete_all(g)
                     clifford = current_iteration % 2 == 0
                     p_had = (current_iteration % 10) / 10
@@ -54,16 +109,15 @@ try:
                     elif internal == 1:
                         g = px.generate.cliffordT(qubits=qubit, depth=depth, p_t=p_t, backend=backend, seed=seed)
                     elif internal == 2:
-                        g = px.generate.cliffords(qubits=qubit, depth=depth, no_hadamard=no_hadamard, backend=backend,seed=seed)
+                        g = px.generate.cliffords(qubits=qubit, depth=depth, no_hadamard=no_hadamard, backend=backend,
+                                                  seed=seed)
                     elif internal == 3:
                         g = px.generate.cliffordTmeas(qubits=qubit, depth=depth, p_t=p_t, backend=backend, seed=seed)
 
                     px.full_reduce(g)
-
-                    # print(f"iter: {iter}", end='\n')
                     current_iteration += 1
 
-except Exception as e:
+except EOFError as e:
     print(f"e:", end='\n')
     print(e)
 
@@ -76,3 +130,7 @@ print(f"seed: {seed}", end='\n')
 print(f"clifford: {clifford}", end='\n')
 print(f"internal: {internal}", end='\n')
 print(f"no_hadamard: {no_hadamard}", end='\n')
+
+print(f"\nstats:", end='\n')
+print(f"{stats}", end='\n')
+# breakpoint()
