@@ -1,0 +1,69 @@
+name: custom-unittests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-backends:
+    runs-on: ubuntu-latest
+
+    services:
+      memgraph:
+        image: memgraph/memgraph-mage:latest
+        ports:
+          - 7445:7687 # Mapataan kontin 7687 ulospäin porttiin 7445
+      
+      age:
+        image: apache/age:latest
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: postgres
+
+      neo4j:
+        image: neo4j:latest
+        ports:
+          - 7687:7687
+        env:
+          NEO4J_AUTH: none
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Services
+        run: |
+          echo "Waiting for ports to open..."
+          timeout 60s bash -c 'until printf "" 2>/dev/null >/dev/tcp/127.0.0.1/7445; do sleep 2; done'
+          timeout 60s bash -c 'until printf "" 2>/dev/null >/dev/tcp/127.0.0.1/5432; do sleep 2; done'
+          timeout 60s bash -c 'until printf "" 2>/dev/null >/dev/tcp/127.0.0.1/7687; do sleep 2; done'
+          echo "All services are up!"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # 3.13 on hyvin uusi, 3.11 on varmempi monen kirjaston kanssa
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install . # TÄRKEÄ: Asentaa pyproject.toml:n avulla projektin moduuliksi
+
+      - name: Run tests
+        env:
+          # Nämä pakottavat Pythonin käyttämään TCP:tä eikä Unix-sockettia
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          
+          MEMGRAPH_URI: bolt://127.0.0.1:7445
+          MEMGRAPH_AUTH: 0 # Yleensä testikonteissa ei ole salasanaa oletuksena
+          
+          NEO4J_URI: bolt://127.0.0.1:7687
+          DB_URI: bolt://127.0.0.1:7687
+        run: |
+          # Ajetaan testit moduulina, jotta importit (kuten pyzx_db_addon) toimivat
+          python3 -m unittest discover -s "tests/test_graph_age"
+          python3 -m unittest discover -s "tests/test_graph_neo4j"
+          python3 -m unittest discover -s "tests/tests_from_zxdb"

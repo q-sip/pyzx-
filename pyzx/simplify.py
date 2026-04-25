@@ -221,7 +221,17 @@ def full_reduce(g: BaseGraph[VT,ET], matchf: Optional[Callable[[Union[VT, ET]],b
         i = gadget_simp(g)
         interior_clifford_simp(g)
         k = copy_simp(g)
+        if k:
+            print(" ")
+            print(" ")
+            print("pyzx copy simp did something                                         2")
+            print(" ")
         l = supplementarity_simp(g)
+        if l:
+            print(" ")
+            print(" ")
+            print("pyzx copy simp did something                                         2")
+            print(" ")
         j = pivot_gadget_simp(g)
         if not (i or j or k or l):
             g.remove_isolated_vertices()

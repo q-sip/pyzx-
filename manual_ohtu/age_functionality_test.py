@@ -1,15 +1,15 @@
+#Scelaton
 from pyzx.graph.graph_AGE import GraphAGE
+
 from pyzx.utils import VertexType, EdgeType
+from tests.test_graph_age import test_add_vertices
 import networkx as nx
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from fractions import Fraction
-import pyzx as zx
-import os
-import pprint
 
 # connect to AGE database
+g = GraphAGE()
+ 
 print("Successfully connected to AGE database")
 
 # Minimal Cypher smoke test to verify AGE functionality
@@ -49,6 +49,11 @@ def delete_graph():
     print("\nGraph deleted")
 
 #is_there_smoke()
+
+g.add_vertices(3)
+print("vertices added")
+g.delete_graph()
+
 g = GraphAGE()
 i = None
 v = None
@@ -81,14 +86,6 @@ def use_add_vertices():
     _create_edge(v, w)
     return [i, v, w]
 
-def draw_graph(g):
-    vertices = g.get_vertices()
-    edges = g.get_edges()
-    G = nx.Graph()
-    G.add_nodes_from(vertices)
-    G.add_edges_from(edges)
-    return G
-
 def plt_graph(G):
     G_nx = nx_from_age(G)
     plt.figure()
@@ -105,7 +102,6 @@ def nx_from_age(g):
         G_nx.add_edge(u, v)
     return G_nx
     
-
 ##plt_graph(g)
 
 def fetch_graph():
@@ -228,11 +224,11 @@ w = nodes [2]
 
 graph_data = fetch_graph3(g)
 
-pprint.pprint(graph_data)
+print(graph_data)
 print(v, w)
 g.remove_edges([(v, w)])
 new_graph_data = fetch_graph3(g)
 
-pprint.pprint(new_graph_data)
+print(new_graph_data)
 
 g.delete_graph()

@@ -2,10 +2,10 @@
 Docstring for pyzx.graph.graph_AGE
 """
 
-# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments
+# pylint: disable=invalid-name,abstract-method,arguments-differ,no-member,super-init-not-called,broad-exception-caught,too-many-public-methods,too-many-lines,too-many-branches,too-many-instance-attributes,protected-access,too-many-positional-arguments,duplicate-code
 
-import os
 import json
+import os
 import uuid
 from fractions import Fraction
 from typing import (
@@ -16,15 +16,13 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    Union,
 )
 
-from dotenv import load_dotenv
 import psycopg
-
-from .base import BaseGraph
+from dotenv import load_dotenv
 
 from ..utils import (
-    assert_phase_real,
     EdgeType,
     FloatInt,
     FractionLike,
@@ -34,14 +32,15 @@ from ..utils import (
     vertex_is_z_like,
     vertex_is_zx_like,
 )
+from .base import BaseGraph
 
 load_dotenv()
 
 VT = int
 ET = Tuple[int, int]
 
-class GraphAGE(BaseGraph[VT, ET]):
 
+class GraphAGE(BaseGraph[VT, ET]):
     """Apache AGE-backed graph implementation."""
 
     backend = "age"
@@ -49,13 +48,14 @@ class GraphAGE(BaseGraph[VT, ET]):
     def __init__(self, graph_id: Optional[str] = None):
         BaseGraph.__init__(self)
 
-        self.graph_id = graph_id if graph_id is not None else f"g_{uuid.uuid4().hex[:12]}"
+        self.graph_id = graph_id if graph_id is not None else f"graph_{uuid.uuid4().hex}"
         self._vindex: int = 0
         self._inputs: Tuple[VT, ...] = tuple()
         self._outputs: Tuple[VT, ...] = tuple()
         self._maxr: int = 1
+        self._edata = {}
 
-        db_uri = os.getenv("DB_URI")
+        db_uri = os.getenv("DB_URI_POSTGRES")
         connect_kwargs = {
             "host": os.getenv("DB_HOST"),
             "port": os.getenv("DB_PORT"),
@@ -81,16 +81,12 @@ class GraphAGE(BaseGraph[VT, ET]):
                 print(f"Error: {e}")
                 self.conn.rollback()
 
-    def verify_db_connection(self)->bool:
-        """Verifies that the database connection is valid."""
-        return False if self.conn.close == 0 else True
-
     def _prepare_session(self) -> None:
         """Prepare AGE session once per DB connection."""
         if self._session_prepared:
             return
         with self.conn.cursor() as cur:
-            cur.execute('CREATE EXTENSION IF NOT EXISTS age;')
+            cur.execute("CREATE EXTENSION IF NOT EXISTS age;")
             cur.execute("LOAD 'age';")
             cur.execute("SET search_path = ag_catalog, public;")
         self.conn.commit()
@@ -157,10 +153,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._read_cache.clear()
         with self.conn.cursor() as cur:
             try:
-                cur.execute(
-                    "SELECT drop_graph(%s, %s);",
-                    (self.graph_id, True)
-                )
+                cur.execute("SELECT drop_graph(%s, %s);", (self.graph_id, True))
             except Exception:
                 self.conn.rollback()
                 return
@@ -182,9 +175,6 @@ class GraphAGE(BaseGraph[VT, ET]):
     def set_outputs(self, outputs: Tuple[VT, ...]):
         """Sets the outputs of the graph."""
         self._outputs = tuple(outputs)
-
-    def __len__(self):
-        return len(self.vertices())
 
     def add_vertices(self, amount: int) -> List[VT]:
         """Adds ``amount`` number of vertices and returns a list containing their IDs
@@ -216,13 +206,11 @@ class GraphAGE(BaseGraph[VT, ET]):
             items = []
             for obj in data:
                 items.append(
-                    "{" +
-                    f"id: {obj['id']}, "
+                    "{" + f"id: {obj['id']}, "
                     f"t: {obj['t']}, "
                     f"phase: '{obj['phase']}', "
                     f"qubit: {obj['qubit']}, "
-                    f"row: {obj['row']}"
-                    + "}"
+                    f"row: {obj['row']}" + "}"
                 )
             return "[" + ", ".join(items) + "]"
 
@@ -247,7 +235,7 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def add_vertex(
         self,
-        ty: VertexType = VertexType.BOUNDARY,
+        ty: Union[VertexType, int] = VertexType.BOUNDARY,
         qubit: FloatInt = -1,
         row: FloatInt = -1,
         phase: Optional[FractionLike] = None,
@@ -255,18 +243,18 @@ class GraphAGE(BaseGraph[VT, ET]):
         index: Optional[VT] = None,
     ) -> VT:
         """Add a single vertex to the graph and return its index."""
-        try:
-            ty = VertexType(ty)
-        except ValueError as exc:
-            raise ValueError(f"Invalid vertex type: {ty}") from exc
+        # Convert int to VertexType if needed
+        if isinstance(ty, int):
+            try:
+                ty = VertexType(ty)
+            except ValueError as exc:
+                raise ValueError(f"Invalid vertex type: {ty}") from exc
 
         if phase is None:
             if ty == VertexType.H_BOX:
                 phase = 1
             else:
                 phase = 0
-        
-        assert_phase_real(phase)
         try:
             phase = phase % 2
         except Exception:
@@ -345,18 +333,6 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         if v >= self._vindex:
             self._vindex = v + 1
-    
-    def get_vertices(self):
-        query = f"""
-        SELECT * FROM cypher('{self.graph_id}', $$
-        MATCH (n)
-        RETURN n.id
-        $$) AS (id agtype);
-        """
-
-        rows = self._fetchall(query)
-        #return rows
-        return [int(str(r[0]).split("::")[0].strip('"')) for r in rows]
 
     def add_edge(  # noqa: too-many-branches
         self, edge_pair: Tuple[VT, VT], edgetype: EdgeType = EdgeType.SIMPLE
@@ -415,9 +391,7 @@ class GraphAGE(BaseGraph[VT, ET]):
                     # one of each → keep fuse edge, add π to src, scalar ×½
                     self.set_edge_type((src, dst), fuse)
                     if t1 == VertexType.Z_BOX:
-                        set_z_box_label(
-                            self, src, get_z_box_label(self, src) * -1
-                        )
+                        set_z_box_label(self, src, get_z_box_label(self, src) * -1)
                     else:
                         self.add_to_phase(src, 1)
                     self.scalar.add_power(-1)
@@ -432,9 +406,7 @@ class GraphAGE(BaseGraph[VT, ET]):
                     )
             else:
                 # H-box / non-ZX-like boundary — simple parallel just reduces
-                if (
-                    vertex_is_z_like(t1) and t2 == VertexType.H_BOX
-                ) or (
+                if (vertex_is_z_like(t1) and t2 == VertexType.H_BOX) or (
                     vertex_is_z_like(t2) and t1 == VertexType.H_BOX
                 ):
                     if edgetype == EdgeType.SIMPLE:
@@ -445,30 +417,19 @@ class GraphAGE(BaseGraph[VT, ET]):
                 )
 
         return self.edge(src, dst)
-    
-    def get_edges(self):
-        query = f"""
-        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
-            MATCH (a:Node)-[e]->(b:Node)
-            RETURN a.id, b.id
-        $$) AS (a agtype, b agtype);
-        """
 
-        rows = self._fetchall(query)
-        edges = []
-
-        for r in rows:
-            a = int(str(r[0]).split("::")[0].strip('"'))
-            b = int(str(r[1]).split("::")[0].strip('"'))
-            edges.append((a,b))
-
-        return edges
-    
     def remove_vertices(self, vertices):
         """Removes the specified vertices from the graph."""
         vertex_list = list(vertices)
         if not vertex_list:
             return
+
+        vertex_set = set(vertex_list)
+        self._edata = {
+            edge: data
+            for edge, data in self._edata.items()
+            if edge[0] not in vertex_set and edge[1] not in vertex_set
+        }
 
         # Build a list of vertex IDs to match in Cypher
         # Using a WHERE clause with INs to match multiple vertices
@@ -488,6 +449,10 @@ class GraphAGE(BaseGraph[VT, ET]):
         edge_list = list(edges)
         if not edge_list:
             return
+
+        for s, t in edge_list:
+            key = (s, t) if s <= t else (t, s)
+            self._edata.pop(key, None)
 
         # Build Cypher list for edge pairs
         edges_list = []
@@ -667,8 +632,13 @@ class GraphAGE(BaseGraph[VT, ET]):
             $$) AS (src agtype, tgt agtype);
             """
             rows = self._fetchall(query)
-            return [(int(str(row[0]).split("::", 1)[0].strip('"')),
-                     int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
+            return [
+                (
+                    int(str(row[0]).split("::", 1)[0].strip('"')),
+                    int(str(row[1]).split("::", 1)[0].strip('"')),
+                )
+                for row in rows
+            ]
 
         # Return all edges, canonicalized by ID to avoid duplicates
         query = f"""
@@ -679,8 +649,13 @@ class GraphAGE(BaseGraph[VT, ET]):
         $$) AS (s agtype, t agtype);
         """
         rows = self._fetchall(query)
-        return [(int(str(row[0]).split("::", 1)[0].strip('"')),
-                 int(str(row[1]).split("::", 1)[0].strip('"'))) for row in rows]
+        return [
+            (
+                int(str(row[0]).split("::", 1)[0].strip('"')),
+                int(str(row[1]).split("::", 1)[0].strip('"')),
+            )
+            for row in rows
+        ]
 
     def edge(self, s: VT, t: VT, et: EdgeType = EdgeType.SIMPLE) -> ET:
         """Returns the edge between vertices s and t (canonicalized as tuple)."""
@@ -724,10 +699,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         rows = self._fetchall(query)
 
-        neighbors = {
-            int(str(row[0]).split("::", 1)[0].strip('"'))
-            for row in rows
-        }
+        neighbors = {int(str(row[0]).split("::", 1)[0].strip('"')) for row in rows}
         return list(neighbors)
 
     def vertex_degree(self, vertex: VT) -> int:
@@ -757,8 +729,10 @@ class GraphAGE(BaseGraph[VT, ET]):
         rows = self._fetchall(query)
 
         return [
-            (int(str(row[0]).split("::", 1)[0].strip('"')),
-             int(str(row[1]).split("::", 1)[0].strip('"')))
+            (
+                int(str(row[0]).split("::", 1)[0].strip('"')),
+                int(str(row[1]).split("::", 1)[0].strip('"')),
+            )
             for row in rows
         ]
 
@@ -845,11 +819,14 @@ class GraphAGE(BaseGraph[VT, ET]):
 
         return result
 
-    def set_type(self, vertex: VT, t: VertexType) -> None:
+    def set_type(self, vertex: VT, t: Union[VertexType, int]) -> None:
         """Sets the type of the given vertex to t."""
-        # Convert int to VertexType if necessary (e.g., from JSON deserialization)
         if isinstance(t, int):
-            t = VertexType(t)
+            try:
+                t = VertexType(t)
+            except ValueError as exc:
+                raise ValueError(f"Invalid vertex type: {t}") from exc
+
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node {{id: {vertex}}})
@@ -908,7 +885,6 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def set_phase(self, vertex: VT, phase: FractionLike) -> None:
         """Sets the phase of the given vertex."""
-        assert_phase_real(phase)
         try:
             phase = phase % 2
         except Exception:
@@ -1031,6 +1007,33 @@ class GraphAGE(BaseGraph[VT, ET]):
         """
         self.db_execute(query)
 
+    def is_ground(self, vertex: VT) -> bool:
+        """Returns whether the given vertex is connected to ground."""
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            RETURN n.ground
+        $$) AS (ground agtype);
+        """
+        row = self._fetchone(query)
+        if not row:
+            return False
+
+        raw = str(row[0]).split("::", 1)[0].strip('"').lower()
+        return raw in ("true", "1")
+
+    def set_ground(self, vertex: VT, flag: bool = True) -> None:
+        """Connect or disconnect the vertex to a ground."""
+        val = "true" if flag else "false"
+        query = f"""
+        SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
+            MATCH (n:Node {{id: {vertex}}})
+            SET n.ground = {val}
+            RETURN count(n)
+        $$) AS (count agtype);
+        """
+        self.db_execute(query)
+
     def vdata_keys(self, vertex: VT) -> Sequence[str]:
         """Returns an iterable of the vertex data key names."""
         query = f"""
@@ -1045,24 +1048,6 @@ class GraphAGE(BaseGraph[VT, ET]):
             cur.execute(query)
             row = cur.fetchone()
             self.conn.commit()
-
-        if not row:
-            return []
-
-        keys_raw = str(row[0]).split("::", 1)[0]
-        if keys_raw in ("", "null", "None"):
-            return []
-
-        # Exclude base properties that are handled separately
-        base_vprops = {"id", "t", "ty", "phase", "qubit", "row", "ground"}
-        
-        try:
-            parsed = json.loads(keys_raw)
-            if isinstance(parsed, list):
-                return [str(k) for k in parsed if str(k) not in base_vprops]
-        except json.JSONDecodeError:
-            pass
-        return []
 
     def vdata(self, vertex: VT, key: str, default: Any = None) -> Any:
         """Returns the data value of the given vertex associated to the key.
@@ -1088,22 +1073,11 @@ class GraphAGE(BaseGraph[VT, ET]):
         if value_raw in ("", "null", "None"):
             return default
 
-        # Strip outer quotes if present
-        value_raw = value_raw.strip('"')
-        # Unescape the string (remove escaped backslashes)
-        value_raw = value_raw.replace('\\"', '"')
-        
         try:
             parsed = json.loads(value_raw)
-            if parsed is None:
-                return default
-            # Handle complex numbers stored as {"__complex__": [real, imag]}
-            if isinstance(parsed, dict) and "__complex__" in parsed:
-                real, imag = parsed["__complex__"]
-                return complex(real, imag)
-            return parsed
+            return default if parsed is None else parsed
         except json.JSONDecodeError:
-            return value_raw
+            return value_raw.strip('"')
 
     def set_vdata(self, vertex: VT, key: str, val: Any) -> None:
         """Sets the vertex data associated to key to val."""
@@ -1113,11 +1087,6 @@ class GraphAGE(BaseGraph[VT, ET]):
             value_expr = "null"
         elif isinstance(val, bool):
             value_expr = "true" if val else "false"
-        elif isinstance(val, complex):
-            # Store complex numbers as JSON {"__complex__": [real, imag]}
-            json_val = json.dumps({"__complex__": [val.real, val.imag]})
-            value_escaped = json_val.replace("\\", "\\\\").replace("'", "\\'")
-            value_expr = f"'{value_escaped}'"
         elif isinstance(val, (int, float)):
             value_expr = str(val)
         else:
@@ -1138,14 +1107,7 @@ class GraphAGE(BaseGraph[VT, ET]):
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n:Node {{id: {vertex}}})
-            SET n = {{
-                id: n.id,
-                t: n.t,
-                phase: n.phase,
-                qubit: n.qubit,
-                row: n.row,
-                ground: n.ground
-            }}
+            SET n = {{id: n.id, t: n.t, phase: n.phase, qubit: n.qubit, row: n.row}}
             RETURN count(n)
         $$) AS (count agtype);
         """
@@ -1183,6 +1145,12 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def set_edata(self, edge: ET, key: str, val: Any) -> None:
         """Sets the edge data associated to key to val."""
+        edge_key = (edge[0], edge[1]) if edge[0] <= edge[1] else (edge[1], edge[0])
+        if edge_key in self._edata:
+            self._edata[edge_key][key] = val
+        else:
+            self._edata[edge_key] = {key: val}
+
         key_escaped = key.replace("`", "``")
 
         if val is None:
@@ -1206,6 +1174,9 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def clear_edata(self, edge: ET) -> None:
         """Removes all edata associated to an edge."""
+        edge_key = (edge[0], edge[1]) if edge[0] <= edge[1] else (edge[1], edge[0])
+        self._edata.pop(edge_key, None)
+
         query = f"""
         SELECT * FROM ag_catalog.cypher('{self.graph_id}', $$
             MATCH (n1:Node {{id: {edge[0]}}})-[r:Wire]-(n2:Node {{id: {edge[1]}}})
@@ -1247,32 +1218,18 @@ class GraphAGE(BaseGraph[VT, ET]):
 
     def close(self) -> None:
         """Close the database connection."""
-        self.conn.close()
-
-    def __del__(self) -> None:
-        """Ensure the database connection is closed when the object is garbage collected."""
+        conn = getattr(self, "conn", None)
+        if conn is None:
+            return
         try:
-            if hasattr(self, 'conn') and self.conn is not None:
-                self.conn.close()
+            if not conn.closed:
+                conn.close()
         except Exception:
-            # Ignore errors during cleanup
             pass
 
-    def is_ground(self, vertex: VT) -> bool:
-        """Check if a vertex is marked as ground."""
-        return self.vdata(vertex, "ground", False) is True
-
-    def grounds(self) -> Iterable[VT]:
-        """Returns an iterable of all ground vertices."""
-        result = []
-        for v in self.vertices():
-            if self.is_ground(v):
-                result.append(v)
-        return result
-
-    def set_ground(self, vertex: VT, flag: bool = True) -> None:
-        """Mark a vertex as ground or remove the ground marking."""
-        self.set_vdata(vertex, "ground", flag)
+    def __del__(self) -> None:
+        """Ensure DB connection is closed when object is collected."""
+        self.close()
 
     def clone(self) -> "GraphAGE":
         """Return an identical copy of the graph without relabeling vertices/edges."""
@@ -1314,3 +1271,15 @@ class GraphAGE(BaseGraph[VT, ET]):
         cpy.set_inputs(self.inputs())
         cpy.set_outputs(self.outputs())
         return cpy
+
+    def get_vertices(self) -> List[VT]:
+        """Returns all vertices as a list."""
+        return list(self.vertices())
+
+    def get_edges(self) -> List[ET]:
+        """Returns all edges as a list."""
+        return list(self.edges())
+
+    def grounds(self) -> List[VT]:
+        """Returns the list of vertices connected to a ground."""
+        return [v for v in self.vertices() if self.is_ground(v)]
