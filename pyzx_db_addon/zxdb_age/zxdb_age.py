@@ -252,8 +252,60 @@ class ZXdbAge:
         return total_patterns
 
     def pivot_rule(self) -> int:
-        """TODO: implement AGE pivot rewrite."""
-        return 0
+        """Scaffold for AGE pivot rewrite.
+
+        Structure:
+        1) Find one pivot candidate.
+        2) Apply rewrite for that candidate.
+        3) Repeat until no candidates or no rewrite progress.
+
+        Query internals are intentionally left in query collection entries so the
+        actual rewrite Cypher can be completed incrementally.
+        """
+
+        total_patterns = 0
+        max_iterations = int(os.getenv("ZXDB_AGE_PIVOT_MAX_ITERS", "1000"))
+
+        for _ in range(max_iterations):
+            find_query = self._get_named_query("Pivot rule age - find candidate")
+            find_query = find_query.replace("__GRAPH_ID__", self.graph_id)
+
+            rows = self._execute_cypher(
+                find_query,
+                return_signature="a_id agtype, b_id agtype, a_phase agtype, b_phase agtype",
+            )
+            if not rows or not rows[0]:
+                break
+
+            a_id = int(rows[0][0])
+            b_id = int(rows[0][1])
+            a_phase = float(rows[0][2])
+            b_phase = float(rows[0][3])
+
+            apply_query = self._get_named_query("Pivot rule age - apply rewrite")
+            apply_query = apply_query.replace("__GRAPH_ID__", self.graph_id)
+            apply_query = apply_query.replace("__A_ID__", str(a_id))
+            apply_query = apply_query.replace("__B_ID__", str(b_id))
+            apply_query = apply_query.replace("__A_PHASE__", str(a_phase))
+            apply_query = apply_query.replace("__B_PHASE__", str(b_phase))
+
+            applied_rows = self._execute_cypher(
+                apply_query,
+                return_signature="rewritten agtype",
+            )
+            rewritten = int(applied_rows[0][0]) if applied_rows and applied_rows[0] and applied_rows[0][0] is not None else 0
+
+            if rewritten <= 0:
+                break
+
+            total_patterns += rewritten
+
+        if total_patterns:
+            print(f"Pivot rule(age): Processed {total_patterns} patterns.")
+        else:
+            print("Pivot rule(age): Processed 0 patterns (apply query scaffold/TODO).")
+
+        return total_patterns
 
     def local_complementation_rule(self) -> int:
         # Not working

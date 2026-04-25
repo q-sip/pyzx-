@@ -80,6 +80,11 @@ The images in this section are also from Romain Moyard's article.
 | Local complementation age - delete hadamard edges | Not working | `age-specific-queries.json` |
 | Local complementation age - toggle mixed edges | Not working | `age-specific-queries.json` |
 | Local complementation age - batch apply center phase | Not working | `age-specific-queries.json` |
+| Remove isolated vertices age | Working | `age-specific-queries.json` |
+| Remove dangling pairs age | Working | `age-specific-queries.json` |
+| Turn Hadamard gates into edges age | Working | `age-specific-queries.json` |
+| Pivot rule age - find candidate | Scaffold | `age-specific-queries.json` |
+| Pivot rule age - apply rewrite | Scaffold / TODO | `age-specific-queries.json` |
 | Spider fusion (A) | TBD | `main_queries.json` |
 | Hopf (A) | TBD | `main_queries.json` |
 | Bialgebra labeling (A) | TBD | `main_queries.json` |

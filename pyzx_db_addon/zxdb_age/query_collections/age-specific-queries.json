@@ -144,6 +144,26 @@
             }
         },
         {
+            "title": "Pivot rule age - find candidate",
+            "description": "Find a single pivot candidate pair (structure scaffold)",
+            "query": {
+                "code": {
+                    "value": "MATCH (a:Node {graph_id: '__GRAPH_ID__', t: 1})-[pivot:Wire {t: 2}]-(b:Node {graph_id: '__GRAPH_ID__', t: 1})\nWHERE id(a) < id(b)\n  AND coalesce(a.phase, 0) = round(coalesce(a.phase, 0))\n  AND coalesce(b.phase, 0) = round(coalesce(b.phase, 0))\nRETURN coalesce(a.id, id(a)) AS a_id,\n       coalesce(b.id, id(b)) AS b_id,\n       coalesce(a.phase, 0.0) AS a_phase,\n       coalesce(b.phase, 0.0) AS b_phase\nLIMIT 1"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Pivot rule age - apply rewrite",
+            "description": "TODO scaffold: apply pivot rewrite for selected pair",
+            "query": {
+                "code": {
+                    "value": "MATCH (a:Node {graph_id: '__GRAPH_ID__', id: __A_ID__}), (b:Node {graph_id: '__GRAPH_ID__', id: __B_ID__})\nWITH a, b\nRETURN 0 AS rewritten"
+                },
+                "params": {}
+            }
+        },
+        {
             "title": "Remove isolated vertices age",
             "description": "Remove isolated vertices",
             "query": {
