@@ -415,8 +415,38 @@ class ZXdbAge:
         return {}
 
     def turn_hadamard_gates_into_edges(self) -> None:
-        """TODO: implement AGE hadamard-node to hadamard-edge conversion."""
-        return
+        """Convert degree-2 Hadamard H-boxes into Hadamard edges."""
+
+        total = 0
+        while True:
+            query = f"""
+            MATCH (h:Node {{graph_id: '{self.graph_id}', t: 3}})
+            WITH h
+            OPTIONAL MATCH (h)-[rh:Wire]-(n:Node)
+            WITH h, collect(DISTINCT n) AS neighbors, collect(DISTINCT rh) AS rels
+            WHERE size(neighbors) = 2
+            WITH h, neighbors[0] AS n1, neighbors[1] AS n2, rels
+            OPTIONAL MATCH (h)-[r1:Wire]-(n1)
+            OPTIONAL MATCH (h)-[r2:Wire]-(n2)
+            WITH h, n1, n2, r1, r2,
+                 CASE
+                     WHEN coalesce(r1.t, 1) = coalesce(r2.t, 1) THEN 2
+                     ELSE 1
+                 END AS new_edge_t
+            CREATE (n1)-[:Wire {{t: new_edge_t, graph_id: '{self.graph_id}'}}]->(n2)
+            DETACH DELETE h
+            RETURN count(h) AS converted
+            """
+            rows = self._execute_cypher(query, return_signature="converted agtype")
+            converted = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
+            if converted == 0:
+                break
+            total += converted
+
+        if total:
+            print(f"Turn Hadamard gates into edges(age): Processed {total} patterns.")
+        else:
+            print("Turn Hadamard gates into edges(age): Processed 0 patterns.")
 
     def copy_simp(self) -> int:
         """TODO: implement AGE copy simplification rewrite."""
