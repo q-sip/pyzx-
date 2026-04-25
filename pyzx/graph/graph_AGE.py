@@ -55,23 +55,37 @@ class GraphAGE(BaseGraph[VT, ET]):
         self._maxr: int = 1
         self._edata = {}
 
-        db_uri = os.getenv("DB_URI_POSTGRES")
-        connect_kwargs = {
-            "host": os.getenv("DB_HOST"),
-            "port": os.getenv("DB_PORT"),
-            "dbname": os.getenv("POSTGRES_DB"),
-            "user": os.getenv("POSTGRES_USER"),
-            "password": os.getenv("POSTGRES_PASSWORD"),
-        }
-        if db_uri:
-            connect_kwargs["conninfo"] = db_uri
+        #The below connection details works for some
+        #db_uri = os.getenv("DB_URI_POSTGRES")
+        #connect_kwargs = {
+        #    "host": os.getenv("DB_HOST"),
+        #    "port": os.getenv("DB_PORT"),
+        #    "dbname": os.getenv("POSTGRES_DB"),
+        #    "user": os.getenv("POSTGRES_USER"),
+        #    "password": os.getenv("POSTGRES_PASSWORD"),
+        #}
+        #if db_uri:
+        #    connect_kwargs["conninfo"] = db_uri
 
-        self.conn = psycopg.connect(**connect_kwargs)
-        self._session_prepared = False
-        self._batch_depth = 0
-        self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
-        self._read_cache: dict[str, Any] = {}
-        self._prepare_session()
+        #self.conn = psycopg.connect(**connect_kwargs)
+        #self._session_prepared = False
+        #self._batch_depth = 0
+        #self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
+        #self._read_cache: dict[str, Any] = {}
+        #self._prepare_session()
+
+        #Some are better of with the following
+        db_uri = os.getenv("DB_URI_POSTGRES")
+        if db_uri:
+            self.conn = psycopg.connect(conninfo=db_uri)
+        else:
+            self.conn = psycopg.connect(
+                host=os.getenv("DB_HOST"),
+                port=os.getenv("DB_PORT"),
+                dbname=os.getenv("POSTGRES_DB"),
+                user=os.getenv("POSTGRES_USER"),
+                password=os.getenv("POSTGRES_PASSWORD"),
+    )
 
         with self.conn.cursor() as cur:
             try:
