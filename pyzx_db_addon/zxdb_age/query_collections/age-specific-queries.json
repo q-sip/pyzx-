@@ -162,6 +162,16 @@
                 },
                 "params": {}
             }
+        },
+        {
+            "title": "Turn Hadamard gates into edges age",
+            "description": "Convert degree-2 H-box nodes into direct edges",
+            "query": {
+                "code": {
+                    "value": "MATCH (h:Node {graph_id: '__GRAPH_ID__', t: 3}) WITH h OPTIONAL MATCH (h)-[rh:Wire]-(n:Node) WITH h, collect(DISTINCT n) AS neighbors, collect(DISTINCT rh) AS rels WHERE size(neighbors) = 2 WITH h, neighbors[0] AS n1, neighbors[1] AS n2, rels OPTIONAL MATCH (h)-[r1:Wire]-(n1) OPTIONAL MATCH (h)-[r2:Wire]-(n2) WITH h, n1, n2, r1, r2, CASE WHEN coalesce(r1.t, 1) = coalesce(r2.t, 1) THEN 2 ELSE 1 END AS new_edge_t CREATE (n1)-[:Wire {t: new_edge_t, graph_id: '__GRAPH_ID__'}]->(n2) DETACH DELETE h RETURN count(h) AS converted"
+                },
+                "params": {}
+            }
         }
     ]
 }
