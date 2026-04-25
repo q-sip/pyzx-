@@ -256,6 +256,7 @@ class ZXdbAge:
         return 0
 
     def local_complementation_rule(self) -> int:
+        # Not working
         """Apply local complementation rewrites until no more patterns are found.
         
         Uses efficient batched queries:
@@ -441,8 +442,16 @@ class ZXdbAge:
         )
 
     def remove_isolated_vertices(self) -> None:
-        """TODO: implement isolated-vertex cleanup."""
-        return
+        """
+        Remove isolated vertices from the graph.
+        Also remove dangling pairs of vertices that aren't connected to the graph but only to each other.
+        """
+        query_pairs = self._get_named_query("Remove dangling pairs age").replace("__GRAPH_ID__", self.graph_id)
+        self._execute_cypher(query_pairs, return_signature="deleted_pairs agtype")
+
+        query_isolated = self._get_named_query("Remove isolated vertices age").replace("__GRAPH_ID__", self.graph_id)
+        self._execute_cypher(query_isolated, return_signature="deleted_isolated agtype")
+
 
     def supplementarity_simp(self) -> int:
         """TODO: implement AGE supplementarity rewrite."""

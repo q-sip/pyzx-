@@ -142,6 +142,26 @@
                 },
                 "params": {}
             }
+        },
+        {
+            "title": "Remove isolated vertices age",
+            "description": "Remove isolated vertices",
+            "query": {
+                "code": {
+                    "value": "MATCH (v:Node {graph_id: '__GRAPH_ID__'}) OPTIONAL MATCH (v)-[rv:Wire]-(:Node {graph_id: '__GRAPH_ID__'}) WITH v, count(rv) AS deg_v WHERE deg_v = 0 DELETE v RETURN count(v) AS deleted_isolated"
+                },
+                "params": {}
+            }
+        },
+        {
+            "title": "Remove dangling pairs age",
+            "description": "Remove degree-1 node pairs connected only to each other",
+            "query": {
+                "code": {
+                    "value": "MATCH (n:Node {graph_id: '__GRAPH_ID__'})-[r:Wire]-(m:Node {graph_id: '__GRAPH_ID__'}) WHERE id(n) < id(m) WITH n, m, count(r) AS between_count WHERE between_count = 1 OPTIONAL MATCH (n)-[rn:Wire]-(:Node {graph_id: '__GRAPH_ID__'}) WITH n, m, between_count, count(rn) AS deg_n WHERE deg_n = 1 OPTIONAL MATCH (m)-[rm:Wire]-(:Node {graph_id: '__GRAPH_ID__'}) WITH n, m, between_count, deg_n, count(rm) AS deg_m WHERE deg_n = 1 AND deg_m = 1 DETACH DELETE n, m RETURN count(*) AS deleted_pairs"
+                },
+                "params": {}
+            }
         }
     ]
 }
