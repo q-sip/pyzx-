@@ -210,6 +210,7 @@ class ZXdbAge:
 
     def remove_identities(self, G) -> int:
         """
+        NOTE This method has been drafted but not tested.
         Collapse nodes with:
         - attribute 'phase' even
         - degree == 2
@@ -235,18 +236,17 @@ class ZXdbAge:
                 neighbors = list(G.neighbors(node))
                 if len(neighbors) != 2:
                     continue  # safety check
-                #Fix from here onwards
                 v1, v2 = neighbors
 
                 # Avoid creating duplicate edges if already connected
-                if not G.has_edge(v1, v2):
-                    G.add_edge(v1, v2, type="Wire")
+                if not G.edges(v1, v2):
+                    G.edges(v1, v2, type="Wire")
 
                 nodes_to_remove.append(node)
 
         # Remove nodes after iteration
         for node in nodes_to_remove:
-            G.remove_node(node)
+            G.remove_vertices(node)
 
         return len(nodes_to_remove) > 0
 

@@ -2,7 +2,7 @@
 from pyzx.graph.graph_AGE import GraphAGE
 
 from pyzx.utils import VertexType, EdgeType
-from tests.test_graph_age import test_add_vertices
+#from tests.test_graph_age import test_add_vertices
 import networkx as nx
 import matplotlib.pyplot as plt
 from fractions import Fraction
