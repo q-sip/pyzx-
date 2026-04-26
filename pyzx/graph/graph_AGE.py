@@ -82,7 +82,7 @@ class GraphAGE(BaseGraph[VT, ET]):
     )
         self._session_prepared = False
         self._batch_depth = 0
-        #self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
+        self._read_cache_enabled = os.getenv("AGE_READ_CACHE", "1") != "0"
         self._read_cache: dict[str, Any] = {}
         self._prepare_session()
 

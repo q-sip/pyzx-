@@ -10,7 +10,7 @@ from fractions import Fraction
 # connect to AGE database
 g = GraphAGE()
  
-print("Successfully connected to AGE database")
+print("Successfully connected to AGE-database")
 
 # Minimal Cypher smoke test to verify AGE functionality
 def is_there_smoke():
