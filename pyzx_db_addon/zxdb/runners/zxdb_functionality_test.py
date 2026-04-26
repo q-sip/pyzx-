@@ -1,4 +1,6 @@
 import os
+import faulthandler
+import time
 from dotenv import load_dotenv
 import pyzx as zx
 from pyzx.simplify import spider_simp, to_gh
@@ -14,7 +16,7 @@ URI = os.getenv("MEMGRAPH_URI")
 AUTH = (os.getenv("DB_USER"), os.getenv("DB_PASSWORD"))
 # for x in range(100):
 #     print(f'seed ===== {x}')
-c = zx.generate.CNOT_HAD_PHASE_circuit(3, 40, seed=43)
+c = zx.generate.CNOT_HAD_PHASE_circuit(7, 30, seed=43)
 # g = zx.generate.cliffordT(3, 30, seed=8, backend='memgraph')
 # c = g.copy(backend='simple')
 c_local = c.to_graph(backend='simple')
@@ -45,7 +47,18 @@ g_local = g.copy(backend='simple')
 
 # 4. Compare the reduced graph directly to the original circuit!
 # print('started comparing')
-compare = zx.compare_tensors(g_local, c, preserve_scalar=False)
+print('starting compare_tensors...')
+start_compare = time.perf_counter()
+
+# If compare_tensors appears stuck, emit Python stack traces every 60s.
+faulthandler.dump_traceback_later(60, repeat=True)
+try:
+	compare = zx.compare_tensors(g_local, c, preserve_scalar=False)
+finally:
+	faulthandler.cancel_dump_traceback_later()
+
+elapsed_compare = time.perf_counter() - start_compare
+print(f'compare_tensors done in {elapsed_compare:.2f}s')
 print(f'Comparing: {compare}')
 # g = c.copy(backend="memgraph")
 

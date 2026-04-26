@@ -50,23 +50,65 @@ def _patched_graph(backend: Any = None, **kwargs: Any) -> Any:
 	return create_graph(backend=backend, **kwargs)
 
 
+def _patch_pyzx_extract_remove_gadget() -> None:
+	"""Patch pyzx.extract.remove_gadget to keep output-adjacent pivots stable.
+
+	This avoids frontier/output disconnects that can trigger extraction/normalize
+	errors on some backend-rewritten graphs.
+	"""
+	import pyzx.extract as pyzx_extract
+
+	if getattr(pyzx_extract, "_pyzx_db_addon_remove_gadget_patched", False):
+		return
+
+	from pyzx.rewrite_rules.pivot_rule import pivot_NOT_REWORKED
+
+	def _patched_remove_gadget(g, frontier, qubit_map, neighbor_set, gadgets):
+		removed_gadget = False
+		outputs = g.outputs()
+		for w in neighbor_set:
+			if w not in gadgets:
+				continue
+			for v in g.neighbors(w):
+				if v in frontier:
+					out_neighbors = [o for o in g.neighbors(v) if o in outputs]
+					if len(out_neighbors) != 1:
+						continue
+					# Anchor pivot to v's current output neighbor to preserve frontier invariant.
+					ok = pivot_NOT_REWORKED(g, [((w, v), ([], [out_neighbors[0]]))])
+					if not ok:
+						continue
+					frontier.remove(v)
+					del gadgets[w]
+					frontier.append(w)
+					qubit_map[w] = qubit_map[v]
+					removed_gadget = True
+					break
+		return removed_gadget
+
+	pyzx_extract.remove_gadget = _patched_remove_gadget
+	pyzx_extract._pyzx_db_addon_remove_gadget_patched = True
+
+
 def enable_pyzx_backend_overrides() -> None:
-        """Patch PyZX so Graph(..., backend='age'|'neo4j'|'memgraph') uses addon backends."""
-        import pyzx
-        import pyzx.graph.graph as pyzx_graph
-        pyzx_graph.Graph = _patched_graph
-        pyzx.Graph = _patched_graph
-        
-        # Explicit patching for known PyZX module paths that hard-import Graph
-        import pyzx.circuit.graphparser
-        import pyzx.simplify
-        pyzx.circuit.graphparser.Graph = _patched_graph
-        if hasattr(pyzx.simplify, "Graph"):
-            pyzx.simplify.Graph = _patched_graph
-            
-        if hasattr(pyzx_graph, "backends"):
-            for b in _BACKEND_FACTORIES.keys():
-                pyzx_graph.backends[b] = True
+	"""Patch PyZX so Graph(..., backend='age'|'neo4j'|'memgraph') uses addon backends."""
+	import pyzx
+	import pyzx.graph.graph as pyzx_graph
+	pyzx_graph.Graph = _patched_graph
+	pyzx.Graph = _patched_graph
+
+	_patch_pyzx_extract_remove_gadget()
+
+	# Explicit patching for known PyZX module paths that hard-import Graph
+	import pyzx.circuit.graphparser
+	import pyzx.simplify
+	pyzx.circuit.graphparser.Graph = _patched_graph
+	if hasattr(pyzx.simplify, "Graph"):
+		pyzx.simplify.Graph = _patched_graph
+
+	if hasattr(pyzx_graph, "backends"):
+		for b in _BACKEND_FACTORIES.keys():
+			pyzx_graph.backends[b] = True
 
 def disable_pyzx_backend_overrides() -> None:
 	"""Restore PyZX's original Graph factory/class."""
